@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  buoy-tracker:
+    build: .
+    image: buoy-tracker:0.2
+    container_name: buoy-tracker
+    restart: unless-stopped
+    ports:
+      - "5102:5102"
+    volumes:
+      # Optional: Uncomment to persist data across container recreation
+      # - ./data:/app/data
+      - ./logs:/app/logs
+      # Optional: Uncomment to use custom config instead of tracker.config.example
+      # - ./tracker.config:/app/tracker.config:ro
+    environment:
+      - MQTT_USERNAME
+      - MQTT_PASSWORD
+      - MQTT_KEY
+      - ALERT_SMTP_USERNAME
+      - ALERT_SMTP_PASSWORD
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5102/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

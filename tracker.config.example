@@ -1,0 +1,58 @@
+# Example tracker.config - copy to `tracker.config` and edit values for your environment
+
+[app]
+# Human-friendly title shown in UI
+title = SYC Buoy Tracker
+version = 0.2
+
+[mqtt]
+broker = mqtt.bayme.sh
+port = 1883
+root_topic = msh/US/bayarea/2/e/
+mqtt_channels = MediumSlow,MediumFast,LongFast
+# DO NOT store production secrets in this file. Use environment variables in Docker instead.
+username = 
+password = 
+encryption_key = 
+
+[webapp]
+host = 0.0.0.0
+port = 5102
+
+default_lat = 37.7749
+default_lon = -122.4194
+default_zoom = 10
+
+[debug]
+log_level = INFO
+recent_message_buffer_size = 200
+
+[battery]
+low_battery_threshold = 50
+
+[special_nodes]
+show_offline = true
+history_hours = 24
+persist_path = data/special_nodes.json
+stale_after_seconds = 43200
+stale_symbol = ☆
+movement_threshold = 80
+
+# Add your special nodes here (format: node_id = label,lat,lon)
+# Example:
+# 3681533965 = SYCS,37.7749,-122.4194
+
+[alerts]
+enabled = false
+alert_cooldown = 3600
+tracker_url = http://localhost:5102
+
+# SMTP credentials should come from environment variables in production
+smtp_host = smtp.gmail.com
+smtp_port = 587
+smtp_ssl = false
+smtp_username = 
+smtp_password = 
+
+email_from = buoy-tracker@example.com
+email_to = admin@example.com
