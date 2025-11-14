@@ -72,3 +72,4 @@ ssl/
 tracker.config
 # Docker ignore helper
 .dockerignore
+buoy-tracker-0.2.tar.gz
