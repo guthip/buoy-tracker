@@ -45,7 +45,16 @@ The application runs out-of-the-box with default settings. To customize MQTT bro
 
 ### Docker Deployment
 
-**Option 1: Using pre-built container**
+**Option 1: Pull from Docker Hub (Easiest)**
+```bash
+# Pull and run the latest version
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
+
+# Access the application
+open http://localhost:5102
+```
+
+**Option 2: Load from tarball**
 ```bash
 # Load the distributed container
 docker load < buoy-tracker-0.2.tar.gz
@@ -57,7 +66,7 @@ docker run -d --name buoy-tracker -p 5102:5102 buoy-tracker:0.2
 open http://localhost:5102
 ```
 
-**Option 2: Using docker-compose**
+**Option 3: Using docker-compose**
 ```bash
 # Load the image first (if using distributed container)
 docker load < buoy-tracker-0.2.tar.gz

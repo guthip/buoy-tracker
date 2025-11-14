@@ -1,33 +1,49 @@
 # Buoy Tracker — Docker Deployment Guide
 
-Complete instructions for building and running Buoy Tracker v0.2 in Docker.
+Complete instructions for deploying Buoy Tracker v0.2 with Docker.
 
-## Quick Start (Email-Ready Blurb)
+## Quick Start
 
 **Buoy Tracker v0.2** - Real-time Meshtastic mesh network node tracking
 
-The container includes 7-day retention data and runs out-of-the-box. Access at http://localhost:5102
+### From Docker Hub (Recommended)
 
 ```bash
-# Quick start (includes built-in retention data)
-docker run -d --name buoy-tracker \
-  -p 5102:5102 \
-  buoy-tracker:0.2
+# Pull and run the latest version
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
 
-# Or customize config first
+# Access at http://localhost:5102
+```
+
+### From Tarball
+
+```bash
+# Load the distributed container
+docker load < buoy-tracker-0.2.tar.gz
+
+# Run with built-in retention data
+docker run -d --name buoy-tracker -p 5102:5102 buoy-tracker:0.2
+```
+
+### With Custom Configuration
+
+```bash
+# Create and edit your config
 cp tracker.config.example tracker.config
-# Edit tracker.config with your MQTT broker/credentials
+nano tracker.config
+
+# Run with custom config
 docker run -d --name buoy-tracker \
   -p 5102:5102 \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  buoy-tracker:0.2
+  dokwerker8891/buoy-tracker:0.2
 ```
 
 **Data Persistence**: Container includes retention data. Add `-v $(pwd)/data:/app/data` only if you need to persist data across container recreation.
 
-## Building the Image
+## Building the Image (Optional)
 
-From the repository root:
+If you want to build from source:
 
 ```bash
 docker build -t buoy-tracker:0.2 .
@@ -35,7 +51,18 @@ docker build -t buoy-tracker:0.2 .
 
 ## Running Options
 
-### Option 1: Default Configuration (Quickest)
+### Option 1: Pull from Docker Hub (Recommended)
+
+Easiest method - no build or download required:
+
+```bash
+docker run -d \
+  --name buoy-tracker \
+  -p 5102:5102 \
+  dokwerker8891/buoy-tracker:0.2
+```
+
+### Option 2: Default Configuration (from local image)
 
 Runs immediately with example config (connects to mqtt.bayme.sh) and built-in retention data:
 
@@ -46,7 +73,7 @@ docker run -d \
   buoy-tracker:0.2
 ```
 
-### Option 2: With Data Persistence
+### Option 3: With Data Persistence
 
 Add volume mount to persist data across container restarts:
 
@@ -55,10 +82,10 @@ docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
   -v $(pwd)/data:/app/data \
-  buoy-tracker:0.2
+  dokwerker8891/buoy-tracker:0.2
 ```
 
-### Option 3: Custom Configuration (Full Control)
+### Option 4: Custom Configuration (Full Control)
 
 Create your config file first:
 
@@ -70,12 +97,12 @@ docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  buoy-tracker:0.2
+  dokwerker8891/buoy-tracker:0.2
 ```
 
 **Note**: Data volume mount removed to preserve built-in retention data.
 
-### Option 4: Environment Variables (Production)
+### Option 5: Environment Variables (Production)
 
 Pass secrets via environment variables (uses built-in retention data):
 
@@ -86,12 +113,12 @@ docker run -d \
   -e MQTT_USERNAME=your_user \
   -e MQTT_PASSWORD=your_password \
   -e MQTT_KEY=your_encryption_key \
-  buoy-tracker:0.2
+  dokwerker8891/buoy-tracker:0.2
 ```
 
 **Note**: Add `-v $(pwd)/data:/app/data` if you need to persist data beyond the built-in retention data.
 
-### Option 5: Docker Compose (Best for Development)
+### Option 6: Docker Compose (Best for Development)
 
 Uses the included `docker-compose.yml`:
 
@@ -256,7 +283,16 @@ gunzip -c buoy-tracker-0.2.tar.gz | docker load
 
 **For recipients of the distributed container:**
 
-**Option 1: Direct docker run**
+**Option 1: Pull from Docker Hub (Easiest)**
+```bash
+# 1. Pull and run
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
+
+# 2. Access the application
+open http://localhost:5102
+```
+
+**Option 2: Load from tarball**
 ```bash
 # 1. Load the image
 docker load < buoy-tracker-0.2.tar.gz
@@ -268,12 +304,12 @@ docker run -d --name buoy-tracker -p 5102:5102 buoy-tracker:0.2
 open http://localhost:5102
 ```
 
-**Option 2: Using docker-compose**
+**Option 3: Using docker-compose**
 ```bash
-# 1. Load the image
-docker load < buoy-tracker-0.2.tar.gz
+# 1. Download docker-compose.yml (or create from example)
+wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
 
-# 2. Start services
+# 2. Start services (automatically pulls image)
 docker-compose up -d
 
 # 3. View logs
@@ -289,7 +325,7 @@ docker run -d --name buoy-tracker \
   -p 5102:5102 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  buoy-tracker:0.2
+  dokwerker8891/buoy-tracker:0.2
 ```
 
 **Management commands:**

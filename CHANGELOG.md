@@ -2,7 +2,35 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
-## [2025-11-13] - Docker Deployment with Retention Data
+## [2025-11-13] - Docker Hub Deployment
+
+### Added
+- **Docker Hub Distribution**: Published image to Docker Hub
+  - Available at: `dokwerker8891/buoy-tracker:0.2`
+  - Provides easiest deployment option: `docker pull dokwerker8891/buoy-tracker:0.2`
+  - Eliminates need to download 192 MB tarball for most users
+  - Both `:0.2` and `:latest` tags available
+
+### Changed
+- **Docker Compose Configuration**: Updated to pull from Docker Hub by default
+  - Primary: `image: dokwerker8891/buoy-tracker:0.2`
+  - Alternative: Local build available via `build: .` (commented)
+  - Enables `docker-compose up` without tarball or local build
+
+### Documentation
+- Updated README.md with Docker Hub as Option 1 (recommended)
+- Updated DOCKER.md with Docker Hub deployment instructions
+- Added Docker Hub pull commands to Quick Reference Card
+- Updated all deployment examples to use Docker Hub image
+
+## [2025-11-13] - GitHub Release & Docker Deployment with Retention Data
+
+### Added
+- **GitHub Release**: Published v0.2 to GitHub
+  - Repository: https://github.com/guthip/buoy-tracker
+  - Release: https://github.com/guthip/buoy-tracker/releases/tag/v0.2
+  - Distribution files: 192 MB tarball + SHA256 checksum
+  - Complete release notes with deployment instructions
 
 ### Changed
 - **Docker Deployment Strategy**: Modified to include retention data in container
@@ -17,9 +45,10 @@ All notable changes to the Buoy Tracker project are documented here.
   - Config volume optional (falls back to tracker.config.example)
 
 ### Documentation
-- Updated DOCKER.md with 4 deployment options explaining data persistence
+- Updated DOCKER.md with 6 deployment options explaining data persistence
 - Added warnings about mounting empty host directories over built-in data
 - Clarified when to use volume mounts vs. built-in container data
+- Added GITHUB_RELEASE.md with complete GitHub setup instructions
 
 ## [2025-11-13] - Configuration Cleanup & Trail History Enhancement
 
