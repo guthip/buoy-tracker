@@ -47,12 +47,14 @@ The application runs out-of-the-box with default settings. To customize MQTT bro
 
 **Option 1: Pull from Docker Hub (Easiest)**
 ```bash
-# Pull and run the latest version
+# Pull and run the latest version (works on Intel, Apple Silicon, and Raspberry Pi)
 docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
 
 # Access the application
 open http://localhost:5102
 ```
+
+> **Multi-Platform Support**: Image automatically works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64) - Docker selects the correct architecture for your platform.
 
 **Option 2: Load from tarball**
 ```bash

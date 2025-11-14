@@ -2,6 +2,15 @@
 
 Complete instructions for deploying Buoy Tracker v0.2 with Docker.
 
+## Platform Support
+
+✅ **Multi-Platform Image** - Automatically works on:
+- **Intel/AMD (x86_64)** - Standard desktop/server processors
+- **Apple Silicon (ARM64)** - M1/M2/M3 Macs
+- **Raspberry Pi (ARM64)** - Pi 4 and newer
+
+Docker automatically selects the correct architecture for your platform.
+
 ## Quick Start
 
 **Buoy Tracker v0.2** - Real-time Meshtastic mesh network node tracking
@@ -9,7 +18,7 @@ Complete instructions for deploying Buoy Tracker v0.2 with Docker.
 ### From Docker Hub (Recommended)
 
 ```bash
-# Pull and run the latest version
+# Pull and run the latest version (works on Intel, Apple Silicon, and Raspberry Pi)
 docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
 
 # Access at http://localhost:5102

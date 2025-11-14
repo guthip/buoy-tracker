@@ -2,14 +2,21 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
-## [2025-11-13] - Docker Hub Deployment
+## [2025-11-13] - Multi-Platform Docker Hub Deployment
 
 ### Added
+- **Multi-Platform Docker Image**: Built and published for multiple architectures
+  - **linux/amd64** - Intel/AMD processors (standard desktop/server)
+  - **linux/arm64** - Apple Silicon (M1/M2/M3) and Raspberry Pi 4+
+  - Automatic platform detection - Docker pulls the correct architecture
+  - Single command works across all platforms
+  
 - **Docker Hub Distribution**: Published image to Docker Hub
   - Available at: `dokwerker8891/buoy-tracker:0.2`
   - Provides easiest deployment option: `docker pull dokwerker8891/buoy-tracker:0.2`
   - Eliminates need to download 192 MB tarball for most users
   - Both `:0.2` and `:latest` tags available
+  - Works on Intel/AMD, Apple Silicon, and Raspberry Pi
 
 ### Changed
 - **Docker Compose Configuration**: Updated to pull from Docker Hub by default
@@ -18,7 +25,8 @@ All notable changes to the Buoy Tracker project are documented here.
   - Enables `docker-compose up` without tarball or local build
 
 ### Documentation
-- Updated README.md with Docker Hub as Option 1 (recommended)
+- Added Platform Support section to DOCKER.md
+- Updated README.md with multi-platform note
 - Updated DOCKER.md with Docker Hub deployment instructions
 - Added Docker Hub pull commands to Quick Reference Card
 - Updated all deployment examples to use Docker Hub image
