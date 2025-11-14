@@ -47,12 +47,18 @@ The application runs out-of-the-box with default settings. To customize MQTT bro
 
 **Option 1: Pull from Docker Hub (Easiest)**
 ```bash
-# Pull and run the latest version (works on Intel, Apple Silicon, and Raspberry Pi)
+# Pull and run - fully pre-configured with SYC buoy data
+# Works on Intel, Apple Silicon, and Raspberry Pi
 docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
 
 # Access the application
 open http://localhost:5102
 ```
+
+**What's included in the image:**
+- ✅ Pre-configured `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
+- ✅ 7-day retention data (position history and telemetry)
+- ✅ Ready to use immediately - zero configuration needed
 
 > **Multi-Platform Support**: Image automatically works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64) - Docker selects the correct architecture for your platform.
 

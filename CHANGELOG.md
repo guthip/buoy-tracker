@@ -2,6 +2,26 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-11-13] - Pre-Configured Docker Image with Retained Data
+
+### Added
+- **Pre-Configured Docker Image**: Image now includes live configuration and data
+  - Includes production `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
+  - Includes 7-day retention data (position history and telemetry)
+  - Ready to run immediately with zero configuration
+  - Users can override config by mounting custom tracker.config if needed
+
+### Changed
+- **`.dockerignore` Updated**: Removed `tracker.config` exclusion
+  - Image now contains working configuration instead of just example
+  - Simplifies deployment - no manual configuration needed
+  - Retained data provides immediate historical context on first launch
+
+### Documentation
+- Updated DOCKER.md Quick Start with "What's Included" section
+- Updated README.md Docker section with pre-configuration details
+- Clarified that image contains working config + data, not just templates
+
 ## [2025-11-13] - Multi-Platform Docker Hub Deployment
 
 ### Added

@@ -18,11 +18,17 @@ Docker automatically selects the correct architecture for your platform.
 ### From Docker Hub (Recommended)
 
 ```bash
-# Pull and run the latest version (works on Intel, Apple Silicon, and Raspberry Pi)
+# Pull and run - fully pre-configured with SYC buoy data
+# Works on Intel, Apple Silicon, and Raspberry Pi
 docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
 
 # Access at http://localhost:5102
 ```
+
+**What's Included:**
+- ✅ Pre-configured `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
+- ✅ Retained node data (7-day history with position and telemetry)
+- ✅ Ready to run immediately - no configuration needed
 
 ### From Tarball
 
@@ -30,25 +36,27 @@ docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
 # Load the distributed container
 docker load < buoy-tracker-0.2.tar.gz
 
-# Run with built-in retention data
+# Run with pre-configured settings and retained data
 docker run -d --name buoy-tracker -p 5102:5102 buoy-tracker:0.2
 ```
 
-### With Custom Configuration
+### Override Configuration (Optional)
+
+If you need different MQTT settings or special nodes:
 
 ```bash
 # Create and edit your config
 cp tracker.config.example tracker.config
 nano tracker.config
 
-# Run with custom config
+# Run with custom config (overrides built-in config)
 docker run -d --name buoy-tracker \
   -p 5102:5102 \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
   dokwerker8891/buoy-tracker:0.2
 ```
 
-**Data Persistence**: Container includes retention data. Add `-v $(pwd)/data:/app/data` only if you need to persist data across container recreation.
+**Data Persistence**: Container includes 7-day retention data. Mount `-v $(pwd)/data:/app/data` to persist new data across container updates.
 
 ## Building the Image (Optional)
 
@@ -71,14 +79,15 @@ docker run -d \
   dokwerker8891/buoy-tracker:0.2
 ```
 
-### Option 2: Default Configuration (from local image)
+### Option 2: Run with Pre-Configured Settings
 
-Runs immediately with example config (connects to mqtt.bayme.sh) and built-in retention data:
+Image includes working config and 7-day retention data - runs immediately:
 
 ```bash
 docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
+  dokwerker8891/buoy-tracker:0.2
   buoy-tracker:0.2
 ```
 
