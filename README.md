@@ -11,6 +11,7 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
 - **Time Indicators**: Each node card shows:
   - **LPU** (Last Position Update): Time since last GPS position packet
   - **SoL** (Sign of Life): Time since any packet received
+  - **Position History**: Deduplicated by packet timestamp to show only unique positions (retransmitted packets are automatically filtered)
 - **Special Node Tracking**: Track specific nodes with home positions and movement alerts
   - Green dashed rings show movement threshold (50m default)
   - Red solid rings when nodes move beyond threshold
@@ -18,9 +19,19 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
   - Gray markers at home position until first GPS fix
   - Packet activity display with timestamps
   - **Persistent Data**: Node info (battery, telemetry, channel, position) survives restarts
-  - **Packet History**: Last 50 packets per special node persisted to disk
+  - **Packet History**: All packets per special node persisted to disk (7-day retention)
+  - **Position Trails**: Visual polylines showing movement history on the map
+  - **Position Deduplication**: Retransmitted packets automatically filtered to show only unique positions
   - **Dynamic Config Updates**: Origin coordinates recalculated on config reload/restart
 - **Debug Tools**: View recent raw MQTT messages
+- **Data Retention**: Automatic 7-day retention policy
+  - Position history and packet data older than 7 days automatically cleaned up
+  - Prevents unlimited storage growth while preserving recent activity
+  - Cleanup runs on every save operation
+- **Efficient Persistence**: Event-driven data saves
+  - Saves to disk only when data changes (5-second minimum throttle to batch updates)
+  - Dramatically reduces unnecessary disk I/O compared to fixed-interval saves
+  - Responsive data persistence for mission-critical tracking
 - **Configurable**: All settings in `tracker.config`
 
 ## Quick Start
@@ -32,27 +43,54 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
 pip install -r requirements.txt
 
 # (Optional) Customize configuration
-cp tracker.config.example tracker.config
+cp tracker.config.template tracker.config
 nano tracker.config
 
-# Run the application (uses tracker.config or falls back to example)
+# Run the application (uses tracker.config or falls back to template)
 python3 run.py
 ```
 
 The web interface will be available at `http://localhost:5102`
 
-The application runs out-of-the-box with default settings. To customize MQTT broker, special nodes, or other settings, copy `tracker.config.example` to `tracker.config` and edit as needed.
+The application runs out-of-the-box with default settings. To customize MQTT broker, special nodes, or other settings, copy `tracker.config.template` to `tracker.config` and edit as needed.
 
 ### Docker Deployment
 
+
 **Option 1: Pull from Docker Hub (Easiest)**
 ```bash
-# Pull and run - fully pre-configured with SYC buoy data
-# Works on Intel, Apple Silicon, and Raspberry Pi
-docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.2
+
+# Pull and run the latest version (0.5) - fully pre-configured with SYC buoy data
+# Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64)
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.5
 
 # Access the application
 open http://localhost:5102
+```
+
+**What's included in the image:**
+- ✅ Pre-configured `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
+- ✅ 7-day retention data (position history and telemetry)
+- ✅ Ready to use immediately - zero configuration needed
+
+
+> **Multi-Platform Support**: This image is a true multi-architecture build. Docker will automatically pull the correct version for your platform (x86_64/amd64 or arm64). No manual selection needed.
+
+---
+
+**Maintainer Note:**
+To build and push a new multi-platform image:
+```sh
+docker buildx create --use  # (only needed once)
+docker buildx build --platform linux/amd64,linux/arm64 -t dokwerker8891/buoy-tracker:0.5 --push .
+```
+This ensures all users get the correct image for their hardware.
+
+**To update to the latest version:**
+```bash
+docker pull dokwerker8891/buoy-tracker:0.5
+docker stop buoy-tracker && docker rm buoy-tracker
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.5
 ```
 
 **What's included in the image:**
@@ -100,24 +138,25 @@ docker run -d --name buoy-tracker \
 
 For complete Docker instructions, see [DOCKER.md](DOCKER.md).
 
+
 ## Using the Interface
 
 - **Node Sidebar**: Click any node to zoom map to its location
 - **Map Markers**: Click markers for detailed popups with node information
-  - Includes link to view node on [Meshtastic Map](https://meshtastic.liamcottle.net) (liamcottle's public map viewer)
-- **Display Filters**: 
-  - Toggle "Show only special nodes" to filter the map and sidebar
-  - Toggle channels in the menu to show/hide nodes by channel
-- **Debug Menu**: Click ☰ menu for recent MQTT messages
-- **Movement Alerts**: 
+  - Includes link to view node on [Meshtastic Map](https://meshtastic.liamcottle.net)
+- **Menu Controls**:
+  - Toggle "Show all nodes" to display all nodes (default: show only special nodes)
+  - Toggle position trails to visualize movement history on the map
+  - (Sorting is automatic: special nodes are always shown at the top, sorted alphabetically; all other nodes are sorted by most recently seen)
+- **Movement Alerts**:
   - Green dashed circles show 50m threshold around special node home positions
   - Red solid circles appear when nodes exceed threshold
   - Card backgrounds turn light red when nodes move outside expected range
   - Browser alert on first threshold breach
 - **Color Coding**:
-  - 🔵 Blue: Recent (< 5min)
-  - 🟠 Orange: Stale (5-30min)
-  - 🔴 Red: Very old (> 30min)
+  - 🔵 Blue: Recent (< 1 hour, configurable via `status_blue_threshold`)
+  - 🟠 Orange: Stale (1-12 hours, configurable via `status_orange_threshold`)
+  - 🔴 Red: Very old (> 12 hours)
   - 🟡 Gold: Special node active
   - ⚫ Dark Gray: Special node stale
   - ⚪ Light Gray: Awaiting GPS (at home position)
@@ -128,9 +167,31 @@ For complete Docker instructions, see [DOCKER.md](DOCKER.md).
 The application works out-of-the-box with default settings. To customize, copy the example config and edit:
 
 ```bash
-cp tracker.config.example tracker.config
+cp tracker.config.template tracker.config
 nano tracker.config
 ```
+
+### Applying Configuration Changes
+
+After editing `tracker.config`, you have two options:
+
+**Option 1: Reload without restart (recommended)**
+```bash
+# Reload config without stopping the server
+curl -X POST http://localhost:5102/api/config/reload
+```
+This instantly applies changes to special nodes, coordinates, thresholds, and other settings.
+
+**Option 2: Full restart** 
+```bash
+# Only needed if reload fails or for major updates
+docker restart buoy-tracker  # Docker deployment
+# or
+pkill -f "python3 run.py"   # Direct Python execution
+python3 run.py              # Restart locally
+```
+
+---
 
 Edit `tracker.config` to customize settings:
 
@@ -150,9 +211,22 @@ password = large4cats
 [webapp]
 host = 127.0.0.1
 port = 5102
-default_lat = 37.7749
-default_lon = -122.4194
-default_zoom = 10
+# Map center point. Supports both decimal and degrees-minutes formats:
+# Decimal: default_center = 37.7749,-122.4194
+# Degrees-minutes: default_center = N37° 33.81', W122° 13.13'
+default_center = 37.7749,-122.4194
+default_zoom = 13
+
+# Node status color thresholds (in hours)
+# Less than status_blue_threshold = blue (recent)
+# Between blue and orange = orange (stale)
+# Older than status_orange_threshold = red (very stale)
+status_blue_threshold = 1
+status_orange_threshold = 12
+
+# Data refresh intervals (in seconds)
+node_refresh_interval = 2
+status_refresh_interval = 5
 ```
 
 ### Special Nodes
@@ -209,56 +283,124 @@ persist_path = data/special_history.json
 
 ## Email Alerts
 
-Send email notifications when special nodes move outside their home fence:
+Send email notifications when special nodes move outside their home fence.
 
-### Configuration
+**⚠️ Platform-Specific Setup Required** - Email delivery method depends on your deployment environment.
 
-Add to `tracker.config`:
+### How It Works
 
+- **Continuous Monitoring**: Alerts are sent whenever a special node is **outside its safe zone**
+- **Smart Cooldown**: Only one email per node per cooldown period (default 1 hour, configurable)
+- **No Redundant Alerts**: If a node stays outside the zone, you get one alert per cooldown period, not continuous emails
+- **Includes**: Distance from home, battery level, timestamp, and tracker URL
+
+### Platform-Specific Configuration
+
+#### Production Deployment (Linux Servers) - RECOMMENDED
+
+Linux servers have `sendmail` or `postfix` running by default. Use **localhost:25** (no credentials needed):
+
+**In `tracker.config`:**
 ```ini
 [alerts]
 enabled = true
-alert_cooldown = 3600
+alert_cooldown = 1
 
-# SMTP Configuration (example for Gmail)
-smtp_host = smtp.gmail.com
-smtp_port = 587
-smtp_ssl = starttls
-smtp_username = your-email@gmail.com
-smtp_password = your-app-password
+tracker_url = http://your-server-address:5102
+email_from = norepy@sequoiayc.org
 
-# Email Settings
-email_from = your-email@gmail.com
-email_to = recipient1@example.com, recipient2@example.com
-
-# Optional: URL for links in emails
-tracker_url = http://10.10.3.221:5102
+# SMTP Configuration for localhost:25 (sendmail/postfix)
+smtp_host = localhost
+smtp_port = 25
+smtp_ssl = false
+# No credentials needed for sendmail/postfix
 ```
 
-### Gmail Setup
+**In `secret.config`:**
+```ini
+[alerts]
+# Email recipient address(es)
+email_to = admin@sequoiayc.org
+```
 
-1. Enable 2-factor authentication in your Google account
-2. Generate an app password: https://myaccount.google.com/apppasswords
-3. Use the 16-character app password in `smtp_password`
+Verify sendmail is running:
+```bash
+sudo systemctl status sendmail
+# or
+sudo systemctl status postfix
 
-### Alternative SMTP Providers
+# If not installed:
+sudo apt install sendmail  # Debian/Ubuntu
+# or
+sudo yum install sendmail   # RHEL/CentOS
+```
+
+#### Development Setup (Mac/Windows) - External SMTP Required
+
+macOS and Windows don't have sendmail/postfix running by default. Use an external SMTP provider:
+
+**In `tracker.config`:**
+```ini
+[alerts]
+enabled = true
+alert_cooldown = 1
+
+tracker_url = http://localhost:5102
+email_from = norepy@sequoiayc.org
+
+# Override SMTP settings for external provider
+smtp_host = smtp.gmail.com
+smtp_port = 587
+smtp_ssl = false
+```
+
+**In `secret.config`:**
+```ini
+[alerts]
+# Email recipient address(es)
+email_to = your-email@example.com
+
+# SMTP credentials (required for external providers)
+smtp_username = your-email@gmail.com
+smtp_password = your-app-password
+```
+
+See External SMTP Providers section below for setup instructions.
+
+### External SMTP Providers
+
+For development on Mac/Windows, use an external SMTP provider. All providers work the same way - configure in `tracker.config`:
+
+**Gmail:**
+```ini
+[alerts]
+smtp_host = smtp.gmail.com
+smtp_port = 587
+smtp_ssl = false
+```
 
 **SendGrid:**
 ```ini
+[alerts]
 smtp_host = smtp.sendgrid.net
 smtp_port = 587
-smtp_ssl = starttls
-smtp_username = apikey
-smtp_password = your-sendgrid-api-key
+smtp_ssl = false
 ```
 
 **AWS SES:**
 ```ini
+[alerts]
 smtp_host = email-smtp.us-west-2.amazonaws.com
 smtp_port = 587
-smtp_ssl = starttls
-smtp_username = your-ses-smtp-username
-smtp_password = your-ses-smtp-password
+smtp_ssl = false
+```
+
+Then add credentials to `secret.config`:
+```ini
+[alerts]
+smtp_username = your-email@gmail.com
+smtp_password = your-app-password
+email_to = recipient@example.com
 ```
 
 ### Security: Environment Variables
@@ -270,24 +412,22 @@ export ALERT_SMTP_USERNAME="your-email@gmail.com"
 export ALERT_SMTP_PASSWORD="your-app-password"
 ```
 
-Then omit `smtp_username` and `smtp_password` from `tracker.config`.
+Then leave `smtp_username` and `smtp_password` blank in `tracker.config`.
 
 ### Testing
 
-Test your email configuration:
+Test your email configuration with these endpoints:
 
 ```bash
+# Test configuration
 curl -X POST http://localhost:5102/api/test-alert
+
+# Test movement alert  
+curl -X POST http://localhost:5102/api/test-alert-movement
+
+# Test battery alert
+curl -X POST http://localhost:5102/api/test-alert-battery
 ```
-
-### Email Features
-
-- **Movement Detection**: Alerts trigger when nodes exceed `movement_threshold` distance from home
-- **Cooldown**: Prevents spam - only one alert per node per cooldown period (default 3600s = 1 hour)
-- **Google Maps Links**: Emails include links to view node locations
-- **Node Details**: Battery level, distance from home, timestamp included in alert
-- `special_history.json` - Position history for movement tracking
-- Data survives server restarts and is automatically updated as packets arrive
 
 ## API Reference
 
