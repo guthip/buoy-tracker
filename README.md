@@ -60,9 +60,9 @@ The application runs out-of-the-box with default settings. To customize MQTT bro
 **Option 1: Pull from Docker Hub (Easiest)**
 ```bash
 
-# Pull and run the latest version (0.5) - fully pre-configured with SYC buoy data
+# Pull and run the latest version (0.6) - fully pre-configured with SYC buoy data
 # Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64)
-docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.5
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.6
 
 # Access the application
 open http://localhost:5102
@@ -82,15 +82,15 @@ open http://localhost:5102
 To build and push a new multi-platform image:
 ```sh
 docker buildx create --use  # (only needed once)
-docker buildx build --platform linux/amd64,linux/arm64 -t dokwerker8891/buoy-tracker:0.5 --push .
+docker buildx build --platform linux/amd64,linux/arm64 -t dokwerker8891/buoy-tracker:0.6 --push .
 ```
 This ensures all users get the correct image for their hardware.
 
 **To update to the latest version:**
 ```bash
-docker pull dokwerker8891/buoy-tracker:0.5
+docker pull dokwerker8891/buoy-tracker:0.6
 docker stop buoy-tracker && docker rm buoy-tracker
-docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.5
+docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.6
 ```
 
 **What's included in the image:**
@@ -100,40 +100,13 @@ docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.5
 
 > **Multi-Platform Support**: Image automatically works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64) - Docker selects the correct architecture for your platform.
 
-**Option 2: Load from tarball**
-```bash
-# Load the distributed container
-docker load < buoy-tracker-0.2.tar.gz
-
-# Run the container (includes 7-day retention data)
-docker run -d --name buoy-tracker -p 5102:5102 buoy-tracker:0.2
-
-# Access the application
-open http://localhost:5102
-```
-
-**Option 3: Using docker-compose**
-```bash
-# Load the image first (if using distributed container)
-docker load < buoy-tracker-0.2.tar.gz
-
-# Start with docker-compose
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
-
-# Stop
-docker-compose down
-```
-
 **Optional**: Add volume mounts for persistence or custom config:
 ```bash
 docker run -d --name buoy-tracker \
   -p 5102:5102 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  buoy-tracker:0.2
+  dokwerker8891/buoy-tracker:0.6
 ```
 
 For complete Docker instructions, see [DOCKER.md](DOCKER.md).
@@ -492,25 +465,6 @@ pytest tests/
 
 [Add license information here]
 
-## API Reference
-
-```
-buoy_tracker/
-├── src/
-│   ├── main.py              # Flask app and routes
-│   ├── mqtt_handler.py      # MQTT client and message handlers
-│   ├── config.py            # Configuration loader
-│   └── __init__.py
-├── templates/
-│   └── simple.html          # Web UI (Leaflet map)
-├── examples/
-│   └── my_working_mesh_mqtt.py  # Original example
-├── tests/                   # Test suite
-├── tracker.config           # Configuration file
-├── run.py                   # Application runner
-└── requirements.txt         # Python dependencies
-```
-
 ## Development
 
 The application provides a RESTful API for programmatic access to node data:
@@ -650,8 +604,6 @@ Special nodes are configured in `tracker.config` for enhanced tracking:
 - **`GET /api/mqtt/status`**  
   Get MQTT connection details
 
-## Development
-
 ### Running Tests
 
 ```bash
@@ -668,10 +620,6 @@ This project follows PEP 8 guidelines. Use `black` for code formatting and `flak
 2. Make your changes
 3. Write/update tests
 4. Submit a pull request
-
-## License
-
-[Add license information here]
 
 ## Support
 
