@@ -48,6 +48,7 @@ docker compose logs -f
 **What's created in your directory:**
 ```
 ./tracker.config       # Configuration file (mounted read-only to container)
+./secret.config        # Secrets file for credentials (optional, mounted read-only)
 ./data/                # Node data, history, packets (persisted)
 ./logs/                # Application logs (persisted)
 ./docs/                # Documentation files (mounted read-only)
@@ -79,7 +80,8 @@ docker compose down
 ```
 
 **Automatic volume setup:**
-- `./tracker.config` → Configuration
+- `./tracker.config` → Configuration (public settings)
+- `./secret.config` → Secrets file (optional, for sensitive credentials)
 - `./data/` → Persistent data
 - `./logs/` → Application logs
 - `./docs/` → Documentation
@@ -126,8 +128,9 @@ docker run -d \
 
 The app loads config in this order:
 1. Environment variables (highest priority)
-2. Mounted `tracker.config` file
-3. Built-in `tracker.config.example` (default fallback)
+2. Mounted `secret.config` file (overrides tracker.config for sensitive fields)
+3. Mounted `tracker.config` file
+4. Built-in `tracker.config.template` (default fallback)
 
 ## Volume Mounts Strategy
 
