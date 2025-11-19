@@ -2,8 +2,6 @@ services:
   buoy-tracker:
     # Build from local Dockerfile
     build: .
-    # Or use pre-built image from Docker Hub (requires internet)
-    # image: dokwerker8891/buoy-tracker:0.68
     container_name: buoy-tracker
     restart: unless-stopped
     ports:
