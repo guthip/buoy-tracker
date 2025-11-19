@@ -7,22 +7,20 @@ Get up and running in 2 minutes.
 Works on any system with Docker:
 
 ```bash
-# 1. Create a project directory
-mkdir buoy-tracker && cd buoy-tracker
+# 1. Clone the repository
+git clone https://github.com/guthip/buoy-tracker.git
+cd buoy-tracker
 
-# 2. Get the docker-compose.yml file
-wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
-
-# 3. Create minimal tracker.config (uses built-in defaults)
+# 2. Create minimal tracker.config (uses built-in defaults)
 touch tracker.config
 
-# 4. Create data and logs directories
+# 3. Create data and logs directories
 mkdir -p data logs
 
-# 5. Start the application
+# 4. Start the application (runs from repo with docker-compose.yml and Dockerfile)
 docker compose up -d
 
-# 6. Access at http://localhost:5102
+# 5. Access at http://localhost:5102
 ```
 
 **That's it!** The app is pre-configured with defaults and runs immediately.

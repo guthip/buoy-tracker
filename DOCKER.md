@@ -15,28 +15,34 @@ Docker automatically selects the correct architecture for your platform.
 
 **Buoy Tracker v0.68** - Real-time Meshtastic mesh network node tracking with data persistence
 
-### Using docker-compose (Recommended)
+**Using docker-compose (Recommended)**
+
+Clone the repository and use docker-compose:
 
 ```bash
-# 1. Get the docker-compose.yml file
-wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
+# 1. Clone the repository
+git clone https://github.com/guthip/buoy-tracker.git
+cd buoy-tracker
 
-# 2. Create required directories
+# 2. Create required directories for data and logs
 mkdir -p data logs
 
-# 3. (Optional) Copy and customize config
-cp tracker.config.template tracker.config
-nano tracker.config  # Edit if needed
+# 3. Create minimal tracker.config (uses built-in defaults)
+touch tracker.config
 
-# 4. Start the service
+# 4. (Optional) Customize configuration - copy the template
+cp tracker.config.template tracker.config
+# Edit tracker.config if needed
+# nano tracker.config
+
+# 5. Start the service (must run from repo directory)
 docker compose up -d
 
-# 5. Check status
+# 6. Check status
 docker compose ps
 docker compose logs -f
 
-# 6. Access the application
-# http://localhost:5102
+# Access at http://localhost:5102
 ```
 
 **What's created in your directory:**
