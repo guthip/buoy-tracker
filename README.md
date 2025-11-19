@@ -34,6 +34,16 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
   - Responsive data persistence for mission-critical tracking
 - **Configurable**: All settings in `tracker.config`
 
+## Interface Preview
+
+![Buoy Tracker Live View](screenshots/tracker-interface.png)
+
+The interface shows real-time node tracking with:
+- Live MQTT connection status and node count
+- Special nodes list with position updates (LPU), distance (SoL), and battery voltage
+- Interactive map with color-coded markers
+- Menu controls for toggling views
+
 ## Quick Start
 
 ### Installation
