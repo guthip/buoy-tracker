@@ -246,6 +246,35 @@ docker run -d \
 
 Data in `./data/` is automatically preserved across upgrades.
 
+## Historical Data
+
+**Important**: The `./data/` directory contains runtime data (node positions, packet history) that is **not** included in the GitHub repository. This data is specific to each deployment.
+
+### Transferring Data Between Deployments
+
+If you're migrating to a new deployment and want to preserve historical data:
+
+1. **From source deployment**, get the data files:
+   ```bash
+   # These files contain all historical tracking data
+   - data/special_nodes.json
+   - data/special_channels.json
+   ```
+
+2. **To new deployment**, place them in the data directory:
+   ```bash
+   # Copy files to new deployment's data/ directory
+   cp special_nodes.json ./data/
+   cp special_channels.json ./data/
+   
+   # Restart the service
+   docker compose restart
+   ```
+
+3. **Data will be preserved** across container restarts and image updates as long as you keep the volume mounts
+
+If you don't have existing data files, the application will create them automatically when the first MQTT packets arrive.
+
 ## Troubleshooting
 
 ### Container won't start
