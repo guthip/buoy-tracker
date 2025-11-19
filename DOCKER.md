@@ -135,11 +135,14 @@ Separate volumes for different concerns makes deployment and upgrades seamless:
 ### Configuration Volume (Recommended for Production)
 ```bash
 -v $(pwd)/tracker.config:/app/tracker.config:ro
+-v $(pwd)/secret.config:/app/secret.config:ro
 ```
 - **Benefits**: Update config without rebuilding image, works at any installation path
 - **Persistence**: Survives container restarts and image upgrades
 - **Security**: Read-only mount prevents accidental changes in container
 - **Multi-environment**: Use same image with different configs (dev/prod/staging)
+- **tracker.config**: Public configuration (MQTT broker, special nodes, thresholds)
+- **secret.config**: Sensitive credentials (email passwords, SMTP credentials) - optional, only if using email alerts
 
 ### Data Volume (Persistent Storage)
 ```bash
@@ -168,6 +171,7 @@ docker run -d \
   -p 5102:5102 \
   --restart unless-stopped \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
+  -v $(pwd)/secret.config:/app/secret.config:ro \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
   buoy-tracker:latest

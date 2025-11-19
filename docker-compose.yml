@@ -7,8 +7,9 @@ services:
     ports:
       - "5102:5102"
     volumes:
-      # Configuration volume (read-only)
+      # Configuration volumes (read-only)
       - ./tracker.config:/app/tracker.config:ro
+      - ./secret.config:/app/secret.config:ro
       
       # Data persistence volumes
       - ./data:/app/data
