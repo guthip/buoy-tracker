@@ -100,6 +100,7 @@ docker run -d \
   -p 5102:5102 \
   --restart unless-stopped \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
+  -v $(pwd)/secret.config:/app/secret.config:ro \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
   buoy-tracker:latest
