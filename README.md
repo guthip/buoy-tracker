@@ -71,7 +71,8 @@ mkdir -p data logs
 # 4. Create minimal tracker.config (uses built-in defaults)
 touch tracker.config
 
-# 5. (Optional) Customize configuration
+# 5. (Optional) Customize configuration - get the template
+wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/tracker.config.template
 cp tracker.config.template tracker.config
 # Edit tracker.config if needed
 # nano tracker.config
