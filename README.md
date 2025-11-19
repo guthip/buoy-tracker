@@ -56,7 +56,7 @@ The application runs out-of-the-box with default settings. To customize MQTT bro
 
 ### Docker Deployment (Recommended)
 
-**Option 1: Using docker-compose (Easiest)**
+**Using docker-compose (Easiest)**
 
 ```bash
 # 1. Create a project directory
@@ -85,11 +85,24 @@ docker compose logs -f
 # Access at http://localhost:5102
 ```
 
-**What's Included in v0.68:**
-- ✅ Pre-configured `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
+**Building from Source**
+
+```bash
+# Clone the repository
+git clone https://github.com/guthip/buoy-tracker.git
+cd buoy-tracker
+
+# Build the Docker image
+docker build -t buoy-tracker:latest .
+
+# Run with docker-compose
+docker compose up -d
+```
+
+**What's Included:**
+- ✅ Real-time Meshtastic mesh network node tracking
 - ✅ 7-day retention data (position history and telemetry)
 - ✅ Persistent volumes for config, data, and logs
-- ✅ Ready to use immediately - zero configuration needed
 - ✅ Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), Raspberry Pi (ARM64)
 
 **Volumes Created:**

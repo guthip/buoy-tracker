@@ -55,31 +55,6 @@ docker compose up -d
 
 The existing `./data` directory is preserved across updates.
 
-### From Docker Hub (Manual)
-
-```bash
-# Pull and run - fully pre-configured with SYC buoy data
-# Works on Intel, Apple Silicon, and Raspberry Pi
-docker pull dokwerker8891/buoy-tracker:0.68
-
-# Run with volumes for persistence
-docker run -d \
-  --name buoy-tracker \
-  -p 5102:5102 \
-  -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/logs:/app/logs \
-  dokwerker8891/buoy-tracker:0.68
-```
-
-## Building the Image (Optional)
-
-If you want to build from source:
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 -t dokwerker8891/buoy-tracker:0.68 -t dokwerker8891/buoy-tracker:latest --push .
-```
-
 ## Running Options
 
 ### Recommended: Docker Compose
@@ -105,9 +80,15 @@ docker compose down
 
 ### Manual: docker run with Volumes
 
-For systems without docker-compose or prefer manual control:
+For systems without docker-compose, build from source and run:
 
 ```bash
+# Clone the repository and build
+git clone https://github.com/guthip/buoy-tracker.git
+cd buoy-tracker
+docker build -t buoy-tracker:latest .
+
+# Run with volumes for persistence
 docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
@@ -115,18 +96,21 @@ docker run -d \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
-  dokwerker8891/buoy-tracker:0.68
+  buoy-tracker:latest
 ```
 
 ### Quick Start (No Persistence)
 
-For testing - runs with defaults, no volume mounts:
+For testing - runs with defaults, no volume mounts (requires build first):
 
 ```bash
+git clone https://github.com/guthip/buoy-tracker.git && cd buoy-tracker
+docker build -t buoy-tracker:latest .
+
 docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
-  dokwerker8891/buoy-tracker:0.68
+  buoy-tracker:latest
 ```
 
 ⚠️ **Note**: Data will be lost when container restarts. Use volumes for production.
@@ -170,6 +154,9 @@ Separate volumes for different concerns makes deployment and upgrades seamless:
 
 ### Complete Volume Setup
 ```bash
+git clone https://github.com/guthip/buoy-tracker.git && cd buoy-tracker
+docker build -t buoy-tracker:latest .
+
 docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
@@ -177,7 +164,7 @@ docker run -d \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
-  dokwerker8891/buoy-tracker:0.68
+  buoy-tracker:latest
 ```
 
 **Why This Approach?**
@@ -235,8 +222,10 @@ Data in `./data/` is automatically preserved.
 docker stop buoy-tracker
 docker rm buoy-tracker
 
-# Pull new image
-docker pull dokwerker8891/buoy-tracker:0.68
+# Rebuild from latest source
+cd buoy-tracker
+git pull origin main
+docker build -t buoy-tracker:latest .
 
 # Start with same volumes
 docker run -d \
@@ -246,7 +235,7 @@ docker run -d \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
   -v $(pwd)/logs:/app/logs \
-  dokwerker8891/buoy-tracker:0.68
+  buoy-tracker:latest
 ```
 
 Data in `./data/` is automatically preserved across upgrades.
