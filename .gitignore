@@ -69,7 +69,9 @@ ssl/
 *.tmp
 
 # Local configuration (sensitive)
-tracker.config
+# tracker.config is public (no secrets) - included in repo
+# Only secret.config is ignored
+secret.config
+
 # Docker ignore helper
 .dockerignore
-buoy-tracker-0.2.tar.gz

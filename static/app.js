@@ -1,7 +1,6 @@
 /* Buoy Tracker Client Script (ES5) */
 (function(){
   var APP_JS_VERSION = 'v3';
-  console.log('Buoy Tracker client script loaded', APP_JS_VERSION);
   var map = null;
   var markers = {};
   var trails = {};
@@ -10,36 +9,20 @@
   var movementLines = {}; // red lines from origin to current position when moved
   var movedAlertShown = {}; // track one-time alerts per node id
   var specialPackets = {}; // cache of special node packets
-  var voltageGraphCache = {}; // pre-rendered voltage graphs HTML for special nodes
-  var availableChannels = []; // list of all channels (from config + discovered)
-  var activeChannels = {}; // channel filter state {channelName: true/false}
   
-  var specialOnlyEl = document.getElementById('filter-special-only');
-  var offlineEl = document.getElementById('toggle-offline-specials');
+  // Configuration thresholds (in seconds) - will be loaded from server
+  var statusBlueThreshold = 3600; // default: 1 hour
+  var statusOrangeThreshold = 43200; // default: 12 hours
+
+  
+  var showAllNodesEl = document.getElementById('show-all-nodes');
+  // offlineEl removed: always show special nodes, even when offline
   var trailsEl = document.getElementById('toggle-trails');
   var hoursEl = document.getElementById('trail-hours');
-  var sortByEl = document.getElementById('sort-by');
-  
-  // Initialize channels from config
-  function initChannels(){
-    var d = document.body.dataset;
-    var configChannels = d.mqttChannels || '';
-    if (configChannels) {
-      var channelList = configChannels.split(',');
-      for (var i = 0; i < channelList.length; i++) {
-        var ch = channelList[i].trim();
-        if (ch) {
-          availableChannels.push(ch);
-          activeChannels[ch] = true; // Enable all by default
-        }
-      }
-    }
-    console.log('Initialized channels from config:', availableChannels);
-  }
-  
-  if (offlineEl) offlineEl.checked = true;
+
+    // Ensure the menu checkbox for trails is always checked on load\n  if (trailsEl) trailsEl.checked = true;\n  \n  // Default to showing only SPECIAL nodes on page load\n  if (showAllNodesEl) showAllNodesEl.checked = false;\n  if (trailsEl) trailsEl.checked = true;
   function attachChange(el){ if(el && el.addEventListener){ el.addEventListener('change', function(){ updateNodes(); }); } }
-  attachChange(specialOnlyEl); attachChange(offlineEl); attachChange(trailsEl); attachChange(sortByEl);
+  attachChange(showAllNodesEl); attachChange(trailsEl);
   
   // Add validation for trail-hours input
   if (hoursEl) {
@@ -87,26 +70,6 @@
     }
   };
 
-  function updateChannelFilter(){
-    var container = document.getElementById('channel-filter');
-    if (!container) return;
-    
-    // Build list of channel chips
-    var html = '';
-    for (var i = 0; i < availableChannels.length; i++) {
-      var ch = availableChannels[i];
-      var isActive = activeChannels[ch] !== false; // default to true
-      var className = 'channel-chip' + (isActive ? ' active' : '');
-      html += '<div class="' + className + '" onclick="toggleChannel(\'' + ch + '\')">' + ch + '</div>';
-    }
-    container.innerHTML = html;
-  }
-
-  window.toggleChannel = function(channelName){
-    activeChannels[channelName] = !activeChannels[channelName];
-    updateChannelFilter();
-    updateNodes();
-  };
 
   function initMap(){
     if (typeof L === 'undefined') {
@@ -171,125 +134,9 @@
     return lines.join('<br>');
   }
 
-  // Generate inline SVG voltage graph from data points
-  function generateVoltageGraph(voltageData) {
-    if (!voltageData || voltageData.length < 2) {
-      return ''; // Need at least 2 points for a graph
-    }
-    
-    var width = 240;  // Reduced from 280
-    var height = 60;  // Reduced from 80
-    var padding = { top: 8, right: 8, bottom: 15, left: 30 };  // Reduced padding
-    var graphWidth = width - padding.left - padding.right;
-    var graphHeight = height - padding.top - padding.bottom;
-    
-    // Find min/max voltage for Y-axis
-    var minVoltage = 3.0; // LiPo minimum
-    var maxVoltage = 4.2; // LiPo maximum
-    for (var i = 0; i < voltageData.length; i++) {
-      var v = voltageData[i].voltage;
-      if (v < minVoltage) minVoltage = Math.floor(v * 10) / 10;
-      if (v > maxVoltage) maxVoltage = Math.ceil(v * 10) / 10;
-    }
-    
-    // Time range
-    var minTime = voltageData[0].timestamp;
-    var maxTime = voltageData[voltageData.length - 1].timestamp;
-    var timeRange = maxTime - minTime;
-    
-    // Scale functions
-    function scaleX(timestamp) {
-      return padding.left + ((timestamp - minTime) / timeRange) * graphWidth;
-    }
-    function scaleY(voltage) {
-      return padding.top + graphHeight - ((voltage - minVoltage) / (maxVoltage - minVoltage)) * graphHeight;
-    }
-    
-    // Build SVG path
-    var pathData = 'M';
-    for (var i = 0; i < voltageData.length; i++) {
-      var x = scaleX(voltageData[i].timestamp);
-      var y = scaleY(voltageData[i].voltage);
-      pathData += (i === 0 ? '' : ' L') + x.toFixed(1) + ',' + y.toFixed(1);
-    }
-    
-    // Format time labels
-    function formatTimeLabel(timestamp) {
-      var d = new Date(timestamp * 1000);
-      return (d.getMonth() + 1) + '/' + d.getDate();
-    }
-    
-    var startLabel = formatTimeLabel(minTime);
-    var endLabel = formatTimeLabel(maxTime);
-    
-    // Generate SVG
-    var svg = '<svg width="' + width + '" height="' + height + '" style="background:#f9f9f9;border:1px solid #ddd;border-radius:3px;">';
-    
-    // Grid lines (horizontal)
-    svg += '<line x1="' + padding.left + '" y1="' + scaleY(4.2) + '" x2="' + (width - padding.right) + '" y2="' + scaleY(4.2) + '" stroke="#ddd" stroke-width="1" stroke-dasharray="2,2"/>';
-    svg += '<line x1="' + padding.left + '" y1="' + scaleY(3.0) + '" x2="' + (width - padding.right) + '" y2="' + scaleY(3.0) + '" stroke="#ddd" stroke-width="1" stroke-dasharray="2,2"/>';
-    
-    // Voltage line
-    svg += '<path d="' + pathData + '" fill="none" stroke="#2196F3" stroke-width="2"/>';
-    
-    // Data points
-    for (var i = 0; i < voltageData.length; i++) {
-      var x = scaleX(voltageData[i].timestamp);
-      var y = scaleY(voltageData[i].voltage);
-      svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2" fill="#2196F3"/>';  // Smaller dots
-    }
-    
-    // Y-axis labels (smaller font)
-    svg += '<text x="3" y="' + (scaleY(4.2) + 3) + '" font-size="8" fill="#666">4.2V</text>';
-    svg += '<text x="3" y="' + (scaleY(3.0) + 3) + '" font-size="8" fill="#666">3.0V</text>';
-    
-    // X-axis labels (smaller font)
-    svg += '<text x="' + padding.left + '" y="' + (height - 3) + '" font-size="8" fill="#666">' + startLabel + '</text>';
-    svg += '<text x="' + (width - padding.right - 20) + '" y="' + (height - 3) + '" font-size="8" fill="#666">' + endLabel + '</text>';
-    
-    svg += '</svg>';
-    
-    return svg;
-  }
 
-  // Function to fetch and cache voltage graphs for special nodes
-  function updateVoltageGraphs() {
-    fetch('/api/nodes')
-      .then(function(response) { return response.json(); })
-      .then(function(data) {
-        var nodes = data.nodes || [];
-        nodes.forEach(function(node) {
-          if (node.is_special && node.id && node.voltage != null) {
-            // Fetch voltage history for this special node
-            fetch('/api/special/voltage_history/' + node.id + '?days=7')
-              .then(function(response) { return response.json(); })
-              .then(function(voltageData) {
-                if (voltageData.data && voltageData.data.length >= 2) {
-                  // Generate graph and cache it
-                  var graph = generateVoltageGraph(voltageData.data);
-                  voltageGraphCache[node.id] = '<div style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;">' +
-                    '<div style="font-size:0.85em;font-weight:bold;margin-bottom:4px;">Battery Voltage (Past Week)</div>' +
-                    graph + '</div>';
-                } else if (voltageData.data && voltageData.data.length === 1) {
-                  voltageGraphCache[node.id] = '<div style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;">' +
-                    '<div style="font-size:0.85em;font-weight:bold;margin-bottom:4px;">Battery Voltage</div>' +
-                    '<div style="text-align:center;padding:10px;color:#999;font-size:0.8em;">Only one data point available</div></div>';
-                } else {
-                  voltageGraphCache[node.id] = '<div style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:4px;">' +
-                    '<div style="font-size:0.85em;font-weight:bold;margin-bottom:4px;">Battery Voltage</div>' +
-                    '<div style="text-align:center;padding:10px;color:#999;font-size:0.8em;">No voltage history available</div></div>';
-                }
-              })
-              .catch(function(err) {
-                console.error('Failed to load voltage history for node', node.id, ':', err);
-              });
-          }
-        });
-      })
-      .catch(function(err) {
-        console.error('Failed to fetch nodes for voltage graph update:', err);
-      });
-  }
+
+
 
   function buildNodeCard(node){
     var clickable = (node.has_fix && node.lat != null && node.lon != null);
@@ -306,97 +153,77 @@
       }
     }
     
-    // Compact header: name + status on one line
-    var header = '<div class="node-name">';
-    header += displayName;
-    if (node.stale || node.status === 'gray') { 
-      header += ' <span style="color:#a00;font-size:0.8em">(no GPS data received)</span>'; 
+    // Compact header: name only
+    var header = '<div class="node-name">' + displayName + '</div>';
+
+    // --- Traffic light indicators ---
+    var now = Date.now() / 1000;
+    // Battery
+    var bat = (node.battery != null) ? node.battery : null;
+    var voltage = (node.voltage != null) ? node.voltage : null;
+    var batteryColor = 'gray';
+    if (bat !== null && voltage !== null) {
+      if (bat >= 70 && voltage >= 3.7) batteryColor = 'green';
+      else if (bat >= 40 && voltage >= 3.5) batteryColor = 'yellow';
+      else batteryColor = 'red';
     }
-    header += '</div>';
-    
-    var info = '';
-    if (node.has_fix){
-      var bat = (node.battery != null) ? node.battery : '?';
-      var voltage = (node.voltage != null) ? node.voltage.toFixed(2) + 'V' : '';
-      var channel = node.channel_name ? node.channel_name : (node.modem_preset ? node.modem_preset : '');
-      
-      // Build battery display with voltage and percentage
-      var batteryDisplay = '';
-      var batteryTooltip = 'Battery voltage and charge level';
-      if (voltage && bat !== '?') {
-        batteryDisplay = voltage + ' (' + bat + '%)';
-        batteryTooltip = 'Battery: ' + voltage + ' at ' + bat + '% charge';
-      } else if (voltage) {
-        batteryDisplay = voltage;
-        batteryTooltip = 'Battery voltage: ' + voltage;
-      } else if (bat !== '?') {
-        batteryDisplay = 'Bat: ' + bat + '%';
-        batteryTooltip = 'Battery charge level: ' + bat + '%';
-      }
-      
-      // Add low battery indicator
-      if (node.battery_low) {
-        batteryDisplay += ' ⚠️';
-        batteryTooltip += ' (LOW BATTERY WARNING)';
-      }
-      
-      // Build info line with tooltips: Channel | Battery display
-      var infoParts = [];
-      if (channel) {
-        infoParts.push('<span class="tooltip-item">' + channel + '<span class="tooltip-balloon">LoRa channel/modem preset</span></span>');
-      }
-      if (batteryDisplay) {
-        infoParts.push('<span class="tooltip-item">' + batteryDisplay + '<span class="tooltip-balloon">' + batteryTooltip + '</span></span>');
-      }
-      info = infoParts.join(' | ');
-      
-      // Build LPU, SoL, and Moved on single line with tooltips
-      var now = Date.now() / 1000;
-      var statusParts = [];
-      
-      // LPU: Time since last position update
-      if (node.last_position_update != null) {
-        var lpuAge = Math.round(now - node.last_position_update);
-        var lpuStr = '';
-        if (lpuAge < 60) lpuStr = lpuAge + 's';
-        else if (lpuAge < 3600) lpuStr = Math.floor(lpuAge / 60) + 'm';
-        else lpuStr = Math.floor(lpuAge / 3600) + 'h';
-        statusParts.push('<span class="tooltip-item">LPU: ' + lpuStr + '<span class="tooltip-balloon">Last Position Update: Time since last GPS position packet</span></span>');
-      } else {
-        statusParts.push('<span class="tooltip-item">LPU: ?<span class="tooltip-balloon">Last Position Update: No position data yet</span></span>');
-      }
-      
-      // SoL: Time since any packet received (last_seen)
-      if (node.last_seen != null) {
-        var solAge = Math.round(now - node.last_seen);
-        var solStr = '';
-        if (solAge < 60) solStr = solAge + 's';
-        else if (solAge < 3600) solStr = Math.floor(solAge / 60) + 'm';
-        else solStr = Math.floor(solAge / 3600) + 'h';
-        statusParts.push('<span class="tooltip-item">SoL: ' + solStr + '<span class="tooltip-balloon">Sign of Life: Time since any packet received</span></span>');
-      } else {
-        statusParts.push('<span class="tooltip-item">SoL: ?<span class="tooltip-balloon">Sign of Life: No packets received yet</span></span>');
-      }
-      
-      // Moved: Distance from origin for special nodes
-      if (node.is_special && node.distance_from_origin_m != null && node.origin_lat != null && node.origin_lon != null){
-        var distm = Math.round(Number(node.distance_from_origin_m));
-        if (!isNaN(distm)){
-          statusParts.push('<span class="tooltip-item">Moved: ' + distm + 'M<span class="tooltip-balloon">Distance moved from home position</span></span>');
-        }
-      }
-      
-      // Combine all status parts on single line
-      if (statusParts.length > 0) {
-        info += '<br><small>' + statusParts.join(' | ') + '</small>';
-      }
-    } else {
-      // For nodes without GPS fix, just show channel if available
-      var channel2 = node.channel_name ? node.channel_name : (node.modem_preset ? node.modem_preset : '');
-      if (channel2) info = channel2;
+    // LPU
+    var lpuColor = 'gray';
+    var lpuStr = '?';
+    if (node.last_position_update != null) {
+      var lpuAge = Math.round(now - node.last_position_update);
+      if (lpuAge < statusBlueThreshold) lpuColor = 'green';
+      else if (lpuAge < statusOrangeThreshold) lpuColor = 'yellow';
+      else lpuColor = 'red';
+      if (lpuAge < 60) lpuStr = lpuAge + 's';
+      else if (lpuAge < 3600) lpuStr = Math.floor(lpuAge / 60) + 'm';
+      else lpuStr = Math.floor(lpuAge / 3600) + 'h';
     }
-    
-    // Add extra packet info for special nodes - REMOVED to keep cards compact
+    // SoL
+    var solColor = 'gray';
+    var solStr = '?';
+    if (node.last_seen != null) {
+      var solAge = Math.round(now - node.last_seen);
+      if (solAge < 3600) solColor = 'green';
+      else if (solAge < 12*3600) solColor = 'yellow';
+      else solColor = 'red';
+      if (solAge < 60) solStr = solAge + 's';
+      else if (solAge < 3600) solStr = Math.floor(solAge / 60) + 'm';
+      else solStr = Math.floor(solAge / 3600) + 'h';
+    }
+    // Distance from home (special nodes)
+    var distColor = 'gray';
+    var distStr = '?';
+    if (node.is_special && node.distance_from_origin_m != null && node.origin_lat != null && node.origin_lon != null) {
+      var distm = Math.round(Number(node.distance_from_origin_m));
+      distStr = !isNaN(distm) ? distm + 'M' : '?';
+      var threshold = 50;
+      if (typeof window !== 'undefined' && document.body && document.body.dataset.moveThreshold) {
+        threshold = parseInt(document.body.dataset.moveThreshold, 10) || 50;
+      }
+      if (distm < threshold/2) distColor = 'green';
+      else if (distm < threshold) distColor = 'yellow';
+      else distColor = 'red';
+    }
+
+    // Build traffic light indicators row in order: LPU, distance, SoL, battery
+    var indicators = '<div style="display:flex;gap:8px;margin:4px 0 0 0;">'
+      + '<span title="Last Position Update" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + (lpuColor==='green'?'#4CAF50':lpuColor==='yellow'?'#FFEB3B':lpuColor==='red'?'#F44336':'#bbb')
+      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">LPU '+lpuStr+'</span></span>'
+      + (node.is_special?('<span title="Distance from Home" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + (distColor==='green'?'#4CAF50':distColor==='yellow'?'#FFEB3B':distColor==='red'?'#F44336':'#bbb')
+      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">'+distStr+'</span></span>'):'')
+      + '<span title="Sign of Life" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + (solColor==='green'?'#4CAF50':solColor==='yellow'?'#FFEB3B':solColor==='red'?'#F44336':'#bbb')
+      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">SoL '+solStr+'</span></span>'
+      + '<span title="Battery" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + (batteryColor==='green'?'#4CAF50':batteryColor==='yellow'?'#FFEB3B':batteryColor==='red'?'#F44336':'#bbb')
+      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">'
+      + (voltage!==null?voltage.toFixed(2)+'V':'?') + '</span></span>'
+      + '</div>';
+
+    var info = indicators;
     var extraInfo = '';
     
     var classes = 'node ' + node.status + (node.is_special ? ' special' : '');
@@ -419,7 +246,7 @@
   function fetchSpecialPackets(callback){
     try {
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/special/packets?limit=10', true);
+      xhr.open('GET', 'api/special/packets?limit=10', true);
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
           if (xhr.status === 200){
@@ -449,7 +276,7 @@
       var xhr = new XMLHttpRequest();
       // Add cache-busting parameter to prevent browser caching
       var cacheBuster = '?_=' + Date.now();
-      xhr.open('GET', '/api/nodes' + cacheBuster, true);
+      xhr.open('GET', 'api/nodes' + cacheBuster, true);
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
           if (xhr.status !== 200){ console.warn('nodes request failed', xhr.status); return; }
@@ -459,90 +286,44 @@
             document.getElementById('node-count').textContent='0'; 
             return; 
           }
-          
-          // Merge discovered channels with configured channels
-          var discoveredChannels = {};
-          for (var i = 0; i < data.nodes.length; i++) {
-            var n = data.nodes[i];
-            if (n.channel_name) discoveredChannels[n.channel_name] = true;
-          }
-          
-          // Add any newly discovered channels to availableChannels
-          for (var discCh in discoveredChannels) {
-            if (discoveredChannels.hasOwnProperty(discCh)) {
-              var found = false;
-              for (var j = 0; j < availableChannels.length; j++) {
-                if (availableChannels[j] === discCh) {
-                  found = true;
-                  break;
-                }
+            
+            // Channel filter removed: skip discoveredChannels logic
+            var list = data.nodes.slice(0);
+            
+            if (showAllNodesEl && !showAllNodesEl.checked){
+              var tmp = [];
+              for(var m=0;m<list.length;m++){
+                if(list[m].is_special) tmp.push(list[m]);
               }
-              if (!found) {
-                availableChannels.push(discCh);
-                activeChannels[discCh] = true; // Enable newly discovered channels
-              }
+              list = tmp;
             }
-          }
-          availableChannels.sort();
-          updateChannelFilter();
-          
-          var list = data.nodes.slice(0);
-          
-          // Apply channel filter
-          var filtered = [];
-          for (var k = 0; k < list.length; k++) {
-            var node = list[k];
-            var channelName = node.channel_name || 'Unknown';
-            if (activeChannels[channelName] !== false) {
-              filtered.push(node);
+            
+            
+            // Always sort: special nodes at top (alphabetically), non-special nodes by newest seen
+            var special = [], nonSpecial = [];
+            for (var i = 0; i < list.length; i++) {
+              if (list[i].is_special) special.push(list[i]);
+              else nonSpecial.push(list[i]);
             }
-          }
-          list = filtered;
-          
-          if (specialOnlyEl && specialOnlyEl.checked){ 
-            var tmp = []; 
-            for(var m=0;m<list.length;m++){ 
-              if(list[m].is_special) tmp.push(list[m]); 
-            } 
-            list = tmp; 
-          }
-          
-          if (offlineEl && !offlineEl.checked){ 
-            var tmp2 = []; 
-            for(var p=0;p<list.length;p++){ 
-              if(list[p].has_fix) tmp2.push(list[p]); 
-            } 
-            list = tmp2; 
-          }
-          
-          var sortMode = sortByEl ? sortByEl.value : 'name';
-          list.sort(function(a, b){
-            if(a.is_special && !b.is_special) return -1;
-            if(!a.is_special && b.is_special) return 1;
-            if(sortMode === 'name'){
-              var nameA = (a.name || 'Unknown').toLowerCase();
-              var nameB = (b.name || 'Unknown').toLowerCase();
-              if(nameA < nameB) return -1;
-              if(nameA > nameB) return 1;
+            special.sort(function(a, b) {
+              var nameA = (a.name || '').toLowerCase();
+              var nameB = (b.name || '').toLowerCase();
+              if (nameA < nameB) return -1;
+              if (nameA > nameB) return 1;
               return 0;
-            } else if(sortMode === 'seen-newest'){
+            });
+            nonSpecial.sort(function(a, b) {
               var timeA = a.time_since_seen || 999999;
               var timeB = b.time_since_seen || 999999;
               return timeA - timeB;
-            } else if(sortMode === 'seen-oldest'){
-              var timeA2 = a.time_since_seen || 999999;
-              var timeB2 = b.time_since_seen || 999999;
-              return timeB2 - timeA2;
+            });
+            list = special.concat(nonSpecial);
+            var outHtml = '';
+            for(var q=0;q<list.length;q++){
+              outHtml += buildNodeCard(list[q]);
             }
-            return 0;
-          });
-          
-          var outHtml = ''; 
-          for(var q=0;q<list.length;q++){ 
-            outHtml += buildNodeCard(list[q]); 
-          }
-          document.getElementById('nodes').innerHTML = outHtml;
-          document.getElementById('node-count').textContent = String(list.length);
+            document.getElementById('nodes').innerHTML = outHtml;
+            document.getElementById('node-count').textContent = String(list.length);
           
           if (map){
             var toMap = []; 
@@ -594,19 +375,21 @@
               var key = String(node.id); 
               var color = '#f44336';
               
-              if (node.is_special){ 
-                if (node.status === 'gray'){
-                  // No position fix yet - show at home position in gray
+              if (node.is_special) {
+                // For special nodes, always use gray marker if status is 'gray' or 'red' (very old LPU)
+                if (node.status === 'gray' || node.status === 'red') {
                   color = '#999999';
-                } else if (node.stale){ 
-                  color = '#888888'; 
-                } else { 
-                  color = '#FFD700'; 
-                } 
-              } else if (node.status === 'blue'){ 
-                color = '#2196F3'; 
-              } else if (node.status === 'orange'){ 
-                color = '#FF9800'; 
+                } else if (node.stale) {
+                  color = '#888888';
+                } else {
+                  color = '#FFD700';
+                }
+              } else if (node.status === 'red') {
+                color = '#f44336';
+              } else if (node.status === 'blue') {
+                color = '#2196F3';
+              } else if (node.status === 'orange') {
+                color = '#FF9800';
               }
               
               var nm2 = node.name || 'Unknown'; 
@@ -622,15 +405,16 @@
               var popup = '<b>' + nm2 + '</b>' + sl + staleTxt + noFixTxt + '<br>' + sh2;
               
               // Battery info with voltage if available
-              if (node.voltage != null) {
-                popup += '<br>Battery: ' + node.voltage.toFixed(2) + 'V (' + bat2 + '%)';
+              // For special nodes, prefer improved voltage if available (same as card)
+              if (node.is_special && node.improved_voltage != null) {
+                popup += '<br>Battery: ' + node.improved_voltage.toFixed(2) + 'V (' + bat2 + '%)';
                 if (node.battery_low) {
                   popup += ' ⚠️ LOW';
                 }
-                
-                // Add pre-rendered voltage graph from cache for special nodes
-                if (node.is_special && node.id && voltageGraphCache[node.id]) {
-                  popup += voltageGraphCache[node.id];
+              } else if (node.voltage != null) {
+                popup += '<br>Battery: ' + node.voltage.toFixed(2) + 'V (' + bat2 + '%)';
+                if (node.battery_low) {
+                  popup += ' ⚠️ LOW';
                 }
               } else {
                 popup += '<br>Bat: ' + bat2 + '%';
@@ -697,9 +481,6 @@
                 }
                 
                 // Power metrics if available
-                if (node.power_current != null) {
-                  popup += '<br>Power: ' + node.power_current.toFixed(2) + 'A';
-                }
               }
               
               // Add link to liamcottle meshview server
@@ -716,17 +497,9 @@
               
               var opts = { radius:8, color:'#222', weight:1, fillColor:color, fillOpacity:0.9 };
               if (!markers[key]){ 
-                markers[key] = L.circleMarker([node.lat, node.lon], opts).addTo(map); 
-                // Debug log for special nodes
-                if (node.is_special) {
-                  console.log('Created marker for ' + nm2 + ' at', node.lat, node.lon);
-                }
+                markers[key] = L.circleMarker([node.lat, node.lon], opts).addTo(map);
               } else { 
                 markers[key].setLatLng([node.lat, node.lon]).setStyle(opts);
-                // Debug log for special nodes 
-                if (node.is_special) {
-                  console.log('Updated marker for ' + nm2 + ' to', node.lat, node.lon);
-                }
               }
               
               // Bind popup AFTER marker creation/update
@@ -833,7 +606,7 @@
                 (function(node){
                   var hours = parseInt(hoursEl.value || '24', 10);
                   var xhr2 = new XMLHttpRequest();
-                  xhr2.open('GET', '/api/special/history?node_id=' + node.id + '&hours=' + hours, true);
+                  xhr2.open('GET', 'api/special/history?node_id=' + node.id + '&hours=' + hours, true);
                   xhr2.onreadystatechange = function(){
                     if (xhr2.readyState === 4 && xhr2.status === 200){
                       try { 
@@ -871,38 +644,57 @@
         }
       }; 
       xhr.send();
-    } catch(e){ console.error('Update error:', e); }
+    } catch(e){ 
+      console.error('Update error:', e); 
+    }
   }
 
   function updateStatus(){
-    try { 
+    try {
+      var statusEl = document.getElementById('mqtt-status');
+      if (!statusEl) return;
+      
       var xhr = new XMLHttpRequest(); 
-      xhr.open('GET', '/api/status', true); 
-      xhr.onreadystatechange = function(){ 
-        if (xhr.readyState === 4){ 
-          if (xhr.status !== 200){ 
-            document.getElementById('mqtt-status').textContent = '⚠️ Error'; 
-            return; 
-          } 
-          try { 
+      xhr.open('GET', 'api/status', true); 
+      xhr.timeout = 3000;
+      
+      xhr.onload = function(){ 
+        try {
+          if (xhr.status === 200){ 
             var data2 = JSON.parse(xhr.responseText); 
-            var txt = (data2 && data2.mqtt_connected)? '✅ Connected':'❌ Disconnected'; 
-            document.getElementById('mqtt-status').textContent = txt; 
-          } catch(e){ 
-            document.getElementById('mqtt-status').textContent = '⚠️ Error'; 
-          } 
-        } 
-      }; 
+            var txt = '❌ Disconnected';
+            if (data2 && data2.mqtt_status === 'receiving_packets') {
+              txt = '✅ Receiving packets';
+            } else if (data2 && data2.mqtt_status === 'connected_to_server') {
+              txt = '🔗 Connected to server';
+            } else if (data2 && data2.mqtt_status === 'connecting') {
+              txt = '⏳ Connecting...';
+            }
+            statusEl.textContent = txt;
+          }
+        } catch(e) {
+          // Silent catch - don't let callback errors propagate
+        }
+      };
+      
+      xhr.onerror = function(){ 
+        // Network error - silent
+      };
+      
+      xhr.ontimeout = function(){
+        // Timeout - silent
+      };
+      
       xhr.send(); 
-    } catch(e){ 
-      document.getElementById('mqtt-status').textContent = '⚠️ Error'; 
+    } catch(e) {
+      // Silent - don't let updateStatus errors break the poll loop
     }
   }
 
   window.showRecent = function(){
     try { 
       var xhr = new XMLHttpRequest(); 
-      xhr.open('GET', '/api/recent_messages', true); 
+      xhr.open('GET', 'api/recent_messages', true); 
       xhr.onreadystatechange = function(){ 
         if (xhr.readyState === 4){ 
           if (xhr.status !== 200){ 
@@ -936,7 +728,7 @@
     }
     try {
       var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/config/reload', true);
+      xhr.open('POST', 'api/config/reload', true);
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
           if (xhr.status === 200){
@@ -959,40 +751,82 @@
     }
   };
 
-  window.restartServer = function(){
-    if (!confirm('Restart the server?\n\nThe server will restart in 2 seconds. The page will reload automatically.')) {
-      return;
-    }
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', '/api/restart', true);
-      xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4){
-          if (xhr.status === 200){
-            alert('Server is restarting...\n\nThe page will reload in 5 seconds.');
-            setTimeout(function(){ window.location.reload(); }, 5000);
-          } else {
-            alert('Restart request may have failed. Check if server is running.');
-          }
-        }
-      };
-      xhr.send();
-    } catch(e){
-      alert('Error restarting server: ' + e.message);
-    }
-  };
 
-  initChannels(); // Initialize channels from config
+  // initChannels removed: channel filter no longer used
   initMap(); 
-  updateStatus(); 
-  fetchSpecialPackets(function(){ updateNodes(); }); // Fetch special packets first, then update nodes
-  updateVoltageGraphs(); // Initial fetch of voltage graphs for special nodes
+  updateStatus(); // Call immediately to get initial status
+  
+  // Wrap initial fetch in try-catch to prevent blocking polling
+  try {
+    fetchSpecialPackets(function(){ 
+      try {
+        updateNodes(); 
+      } catch(e) {
+        console.error('[INIT] Error in updateNodes callback:', e);
+      }
+    }); 
+  } catch(e) {
+    console.error('[INIT] Error in fetchSpecialPackets:', e);
+  }
   
   var statusRefresh = parseInt(document.body.dataset.statusRefresh || '5000', 10);
   var nodeRefresh = parseInt(document.body.dataset.nodeRefresh || '5000', 10);
-  setInterval(updateStatus, statusRefresh);
-  setInterval(function(){ fetchSpecialPackets(function(){ updateNodes(); }); }, nodeRefresh);
-  setInterval(updateVoltageGraphs, 60000); // Update voltage graphs every 60 seconds
+  
+  // Poll status continuously every 500ms to ensure live updates
+  var statusPollInterval = null;
+  var pollAttempts = 0;
+  
+  function startStatusPolling(){
+    try {
+      if (statusPollInterval) {
+        clearInterval(statusPollInterval);
+      }
+      pollAttempts = 0;
+      
+      statusPollInterval = setInterval(function() {
+        try {
+          pollAttempts++;
+          updateStatus();
+        } catch(e) {
+          console.error('Error in polling:', e);
+        }
+      }, 500);
+    } catch(e) {
+      console.error('Error starting polling:', e);
+    }
+  }
+  
+  try {
+    startStatusPolling();
+  } catch(e) {
+    console.error('Error starting polling:', e);
+  }
+  
+  // Start node polling immediately (after initial fetch)
+  try {
+    setInterval(function(){ 
+      try {
+        fetchSpecialPackets(function(){ updateNodes(); }); 
+      } catch(e) {
+        console.error('Error in node polling:', e);
+      }
+    }, nodeRefresh);
+  } catch(e) {
+    console.error('Error setting up node polling:', e);
+  }
+  
+  // Update voltage graphs every 60 seconds
+  try {
+    setInterval(function(){
+      try {
+        // updateVoltageGraphs() function not defined yet - skipping
+      } catch(e) {
+        console.error('[VOLT] Error updating voltage graphs:', e);
+      }
+    }, 60000);
+  } catch(e) {
+    console.error('[INIT] Error setting up voltage polling:', e);
+  }
 })();
 
 

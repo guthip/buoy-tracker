@@ -54,62 +54,43 @@ The web interface will be available at `http://localhost:5102`
 
 The application runs out-of-the-box with default settings. To customize MQTT broker, special nodes, or other settings, copy `tracker.config.template` to `tracker.config` and edit as needed.
 
-### Docker Deployment
+### Docker Deployment (Recommended)
 
+**Option 1: Using docker-compose (Easiest)**
 
-**Option 1: Pull from Docker Hub (Easiest)**
 ```bash
+# 1. Get the docker-compose.yml file
+wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
 
-# Pull and run the latest version (0.6) - fully pre-configured with SYC buoy data
-# Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64)
-docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.6
+# 2. Create required directories
+mkdir -p data logs
 
-# Access the application
-open http://localhost:5102
+# 3. Copy configuration (optional - image has defaults)
+cp tracker.config.template tracker.config
+# Edit tracker.config if needed
+# nano tracker.config
+
+# 4. Start the service
+docker compose up -d
+
+# 5. View logs
+docker compose logs -f
+
+# Access at http://localhost:5102
 ```
 
-**What's included in the image:**
+**What's Included in v0.68:**
 - ✅ Pre-configured `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
 - ✅ 7-day retention data (position history and telemetry)
+- ✅ Persistent volumes for config, data, and logs
 - ✅ Ready to use immediately - zero configuration needed
+- ✅ Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), Raspberry Pi (ARM64)
 
-
-> **Multi-Platform Support**: This image is a true multi-architecture build. Docker will automatically pull the correct version for your platform (x86_64/amd64 or arm64). No manual selection needed.
-
----
-
-**Maintainer Note:**
-To build and push a new multi-platform image:
-```sh
-docker buildx create --use  # (only needed once)
-docker buildx build --platform linux/amd64,linux/arm64 -t dokwerker8891/buoy-tracker:0.6 --push .
-```
-This ensures all users get the correct image for their hardware.
-
-**To update to the latest version:**
-```bash
-docker pull dokwerker8891/buoy-tracker:0.6
-docker stop buoy-tracker && docker rm buoy-tracker
-docker run -d --name buoy-tracker -p 5102:5102 dokwerker8891/buoy-tracker:0.6
-```
-
-**What's included in the image:**
-- ✅ Pre-configured `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
-- ✅ 7-day retention data (position history and telemetry)
-- ✅ Ready to use immediately - zero configuration needed
-
-> **Multi-Platform Support**: Image automatically works on Intel/AMD (x86_64), Apple Silicon (ARM64), and Raspberry Pi (ARM64) - Docker selects the correct architecture for your platform.
-
-**Optional**: Add volume mounts for persistence or custom config:
-```bash
-docker run -d --name buoy-tracker \
-  -p 5102:5102 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  dokwerker8891/buoy-tracker:0.6
-```
-
-For complete Docker instructions, see [DOCKER.md](DOCKER.md).
+**Volumes Created:**
+- `./tracker.config` → Container's config (read-only)
+- `./data/` → Node data, history, packets
+- `./logs/` → Application logs
+- `./docs/` → Documentation (optional)
 
 
 ## Using the Interface

@@ -27,6 +27,7 @@ nodes_data = {}
 recent_messages = deque(maxlen=config.RECENT_MESSAGE_BUFFER_SIZE)
 # Track if we've received any messages (more reliable than client.is_connected())
 message_received = False
+packets_received = False  # Track when we've received actual MQTT packets with data
 last_message_time = 0
 
 # Special nodes history: node_id -> deque of {ts, lat, lon, alt}
@@ -40,6 +41,7 @@ node_topics = {}
 special_node_packets = {}  # node_id -> list of ALL packets with details
 special_node_last_packet = {}  # node_id -> timestamp of last packet (any type, even encrypted)
 special_node_channels = {}  # node_id -> channel_name from topic (for routing packets)
+special_node_position_timestamps = {}  # node_id -> set of rxTime values to deduplicate retransmitted positions
 _last_channel_save = 0  # Track when we last saved channel data
 _last_packet_save = 0  # Track when we last saved packet history
 
@@ -137,10 +139,16 @@ def _ensure_history_struct(node_id):
         special_history[node_id] = deque()
 
 def _prune_history(node_id, now_ts=None):
+    """Prune old position history entries for a special node."""
     if node_id not in special_history:
         return
     if now_ts is None:
         now_ts = time.time()
+    cutoff = now_ts - (config.SPECIAL_HISTORY_HOURS * 3600)
+    dq = special_history[node_id]
+    # pop from left while too old (oldest first)
+    while dq and dq[0]['ts'] < cutoff:
+        dq.popleft()
 
 def _haversine_m(lat1, lon1, lat2, lon2):
     """Return distance in meters between two lat/lon points."""
@@ -157,11 +165,6 @@ def _haversine_m(lat1, lon1, lat2, lon2):
         return 6371000.0 * c
     except Exception:
         return None
-    cutoff = now_ts - (config.SPECIAL_HISTORY_HOURS * 3600)
-    dq = special_history[node_id]
-    # pop from left while too old (oldest first)
-    while dq and dq[0]['ts'] < cutoff:
-        dq.popleft()
 
 def _load_special_nodes_data():
     """
@@ -255,19 +258,32 @@ def _load_special_nodes_data():
             return
             
         except Exception as e:
-            logger.warning(f"Failed to load unified special nodes data: {e}")
+            logger.error(f"❌ Failed to load unified special nodes data from {path}")
+            logger.error(f"   Error: {type(e).__name__}: {e}")
+            if isinstance(e, json.JSONDecodeError):
+                logger.error(f"   JSON error at line {e.lineno}, column {e.colno}")
+                try:
+                    with path.open('r') as f:
+                        lines = f.readlines()
+                        if e.lineno - 1 < len(lines):
+                            logger.error(f"   Line {e.lineno}: {lines[e.lineno - 1].rstrip()}")
+                except:
+                    pass
+            logger.warning(f"   Starting fresh with empty data")
+            # Continue with empty data structures
             logger.info("Starting with empty data - unified file will be created on first save")
 
 def _save_special_nodes_data(force=False):
     """
     Save unified special node data to single JSON file.
     Structure: {node_id: {info: {...}, position_history: [...], packets: [...]}}
+    Only saves when force=True or when data has changed (with 5s minimum throttle to batch updates).
     """
     global _last_history_save
     now_ts = time.time()
     
-    # Throttle to once every 60s unless forced
-    if not force and (now_ts - _last_history_save) < 60:
+    # Throttle to at minimum once every 5s to batch rapid updates
+    if not force and (now_ts - _last_history_save) < 5:
         return
     
     try:
@@ -318,8 +334,14 @@ def _save_special_nodes_data(force=False):
             if node_data:  # Only save if we have some data
                 data[str(node_id)] = node_data
         
-        with path.open('w') as f:
-            json.dump(data, f, indent=2)
+        # Atomic write: write to temp file first, then rename to prevent corruption on crash
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False, suffix='.tmp') as tmp:
+            json.dump(data, tmp, indent=2)
+            tmp_path = tmp.name
+        
+        # Atomic rename (overwrites destination on POSIX systems)
+        Path(tmp_path).replace(path)
         
         _last_history_save = now_ts
         
@@ -343,8 +365,9 @@ print("***** All load functions completed *****")
 
 def add_recent(json_data):
     try:
-        global message_received, last_message_time
+        global message_received, packets_received, last_message_time
         message_received = True
+        packets_received = True  # We've received an actual MQTT packet
         last_message_time = time.time()
         # store a lightweight copy with timestamp
         recent_messages.appendleft({
@@ -404,6 +427,7 @@ def on_nodeinfo(json_data):
     last_message_time = time.time()
     
     try:
+        logger.debug(f'on_nodeinfo callback fired - processing message')
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
@@ -501,6 +525,7 @@ def on_position(json_data):
     last_message_time = time.time()
     
     try:
+        logger.debug(f'on_position callback fired - processing message')
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
@@ -557,14 +582,12 @@ def on_position(json_data):
                         nodes_data[node_id]["distance_from_origin_m"] = dist
                         moved_far = bool(dist is not None and dist >= getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0))
                         
-                        # Send email alert if node moved beyond threshold
-                        if moved_far and not nodes_data[node_id].get("moved_far", False):
-                            # Transitioning from not-moved to moved - send alert
-                            if getattr(config, 'ALERT_ENABLED', False):
-                                try:
-                                    alerts.send_movement_alert(node_id, nodes_data[node_id], dist)
-                                except Exception as alert_err:
-                                    logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
+                        # Send email alert if node is outside threshold (cooldown prevents spam)
+                        if moved_far and getattr(config, 'ALERT_ENABLED', False):
+                            try:
+                                alerts.send_movement_alert(node_id, nodes_data[node_id], dist)
+                            except Exception as alert_err:
+                                logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
                         
                         nodes_data[node_id]["moved_far"] = moved_far
             except Exception:
@@ -581,14 +604,33 @@ def on_position(json_data):
             nodes_data[node_id]["last_seen"] = time.time()
             nodes_data[node_id]["last_position_update"] = time.time()  # Track position updates separately
             
-            # Record history for special nodes
+            # Record history for special nodes (deduplicate by rxTime to avoid retransmitted packets)
             if node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
-                _ensure_history_struct(node_id)
-                entry = {"ts": time.time(), "lat": lat, "lon": lon, "alt": alt}
-                special_history[node_id].append(entry)
-                _prune_history(node_id, now_ts=entry['ts'])
-                _save_special_nodes_data()
-                _save_special_nodes_data()  # Also save node data for special nodes
+                # Extract rxTime from the packet to deduplicate retransmissions
+                rx_time = json_data.get("rxTime")
+                
+                # Initialize deduplication set for this node if needed
+                if node_id not in special_node_position_timestamps:
+                    special_node_position_timestamps[node_id] = set()
+                
+                # Only add to history if we haven't seen this rxTime before
+                if rx_time is not None and rx_time not in special_node_position_timestamps[node_id]:
+                    _ensure_history_struct(node_id)
+                    entry = {"ts": time.time(), "lat": lat, "lon": lon, "alt": alt}
+                    special_history[node_id].append(entry)
+                    special_node_position_timestamps[node_id].add(rx_time)
+                    _prune_history(node_id, now_ts=entry['ts'])
+                    _save_special_nodes_data()
+                    logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
+                elif rx_time is not None:
+                    logger.debug(f'Skipped duplicate position for {node_id} (rxTime: {rx_time} already seen)')
+                else:
+                    # No rxTime available, add anyway (shouldn't happen but be safe)
+                    _ensure_history_struct(node_id)
+                    entry = {"ts": time.time(), "lat": lat, "lon": lon, "alt": alt}
+                    special_history[node_id].append(entry)
+                    _prune_history(node_id, now_ts=entry['ts'])
+                    _save_special_nodes_data()
             
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
@@ -631,7 +673,13 @@ def on_telemetry(json_data):
             battery = None
             try:
                 if isinstance(payload, dict):
+                    # Try TELEMETRY_APP format first: deviceMetrics.batteryLevel
                     battery = payload.get("deviceMetrics", {}).get("batteryLevel")
+                    
+                    # Try ADMIN_APP format: deviceState.power.battery
+                    if battery is None:
+                        battery = payload.get("deviceState", {}).get("power", {}).get("battery")
+                    
                     if battery is None:
                         battery = payload.get("battery") or payload.get("batt")
                     # some payloads put metrics under 'metrics' or 'device_metrics'
@@ -639,12 +687,21 @@ def on_telemetry(json_data):
                         battery = payload.get("metrics", {}).get("batteryLevel") or payload.get("device_metrics", {}).get("batteryLevel")
                     
                     # If no battery level found, try to estimate from voltage
-                    # Some devices (especially with power monitoring) only report voltage via powerMetrics
+                    # Priority: powerMetrics (SYCS), admin power metrics, deviceMetrics
                     if battery is None:
                         voltage = None
+                        # SYCS priority: check powerMetrics ch3Voltage first (power monitoring data)
                         power_metrics = payload.get("powerMetrics", {})
                         if power_metrics:
                             voltage = power_metrics.get("ch3Voltage") or power_metrics.get("ch1Voltage")
+                        
+                        # If no powerMetrics, check admin power format voltage
+                        if voltage is None:
+                            admin_voltage = payload.get("deviceState", {}).get("power", {}).get("voltage")
+                            if admin_voltage:
+                                voltage = admin_voltage / 1000.0  # Admin format uses mV
+                        
+                        # Fall back to deviceMetrics voltage
                         if voltage is None:
                             device_metrics = payload.get("deviceMetrics", {})
                             voltage = device_metrics.get("voltage") if device_metrics else None
@@ -670,6 +727,14 @@ def on_telemetry(json_data):
             except Exception:
                 nodes_data[node_id]["battery"] = None
             logger.info(f'Updated telemetry for {node_id}: battery={nodes_data[node_id].get("battery")}%')
+            
+            # Check for battery alert if this is a special node
+            if _is_special_node(node_id):
+                battery_level = nodes_data[node_id].get("battery")
+                if battery_level is not None and battery_level < config.LOW_BATTERY_THRESHOLD:
+                    from . import alerts
+                    node_data = nodes_data[node_id]
+                    alerts.send_battery_alert(node_id, node_data, battery_level)
             
             # Save node data if it's a special node
             if _is_special_node(node_id):
@@ -785,48 +850,76 @@ def connect_mqtt():
         logger.debug('MQTT client already exists, skipping connection')
         return
     
-    try:
-        # Create MeshtasticMQTT client
-        client = MeshtasticMQTT()
-        
-        # Register callbacks for each message type
-        client.register_callback('NODEINFO_APP', on_nodeinfo)
-        client.register_callback('POSITION_APP', on_position)
-        client.register_callback('TELEMETRY_APP', on_telemetry)
-        client.register_callback('NEIGHBORINFO_APP', on_neighborinfo)
-        client.register_callback('MAP_REPORT_APP', on_mapreport)
-        
-        # Connect to broker with first channel
-        # The library will handle decryption automatically
-        logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
-        logger.info(f'Monitoring channels: {", ".join(config.MQTT_CHANNELS)}')
-        
-        # Connect to first channel
-        first_channel = config.MQTT_CHANNELS[0] if config.MQTT_CHANNELS else 'MediumFast'
-        client.connect(
-            broker=config.MQTT_BROKER,
-            port=config.MQTT_PORT,
-            root=config.MQTT_ROOT_TOPIC.rstrip('/') + '/',
-            channel=first_channel,
-            username=config.MQTT_USERNAME if config.MQTT_USERNAME else None,
-            password=config.MQTT_PASSWORD if config.MQTT_PASSWORD else None,
-            key=config.MQTT_KEY if hasattr(config, 'MQTT_KEY') else 'AQ=='
-        )
-        
-        # Subscribe to additional channels
-        for channel in config.MQTT_CHANNELS[1:]:
-            topic = f"{config.MQTT_ROOT_TOPIC.rstrip('/')}/{channel}/#"
-            try:
-                client._client.subscribe(topic)
-                logger.info(f"Subscribed to additional channel: {channel}")
-            except Exception as e:
-                logger.error(f"Failed to subscribe to {channel}: {e}")
-        
-        logger.info('MQTT client connected and callbacks registered')
-        
-    except Exception as e:
-        logger.error(f'Failed to connect to MQTT broker: {e}')
-        raise
+    def _do_connect():
+        """Actually perform the MQTT connection (may block)."""
+        global client, message_received, last_message_time
+        try:
+            # Create MeshtasticMQTT client
+            logger.info('Creating MeshtasticMQTT client instance')
+            client = MeshtasticMQTT()
+            
+            # Register callbacks for each message type
+            logger.info('Registering MQTT callbacks')
+            client.register_callback('NODEINFO_APP', on_nodeinfo)
+            client.register_callback('POSITION_APP', on_position)
+            client.register_callback('TELEMETRY_APP', on_telemetry)
+            client.register_callback('NEIGHBORINFO_APP', on_neighborinfo)
+            client.register_callback('MAP_REPORT_APP', on_mapreport)
+            logger.info('Callbacks registered successfully')
+            
+            # Connect to broker with first channel
+            # The library will handle decryption automatically
+            logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
+            logger.info(f'Monitoring channels: {", ".join(config.MQTT_CHANNELS)}')
+            
+            # Connect to first channel
+            first_channel = config.MQTT_CHANNELS[0] if config.MQTT_CHANNELS else 'MediumFast'
+            logger.info(f'Calling client.connect() with channel: {first_channel}')
+            client.connect(
+                broker=config.MQTT_BROKER,
+                port=config.MQTT_PORT,
+                root=config.MQTT_ROOT_TOPIC.rstrip('/') + '/',
+                channel=first_channel,
+                username=config.MQTT_USERNAME if config.MQTT_USERNAME else None,
+                password=config.MQTT_PASSWORD if config.MQTT_PASSWORD else None,
+                key=config.MQTT_KEY if hasattr(config, 'MQTT_KEY') else 'AQ=='
+            )
+            logger.info('Client.connect() returned successfully')
+            
+            # Subscribe to additional channels
+            for channel in config.MQTT_CHANNELS[1:]:
+                topic = f"{config.MQTT_ROOT_TOPIC.rstrip('/')}/{channel}/#"
+                try:
+                    client._client.subscribe(topic)
+                    logger.info(f"Subscribed to additional channel: {channel}")
+                except Exception as e:
+                    logger.error(f"Failed to subscribe to {channel}: {e}")
+            
+            # Ensure background loop is running for paho-mqtt client
+            # The MeshtasticMQTT wrapper uses paho-mqtt internally
+            if hasattr(client._client, 'loop_start'):
+                try:
+                    client._client.loop_start()
+                    logger.info('MQTT background loop started')
+                except Exception as e:
+                    logger.warning(f'Could not start explicit MQTT loop: {e}')
+            
+            logger.info('MQTT client connected and callbacks registered')
+            
+            # Mark as receiving messages (will be updated by callbacks)
+            message_received = True
+            last_message_time = time.time()
+            
+        except Exception as e:
+            logger.error(f'Failed to connect to MQTT broker: {e}')
+            client = None
+            raise
+    
+    # Run the actual connection in the background to avoid blocking
+    import threading
+    thread = threading.Thread(target=_do_connect, daemon=True)
+    thread.start()
+    logger.info('MQTT connection thread started')
 
 
 def disconnect_mqtt():
@@ -882,18 +975,28 @@ def update_special_nodes():
 
 
 def is_connected():
-    """Check if MQTT client is connected.
-    Returns True if we've received messages in the last 120 seconds."""
+    """Check if MQTT client is connected with three stages.
+    Returns 'receiving_packets' once we receive actual MQTT packets,
+    'connected_to_server' once we receive the first MQTT message,
+    'connecting' if client exists but no messages yet,
+    'disconnected' otherwise."""
     try:
-        # If we're receiving messages within last 2 minutes, consider it connected
-        if message_received and (time.time() - last_message_time) < 120:
-            return True
-        # Fall back to client.is_connected()
-        if client:
-            return client.is_connected()
-        return False
+        # If we have received actual packets, we're fully connected
+        if packets_received:
+            return 'receiving_packets'
+        
+        # If we have received any messages at all, we're connected to server
+        if message_received:
+            return 'connected_to_server'
+        
+        # If client exists but no messages yet, we're connecting
+        if client is not None:
+            return 'connecting'
+        
+        # No client and no messages
+        return 'disconnected'
     except Exception:
-        return False
+        return 'disconnected'
 
 
 def get_nodes():
@@ -1075,3 +1178,89 @@ def get_special_node_packets(node_id=None, limit=50):
 
 def get_recent(limit=100):
     return get_recent_messages(limit)
+
+
+def inject_telemetry_data(node_id, battery_level, channel_name="TEST", from_name="Test Node", message_type="telemetry"):
+    """
+    Inject fake telemetry or admin data for testing.
+    Simulates receiving MQTT messages as if they came from a real node.
+    
+    Args:
+        node_id: The node ID (integer)
+        battery_level: Battery percentage (0-100)
+        channel_name: Channel name (default "TEST")
+        from_name: Node name for display (default "Test Node")
+        message_type: Type of message - "telemetry" (TELEMETRY_APP) or "admin" (ADMIN_APP) (default "telemetry")
+    
+    Returns:
+        bool: True if successful
+    """
+    try:
+        import time
+        
+        if message_type.lower() == "admin":
+            # ADMIN_APP message with deviceState containing battery
+            fake_json = {
+                "from": node_id,
+                "type": "ADMIN_APP",
+                "channel": 0,
+                "channel_name": channel_name,
+                "decoded": {
+                    "portnum": "ADMIN_APP",
+                    "payload": {
+                        "deviceState": {
+                            "power": {
+                                "battery": battery_level,
+                                "chargingCurrent": 0,
+                                "flags": 0,
+                                "observedCurrent": 0,
+                                "voltage": 4200 if battery_level > 50 else 3800
+                            }
+                        }
+                    }
+                },
+                "timestamp": int(time.time() * 1000),
+                "rxTime": int(time.time()),
+                "rxRssi": -100,
+                "rxSnr": 0,
+                "from_name": from_name
+            }
+        else:
+            # TELEMETRY_APP message with deviceMetrics (default)
+            fake_json = {
+                "from": node_id,
+                "type": "TELEMETRY_APP",
+                "channel": 0,
+                "channel_name": channel_name,
+                "decoded": {
+                    "portnum": "TELEMETRY_APP",
+                    "payload": {
+                        "deviceMetrics": {
+                            "batteryLevel": battery_level,
+                            "voltage": 4.0 if battery_level > 50 else 3.8,
+                            "channelUtilization": 0.0,
+                            "airUtilTx": 0.0,
+                            "uptimeSeconds": 1000000
+                        }
+                    }
+                },
+                "timestamp": int(time.time() * 1000),
+                "rxTime": int(time.time()),
+                "rxRssi": -100,
+                "rxSnr": 0,
+                "from_name": from_name
+            }
+        
+        # Call the appropriate handler
+        if message_type.lower() == "admin":
+            on_telemetry(fake_json)  # Admin messages with power info also trigger telemetry handlers
+        else:
+            on_telemetry(fake_json)
+        
+        logger.info(f"Injected fake {message_type} telemetry: {from_name} (ID: {node_id}) battery={battery_level}%")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to inject telemetry data: {e}", exc_info=True)
+        return False
+

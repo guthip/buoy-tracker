@@ -1,3 +1,11 @@
+# [2025-11-14] - Menu & UI Simplification
+
+### Changed
+- **Menu Simplification**: Removed channel filter, debug menu, and sort dropdown from the user interface
+- **Automatic Sorting**: Node sorting is now automatic—special nodes always appear at the top (alphabetically), all other nodes are sorted by most recently seen
+- **UI Cleanup**: Menu now only includes toggles for "Show only special nodes" and position trails; all other controls and filters removed
+- **Code Cleanup**: Removed all frontend and backend code related to channel filter, debug/debug menu, and sort dropdown
+
 # Changelog
 
 All notable changes to the Buoy Tracker project are documented here.

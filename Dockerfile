@@ -1,4 +1,4 @@
-# Dockerfile for Buoy Tracker v0.2
+# Dockerfile for Buoy Tracker v0.6
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

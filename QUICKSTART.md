@@ -1,25 +1,80 @@
 # Buoy Tracker - Quick Start Guide
 
-Get up and running in 3 minutes.
+Get up and running in 2 minutes.
 
-## Installation
+## Docker (Recommended)
+
+Works on any system with Docker:
 
 ```bash
-# Clone or download the repository
-cd buoy_tracker
+# 1. Create a project directory
+mkdir buoy-tracker && cd buoy-tracker
 
+# 2. Create docker-compose.yml
+cat > docker-compose.yml << 'EOF'
+services:
+  buoy-tracker:
+    image: dokwerker8891/buoy-tracker:0.68
+    container_name: buoy-tracker
+    restart: unless-stopped
+    ports:
+      - "5102:5102"
+    volumes:
+      - ./tracker.config:/app/tracker.config:ro
+      - ./data:/app/data
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5102/api/status"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+EOF
+
+# 3. Create minimal tracker.config (uses built-in defaults)
+touch tracker.config
+
+# 4. Create data and logs directories
+mkdir -p data logs
+
+# 5. Start the application
+docker compose up -d
+
+# 6. Access at http://localhost:5102
+```
+
+**That's it!** The app is pre-configured with defaults and runs immediately.
+
+**Optional - Customize Configuration:**
+If you want to customize MQTT broker, special nodes, or other settings, get the full config template:
+```bash
+curl -o tracker.config https://raw.githubusercontent.com/guthip/buoy-tracker/main/tracker.config.template
+nano tracker.config  # Edit as needed
+docker compose restart  # Restart for changes to take effect
+```
+
+## Local Installation
+
+Requires Python 3.13+ and pip:
+
+```bash
+
+## Local Installation
+
+Requires Python 3.13+ and pip:
+
+```bash
 # Install dependencies
 pip install -r requirements.txt
 
 # (Optional) Customize settings - app works with defaults
-cp tracker.config.example tracker.config
+cp tracker.config.template tracker.config
 nano tracker.config
 
 # Run the application
 python3 run.py
 ```
 
-The application runs immediately with built-in defaults (connects to mqtt.bayme.sh). Customize by editing `tracker.config` if needed.
+Access at `http://localhost:5102`
 
 ## Access the Web Interface
 
@@ -33,17 +88,16 @@ The server will automatically connect to the MQTT broker and start tracking node
 2. **Click a node card** in the sidebar to zoom to its location on the map
 3. **Click a map marker** for detailed information and link to public map
 4. **Open the ☰ menu** (top-right) to:
-   - Filter by special nodes only (enabled by default)
+   - Toggle "Show only special nodes" (enabled by default)
    - Toggle position trails
-   - Filter by channel
-   - View debug messages
+   - (Sorting is automatic: special nodes are always shown at the top, sorted alphabetically; all other nodes are sorted by most recently seen)
 
 ## What You're Seeing
 
 **Node Colors:**
-- 🔵 Blue: Recently seen (< 5min)
-- 🟠 Orange: Stale (5-30min)  
-- 🔴 Red: Very old (> 30min)
+- 🔵 Blue: Recently seen (< 1 hour)
+- 🟠 Orange: Stale (1-12 hours)  
+- 🔴 Red: Very old (> 12 hours)
 - 🟡 Gold: Special node (active)
 - ⚫ Dark Gray: Special node (stale)
 
@@ -70,7 +124,7 @@ See [README.md](README.md) for complete configuration options and API documentat
 ## Troubleshooting
 
 **No nodes appearing?**
-- The app uses default MQTT settings (mqtt.bayme.sh:1883). To connect to a different broker, copy `tracker.config.example` to `tracker.config` and edit the `[mqtt]` section
+- The app uses default MQTT settings (mqtt.bayme.sh:1883). To connect to a different broker, copy `tracker.config.template` to `tracker.config` and edit the `[mqtt]` section
 - Check MQTT connection: `curl http://localhost:5102/api/status`
 - Verify network connectivity to your MQTT broker
 - Check logs in `logs/` directory
@@ -81,7 +135,7 @@ See [README.md](README.md) for complete configuration options and API documentat
 
 ## Next Steps
 
-- **Customize Config**: Copy `tracker.config.example` to `tracker.config` and edit MQTT broker, special nodes, etc.
+- **Customize Config**: Copy `tracker.config.template` to `tracker.config` and edit MQTT broker, special nodes, etc.
 - **Add Special Nodes**: Edit `[special_nodes]` section to track specific nodes with movement detection
 - **Email Alerts**: Configure SMTP in `[alerts]` section to receive notifications when nodes move ([README.md](README.md#email-alerts))
 - **API Reference**: See [README.md](README.md) for complete API documentation

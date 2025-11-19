@@ -1,7 +1,28 @@
+            <style>
+                input[type=number]#trail-hours {
+                    width:10ch;
+                }
+                select#sort-by {
+                    width: 16ch;
+                    min-width: 0;
+                    max-width: 100%;
+                    font-size: inherit;
+                    font-family: inherit;
+                    line-height: 1;
+                    padding: 0 2px;
+                    margin: 0;
+                    box-sizing: content-box;
+                }
+                input[type=number]#trail-hours {
+                    font-size: inherit;
+                }
+                                                /* No custom styles for trail-hours input; use browser defaults */
+            </style>
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ app_title }}</title>
+    <title>{{ app_title }} (v{{ app_version }})</title>
+    <!-- Cache busting: version {{ app_version }} -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
@@ -12,8 +33,8 @@
         .node.blue { border-left-color: #2196F3; }
         .node.orange { border-left-color: #FF9800; }
         .node.red { border-left-color: #f44336; }
-        .node.gray { border-left-color: #9e9e9e; color: #777; }
-        .node.special { background-color: var(--special-highlight-color); border-left-width: 6px; }
+    .node.gray { border-left-color: #9e9e9e; color: #555; background: #f0f0f0; }
+    .node.special { border-left-width: 6px; }
         .node.moved-alert { background-color: #ffcdd2; }  /* Darker light red background for moved nodes */
         .node-name { font-weight: bold; font-size: 0.95em; }
         .node-info { font-size: 0.8em; color: #666; margin-top: 3px; line-height: 1.4; }
@@ -99,31 +120,19 @@
             <span id="menu-close" onclick="toggleMenu()">&times;</span>
             <h2 id="menu-title">⚙️ Settings & Controls</h2>
             
-            <div class="menu-section">
-                <div class="menu-section-title">Channel Filter</div>
-                <div class="channel-filter" id="channel-filter"></div>
-            </div>
+
             
             <div class="menu-section">
                 <div class="menu-section-title">Display Options</div>
-                <label><input type="checkbox" id="filter-special-only" checked> Show only special nodes</label>
-                <label><input type="checkbox" id="toggle-offline-specials" checked> Show offline special nodes</label>
+                <label><input type="checkbox" id="show-all-nodes"> Show all nodes</label>
                 <label><input type="checkbox" id="toggle-trails" checked> Show position trails</label>
-                <label>Trail history (hours):
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <label for="trail-hours" style="margin:0;">Trail history (hours):</label>
                     <input type="number" id="trail-hours" min="1" max="168" value="{{ special_history_hours | default(24) }}">
-                </label>
+                </div>
+
             </div>
             
-            <div class="menu-section">
-                <div class="menu-section-title">Sorting</div>
-                <label>Sort nodes by:
-                    <select id="sort-by">
-                        <option value="name">Name (A-Z)</option>
-                        <option value="seen-newest" selected>Last seen (newest)</option>
-                        <option value="seen-oldest">Last seen (oldest)</option>
-                    </select>
-                </label>
-            </div>
             
             <div class="menu-section">
                 <div class="menu-section-title">Legend</div>
@@ -141,44 +150,18 @@
                 </div>
             </div>
             
-            <div class="menu-section">
-                <div class="menu-section-title">Debug</div>
-                <button onclick="showRecent()">View Recent MQTT Messages</button>
-                <div style="font-size: 0.75em; color: #666; margin-top: 6px;">Move alert threshold: {{ special_move_threshold }}m</div>
-            </div>
             
             <div class="menu-section">
                 <div class="menu-section-title">Server Control</div>
                 <button onclick="reloadConfig()" style="background: #4CAF50;">Reload Configuration</button>
-                <button onclick="restartServer()" style="background: #FF9800;">Restart Server</button>
                 <div style="font-size: 0.7em; color: #666; margin-top: 4px; line-height: 1.4;">
-                    Use "Reload Configuration" after editing tracker.config to update special nodes without restart.
+                    Reload configuration changes without stopping the server. Updates special nodes, coordinates, and alert settings.
                 </div>
             </div>
             
             <div class="menu-section">
-                <div class="menu-section-title">API Reference</div>
-                <div style="font-size: 0.75em; line-height: 1.6;">
-                    <div style="margin: 4px 0;"><strong>Status:</strong></div>
-                    <a href="/api/status" target="_blank" style="color: #1976D2; text-decoration: none;">GET /api/status</a> - Connection & node counts<br>
-                    <a href="/health" target="_blank" style="color: #1976D2; text-decoration: none;">GET /health</a> - Health check<br>
-                    
-                    <div style="margin: 8px 0 4px;"><strong>Nodes:</strong></div>
-                    <a href="/api/nodes" target="_blank" style="color: #1976D2; text-decoration: none;">GET /api/nodes</a> - All tracked nodes<br>
-                    <a href="/api/recent_messages" target="_blank" style="color: #1976D2; text-decoration: none;">GET /api/recent_messages</a> - Raw MQTT msgs<br>
-                    
-                    <div style="margin: 8px 0 4px;"><strong>Special Nodes:</strong></div>
-                    <span style="color: #666;">GET /api/special/history?node_id=&lt;id&gt;</span><br>
-                    <span style="color: #666;">GET /api/special/all_history</span><br>
-                    <a href="/api/special/packets?limit=10" target="_blank" style="color: #1976D2; text-decoration: none;">GET /api/special/packets</a><br>
-                    
-                    <div style="margin: 8px 0 4px;"><strong>Server Control:</strong></div>
-                    <span style="color: #666;">POST /api/config/reload</span> - Reload config<br>
-                    <span style="color: #666;">POST /api/restart</span> - Restart server<br>
-                    
-                    <div style="margin-top: 6px; font-size: 0.95em;">
-                        <a href="https://github.com/yourusername/buoy_tracker#api-reference" target="_blank" style="color: #1976D2;">📖 Full API Docs</a>
-                    </div>
+                <div style="margin-top: 6px;">
+                    <a href="https://hub.docker.com/r/dokwerker8891/buoy-tracker" target="_blank">Full API docs</a>
                 </div>
             </div>
         </div>
@@ -201,6 +184,6 @@
     </div>
     <div id="map"></div>
 
-    <script src="/static/app.js?v={{ build_id }}"></script>
+    <script src="static/app.js?v={{ build_id }}"></script>
 </body>
 </html>

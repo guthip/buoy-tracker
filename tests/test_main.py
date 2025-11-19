@@ -33,7 +33,8 @@ def test_get_mqtt_status(client):
     """Test the MQTT status endpoint."""
     response = client.get('/api/mqtt/status')
     assert response.status_code == 200
-    assert 'connected' in response.json
+    assert 'status' in response.json
+    assert response.json['status'] in ['connected', 'connecting', 'disconnected']
 
 
 def test_get_api_status(client):
