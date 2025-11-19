@@ -81,7 +81,7 @@ docker compose down
 
 **Automatic volume setup:**
 - `./tracker.config` → Configuration (public settings)
-- `./secret.config` → Secrets file (optional, for sensitive credentials)
+- `./secret.config` → Secrets file (optional, only mount if you have one)
 - `./data/` → Persistent data
 - `./logs/` → Application logs
 - `./docs/` → Documentation
@@ -96,17 +96,22 @@ git clone https://github.com/guthip/buoy-tracker.git
 cd buoy-tracker
 docker build -t buoy-tracker:latest .
 
+# Create required files and directories
+mkdir -p data logs
+touch tracker.config
+
 # Run with volumes for persistence
 docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
   --restart unless-stopped \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/secret.config:/app/secret.config:ro \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
   buoy-tracker:latest
 ```
+
+**Note:** Only mount `tracker.config` (required). Don't mount `secret.config` unless you have one—the app works fine without it. If you do have a `secret.config` file, add: `-v $(pwd)/secret.config:/app/secret.config:ro` to the docker run command.
 
 ### Quick Start (No Persistence)
 
@@ -170,15 +175,23 @@ Separate volumes for different concerns makes deployment and upgrades seamless:
 git clone https://github.com/guthip/buoy-tracker.git && cd buoy-tracker
 docker build -t buoy-tracker:latest .
 
+# Create required files and directories
+mkdir -p data logs
+touch tracker.config
+
 docker run -d \
   --name buoy-tracker \
   -p 5102:5102 \
   --restart unless-stopped \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/secret.config:/app/secret.config:ro \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
   buoy-tracker:latest
+```
+
+**Optional:** If you have a `secret.config` file with credentials, add this volume to the docker run command:
+```bash
+-v $(pwd)/secret.config:/app/secret.config:ro \
 ```
 
 **Why This Approach?**

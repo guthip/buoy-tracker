@@ -9,7 +9,6 @@ services:
     volumes:
       # Configuration volumes (read-only)
       - ./tracker.config:/app/tracker.config:ro
-      - ./secret.config:/app/secret.config:ro
       
       # Data persistence volumes
       - ./data:/app/data
@@ -17,6 +16,9 @@ services:
       
       # Documentation volume (optional - serve docs from host)
       - ./docs:/app/docs:ro
+      
+      # Uncomment to add optional secret.config if you have one:
+      # - ./secret.config:/app/secret.config:ro
     environment:
       - MQTT_USERNAME
       - MQTT_PASSWORD
