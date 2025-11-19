@@ -10,25 +10,8 @@ Works on any system with Docker:
 # 1. Create a project directory
 mkdir buoy-tracker && cd buoy-tracker
 
-# 2. Create docker-compose.yml
-cat > docker-compose.yml << 'EOF'
-services:
-  buoy-tracker:
-    image: dokwerker8891/buoy-tracker:0.68
-    container_name: buoy-tracker
-    restart: unless-stopped
-    ports:
-      - "5102:5102"
-    volumes:
-      - ./tracker.config:/app/tracker.config:ro
-      - ./data:/app/data
-      - ./logs:/app/logs
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5102/api/status"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-EOF
+# 2. Get the docker-compose.yml file
+wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
 
 # 3. Create minimal tracker.config (uses built-in defaults)
 touch tracker.config

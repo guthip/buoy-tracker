@@ -59,21 +59,27 @@ The application runs out-of-the-box with default settings. To customize MQTT bro
 **Option 1: Using docker-compose (Easiest)**
 
 ```bash
-# 1. Get the docker-compose.yml file
+# 1. Create a project directory
+mkdir buoy-tracker && cd buoy-tracker
+
+# 2. Get the docker-compose.yml file
 wget https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
 
-# 2. Create required directories
+# 3. Create required directories
 mkdir -p data logs
 
-# 3. Copy configuration (optional - image has defaults)
+# 4. Create minimal tracker.config (uses built-in defaults)
+touch tracker.config
+
+# 5. (Optional) Customize configuration
 cp tracker.config.template tracker.config
 # Edit tracker.config if needed
 # nano tracker.config
 
-# 4. Start the service
+# 6. Start the service
 docker compose up -d
 
-# 5. View logs
+# 7. View logs
 docker compose logs -f
 
 # Access at http://localhost:5102
