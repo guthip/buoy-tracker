@@ -115,7 +115,7 @@ except Exception as e:
 
 # Web App Configuration
 WEBAPP_HOST = config.get('webapp', 'host', fallback='127.0.0.1')
-WEBAPP_PORT = config.getint('webapp', 'port', fallback=5101)
+WEBAPP_PORT = config.getint('webapp', 'port', fallback=5102)
 
 # Parse default center point (supports both decimal and degrees-minutes formats)
 _default_center = config.get('webapp', 'default_center', fallback='37.7749,-122.4194')
