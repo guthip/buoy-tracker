@@ -686,7 +686,6 @@ def on_telemetry(json_data):
     try:
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
-        logger.info(f"TELEMETRY payload: {payload}")
         node_id = json_data.get("from")
         # Try to get channel_name from our extracted topic mapping first
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
@@ -718,8 +717,12 @@ def on_telemetry(json_data):
             battery = None
             try:
                 if isinstance(payload, dict):
-                    # Try TELEMETRY_APP format first: deviceMetrics.batteryLevel
-                    battery = payload.get("deviceMetrics", {}).get("batteryLevel")
+                    # Try snake_case format first (from protobuf_to_json with preserving_proto_field_name=True)
+                    battery = payload.get("device_metrics", {}).get("battery_level")
+                    
+                    # Try camelCase format as fallback
+                    if battery is None:
+                        battery = payload.get("deviceMetrics", {}).get("batteryLevel")
                     
                     # Try ADMIN_APP format: deviceState.power.battery
                     if battery is None:
@@ -727,18 +730,25 @@ def on_telemetry(json_data):
                     
                     if battery is None:
                         battery = payload.get("battery") or payload.get("batt")
-                    # some payloads put metrics under 'metrics' or 'device_metrics'
+                    # some payloads put metrics under 'metrics'
                     if battery is None:
-                        battery = payload.get("metrics", {}).get("batteryLevel") or payload.get("device_metrics", {}).get("batteryLevel")
+                        battery = payload.get("metrics", {}).get("batteryLevel") or payload.get("metrics", {}).get("battery_level")
                     
                     # If no battery level found, try to estimate from voltage
                     # Priority: powerMetrics (SYCS), admin power metrics, deviceMetrics
                     if battery is None:
                         voltage = None
-                        # SYCS priority: check powerMetrics ch3Voltage first (power monitoring data)
-                        power_metrics = payload.get("powerMetrics", {})
+                        # Check snake_case format first
+                        power_metrics = payload.get("power_metrics", {})
                         if power_metrics:
-                            voltage = power_metrics.get("ch3Voltage") or power_metrics.get("ch1Voltage")
+                            voltage = power_metrics.get("ch3_voltage") or power_metrics.get("ch1_voltage") or \
+                                    power_metrics.get("ch3Voltage") or power_metrics.get("ch1Voltage")
+                        
+                        # Try camelCase powerMetrics
+                        if voltage is None:
+                            power_metrics_cc = payload.get("powerMetrics", {})
+                            if power_metrics_cc:
+                                voltage = power_metrics_cc.get("ch3Voltage") or power_metrics_cc.get("ch1Voltage")
                         
                         # If no powerMetrics, check admin power format voltage
                         if voltage is None:
@@ -746,10 +756,14 @@ def on_telemetry(json_data):
                             if admin_voltage:
                                 voltage = admin_voltage / 1000.0  # Admin format uses mV
                         
-                        # Fall back to deviceMetrics voltage
+                        # Fall back to deviceMetrics voltage (both formats)
                         if voltage is None:
-                            device_metrics = payload.get("deviceMetrics", {})
+                            device_metrics = payload.get("device_metrics", {})
                             voltage = device_metrics.get("voltage") if device_metrics else None
+                        
+                        if voltage is None:
+                            device_metrics_cc = payload.get("deviceMetrics", {})
+                            voltage = device_metrics_cc.get("voltage") if device_metrics_cc else None
                         
                         # Estimate battery percentage from voltage (LiPo: 4.2V=100%, 3.0V=0%)
                         if voltage is not None and isinstance(voltage, (int, float)):
@@ -1346,10 +1360,9 @@ def get_nodes():
         if is_special and node_id in special_node_last_packet:
             node_info["last_packet_time"] = special_node_last_packet[node_id]
         
-        # Only include nodes with location data
-        if node_info["lat"] is not None and node_info["lon"] is not None:
-            result.append(node_info)
-            present_ids.add(node_id)
+        # Include all tracked nodes
+        result.append(node_info)
+        present_ids.add(node_id)
     
     # Include offline special nodes at their home positions (if defined)
     if getattr(config, 'SPECIAL_SHOW_OFFLINE', True):
