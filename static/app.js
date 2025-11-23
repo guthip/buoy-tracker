@@ -226,6 +226,10 @@
     var info = indicators;
     var extraInfo = '';
     
+    // Add channel name if available
+    if (node.channel_name) {
+      extraInfo += '<div style="font-size:0.75em;color:#666;margin-top:2px;padding-top:2px;border-top:1px solid #eee;">📡 ' + node.channel_name + '</div>';
+    }
     var classes = 'node ' + node.status + (node.is_special ? ' special' : '');
     // Add moved-alert class if special node has moved beyond threshold
     if (node.is_special && node.moved_far) {
