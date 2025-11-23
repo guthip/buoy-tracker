@@ -867,14 +867,16 @@ def connect_mqtt():
             client.register_callback('MAP_REPORT_APP', on_mapreport)
             logger.info('Callbacks registered successfully')
             
-            # Connect to broker with first channel
-            # The library will handle decryption automatically
+            # Connect to broker and subscribe to all configured channels
+            # The library will handle decryption automatically for each channel
             logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
             logger.info(f'Monitoring channels: {", ".join(config.MQTT_CHANNELS)}')
             
-            # Connect to first channel
+            # The MeshtasticMQTT library only handles one channel per connect() call
+            # To receive from multiple channels, we need to manually subscribe to each
+            # First, connect to the primary broker (sets up paho-mqtt client internally)
             first_channel = config.MQTT_CHANNELS[0] if config.MQTT_CHANNELS else 'MediumFast'
-            logger.info(f'Calling client.connect() with channel: {first_channel}')
+            logger.info(f'Primary channel: {first_channel}')
             client.connect(
                 broker=config.MQTT_BROKER,
                 port=config.MQTT_PORT,
@@ -884,16 +886,21 @@ def connect_mqtt():
                 password=config.MQTT_PASSWORD if config.MQTT_PASSWORD else None,
                 key=config.MQTT_KEY if hasattr(config, 'MQTT_KEY') else 'AQ=='
             )
-            logger.info('Client.connect() returned successfully')
+            logger.info('Primary channel connection established')
             
-            # Subscribe to additional channels
-            for channel in config.MQTT_CHANNELS[1:]:
-                topic = f"{config.MQTT_ROOT_TOPIC.rstrip('/')}/{channel}/#"
+            # Manually subscribe to all channels (including first) to ensure we get all packets
+            # Topic format: msh/region/area/channel_id/e/CHANNEL_NAME/#
+            root = config.MQTT_ROOT_TOPIC.rstrip('/')
+            for channel in config.MQTT_CHANNELS:
+                topic = f"{root}/{channel}/#"
                 try:
-                    client._client.subscribe(topic)
-                    logger.info(f"Subscribed to additional channel: {channel}")
+                    if hasattr(client, '_client') and client._client:
+                        client._client.subscribe(topic)
+                        logger.info(f"Subscribed to channel topic: {topic}")
+                    else:
+                        logger.warning(f"Client not ready for channel subscription: {channel}")
                 except Exception as e:
-                    logger.error(f"Failed to subscribe to {channel}: {e}")
+                    logger.error(f"Failed to subscribe to channel {channel}: {e}")
             
             # Ensure background loop is running for paho-mqtt client
             # The MeshtasticMQTT wrapper uses paho-mqtt internally
