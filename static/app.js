@@ -20,7 +20,7 @@
   var trailsEl = document.getElementById('toggle-trails');
   var hoursEl = document.getElementById('trail-hours');
 
-    // Ensure the menu checkbox for trails is always checked on load\n  if (trailsEl) trailsEl.checked = true;\n  \n  // Default to showing only SPECIAL nodes on page load\n  if (showAllNodesEl) showAllNodesEl.checked = false;\n  if (trailsEl) trailsEl.checked = true;
+    // Ensure the menu checkbox for trails is always checked on load\n  if (trailsEl) trailsEl.checked = true;\n  \n  // Default to showing ALL nodes on page load (for debugging)\n  if (showAllNodesEl) showAllNodesEl.checked = true;\n  if (trailsEl) trailsEl.checked = true;
   function attachChange(el){ if(el && el.addEventListener){ el.addEventListener('change', function(){ updateNodes(); }); } }
   attachChange(showAllNodesEl); attachChange(trailsEl);
   

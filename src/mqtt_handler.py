@@ -1,21 +1,30 @@
 """
 Meshtastic MQTT Handler for Buoy Tracker
-Uses meshtastic_mqtt_json library for MQTT connection and decryption
-Tracks node positions, names, and last seen timestamps
+Uses paho-mqtt directly with meshtastic protobuf libraries for clean decoding.
+Extracts channel names from MQTT topic paths.
+Tracks node positions, names, and last seen timestamps.
 """
 
-from meshtastic_mqtt_json import MeshtasticMQTT
+import paho.mqtt.client as mqtt_client
+import base64
 import time
 import logging
 import json
 from collections import deque
-from . import config
-from . import alerts
 from pathlib import Path
 import os
 import math
 import re
 import signal
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from google.protobuf.json_format import MessageToJson
+
+# Import Meshtastic protobuf definitions
+from meshtastic import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
+
+from . import config
+from . import alerts
 
 logger = logging.getLogger(__name__)
 
@@ -677,6 +686,7 @@ def on_telemetry(json_data):
     try:
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
+        logger.info(f"TELEMETRY payload: {payload}")
         node_id = json_data.get("from")
         # Try to get channel_name from our extracted topic mapping first
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
@@ -876,11 +886,206 @@ def on_mapreport(json_data):
         logger.error(f'Error processing mapreport: {e}')
 
 
-def connect_mqtt():
-    """Connect to MQTT broker using meshtastic_mqtt_json library.
+def _extract_channel_from_mqtt_topic(topic: str) -> str:
+    """
+    Extract channel name from MQTT topic path.
+    Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
+    Returns channel name or "Unknown" if not found.
+    """
+    try:
+        parts = topic.split('/')
+        if 'e' in parts:
+            e_idx = parts.index('e')
+            if e_idx + 1 < len(parts):
+                channel = parts[e_idx + 1]
+                if not channel.startswith('!'):
+                    return channel
+    except Exception as e:
+        logger.debug(f"Error extracting channel from topic {topic}: {e}")
+    return "Unknown"
+
+
+def _decrypt_message_packet(mp, key_bytes):
+    """
+    Decrypt an encrypted Meshtastic message packet.
+    Uses AES-CTR with nonce derived from packet ID and sender ID.
+    """
+    try:
+        # Extract the nonce from the packet
+        nonce_packet_id = getattr(mp, 'id').to_bytes(8, 'little')
+        nonce_from_node = getattr(mp, 'from').to_bytes(8, 'little')
+        nonce = nonce_packet_id + nonce_from_node
+
+        # Decrypt the message
+        cipher = Cipher(algorithms.AES(key_bytes), modes.CTR(nonce), backend=default_backend())
+        decryptor = cipher.decryptor()
+        decrypted_bytes = decryptor.update(getattr(mp, 'encrypted')) + decryptor.finalize()
+        
+        # Parse the decrypted message
+        data = mesh_pb2.Data()
+        try:
+            data.ParseFromString(decrypted_bytes)
+        except:
+            return None
+
+        mp.decoded.CopyFrom(data)
+        return mp
+
+    except Exception as e:
+        logger.debug(f'Error decrypting message: {e}')
+        return None
+
+
+def _protobuf_to_json(proto_obj):
+    """
+    Convert a protobuf message to JSON-serializable dict.
+    Handles NaN values by removing them.
+    """
+    try:
+        json_str = MessageToJson(proto_obj, preserving_proto_field_name=True)
+        data = json.loads(json_str)
+        
+        # Remove empty values and NaN
+        def clean_dict(d):
+            if isinstance(d, dict):
+                return {k: clean_dict(v) for k, v in d.items() 
+                       if str(v) not in ('None', 'nan', '', 'null', 'NaN')}
+            elif isinstance(d, list):
+                return [clean_dict(v) for v in d 
+                       if str(v) not in ('None', 'nan', '', 'null', 'NaN')]
+            return d
+        
+        return clean_dict(data)
+    except Exception as e:
+        logger.debug(f"Error converting protobuf to JSON: {e}")
+        return {}
+
+
+def _on_mqtt_message(client_obj, userdata, msg):
+    """
+    Main paho-mqtt message callback.
+    Receives raw encoded MQTT messages, decodes them, and routes to handlers.
+    """
+    global message_received, last_message_time, packets_received
     
-    Subscribes to root topic to receive ALL packets from all channels,
-    then filters for special nodes in callbacks.
+    try:
+        # Extract channel from MQTT topic path
+        channel_name = _extract_channel_from_mqtt_topic(msg.topic)
+        
+        # Parse MQTT ServiceEnvelope protobuf
+        service_envelope = mqtt_pb2.ServiceEnvelope()
+        try:
+            service_envelope.ParseFromString(msg.payload)
+        except Exception as e:
+            logger.debug(f"Error parsing ServiceEnvelope: {e}")
+            return
+        
+        # Extract MeshPacket from envelope
+        mp = service_envelope.packet
+        
+        # Handle encrypted packets
+        if mp.HasField('encrypted'):
+            mp = _decrypt_message_packet(mp, userdata['key_bytes'])
+            if not mp:
+                return
+        
+        # Extract portnum (message type) and get name
+        portnum = mp.decoded.portnum
+        portnum_name = portnums_pb2.PortNum.Name(portnum)
+        
+        # Convert to JSON for callbacks (preserving meshtastic_mqtt_json format)
+        json_packet = _protobuf_to_json(mp)
+        
+        # Add channel name and from/to info
+        json_packet['channel_name'] = channel_name
+        if 'from' not in json_packet:
+            json_packet['from'] = mp.from_
+        if 'to' not in json_packet:
+            json_packet['to'] = mp.to
+        if 'channel' not in json_packet:
+            json_packet['channel'] = mp.channel
+        
+        # Store in recent messages buffer
+        add_recent(json_packet)
+        
+        # Mark as received
+        message_received = True
+        packets_received = True
+        last_message_time = time.time()
+        
+        # Route to appropriate handler based on message type
+        _route_message_to_handler(portnum, portnum_name, mp, json_packet)
+        
+    except Exception as e:
+        logger.error(f"Error in MQTT message handler: {e}", exc_info=True)
+
+
+def _route_message_to_handler(portnum, portnum_name, mp, json_packet):
+    """
+    Route decoded message to appropriate handler based on message type.
+    Decodes payload based on app type, then calls the corresponding handler.
+    """
+    try:
+        # Ensure decoded payload structure
+        if 'decoded' not in json_packet:
+            json_packet['decoded'] = {}
+        if 'payload' not in json_packet['decoded']:
+            json_packet['decoded']['payload'] = {}
+        
+        # Decode payload based on message type
+        try:
+            if portnum == portnums_pb2.ADMIN_APP:
+                data = mesh_pb2.Admin()
+                data.ParseFromString(mp.decoded.payload)
+                json_packet['decoded']['payload'] = _protobuf_to_json(data)
+            
+            elif portnum == portnums_pb2.POSITION_APP:
+                data = mesh_pb2.Position()
+                data.ParseFromString(mp.decoded.payload)
+                json_packet['decoded']['payload'] = _protobuf_to_json(data)
+                on_position(json_packet)
+                return
+            
+            elif portnum == portnums_pb2.NODEINFO_APP:
+                data = mesh_pb2.User()
+                data.ParseFromString(mp.decoded.payload)
+                json_packet['decoded']['payload'] = _protobuf_to_json(data)
+                on_nodeinfo(json_packet)
+                return
+            
+            elif portnum == portnums_pb2.TELEMETRY_APP:
+                data = telemetry_pb2.Telemetry()
+                data.ParseFromString(mp.decoded.payload)
+                json_packet['decoded']['payload'] = _protobuf_to_json(data)
+                on_telemetry(json_packet)
+                return
+            
+            elif portnum == portnums_pb2.MAP_REPORT_APP:
+                data = mesh_pb2.MapReport()
+                data.ParseFromString(mp.decoded.payload)
+                json_packet['decoded']['payload'] = _protobuf_to_json(data)
+                on_mapreport(json_packet)
+                return
+            
+            elif portnum == portnums_pb2.NEIGHBORINFO_APP:
+                data = mesh_pb2.NeighborInfo()
+                data.ParseFromString(mp.decoded.payload)
+                json_packet['decoded']['payload'] = _protobuf_to_json(data)
+                on_neighborinfo(json_packet)
+                return
+            
+        except Exception as e:
+            logger.debug(f"Error decoding payload for {portnum_name}: {e}")
+    
+    except Exception as e:
+        logger.error(f"Error routing message {portnum_name}: {e}", exc_info=True)
+
+
+def connect_mqtt():
+    """
+    Connect to MQTT broker using paho-mqtt directly.
+    Subscribes to root topic with wildcard to receive ALL packets from all channels.
+    Extracts channel names from MQTT topic paths.
     """
     global client
     
@@ -890,106 +1095,77 @@ def connect_mqtt():
         return
     
     def _do_connect():
-        """Actually perform the MQTT connection (may block)."""
+        """Perform the MQTT connection in background thread."""
         global client, message_received, last_message_time
         try:
-            # Create MeshtasticMQTT client
-            logger.info('Creating MeshtasticMQTT client instance')
-            client = MeshtasticMQTT()
-            
-            # Register callbacks for each message type FIRST
-            logger.info('Registering MQTT callbacks')
-            client.register_callback('NODEINFO_APP', on_nodeinfo)
-            client.register_callback('POSITION_APP', on_position)
-            client.register_callback('TELEMETRY_APP', on_telemetry)
-            client.register_callback('NEIGHBORINFO_APP', on_neighborinfo)
-            client.register_callback('MAP_REPORT_APP', on_mapreport)
-            logger.info('Callbacks registered successfully')
-            
-            # BEFORE calling connect(), set up the raw message callback on the internal paho client
-            # This will be used to extract channel names from MQTT topic paths
-            def on_raw_message(client_obj, userdata, msg):
-                """Intercept raw MQTT messages to extract channel name and node ID from topic."""
-                try:
-                    # Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
-                    topic_parts = msg.topic.split('/')
-                    
-                    # Extract channel name if present
-                    if 'e' in topic_parts:
-                        e_idx = topic_parts.index('e')
-                        if e_idx + 1 < len(topic_parts):
-                            potential_channel = topic_parts[e_idx + 1]
-                            
-                            # Look for node ID (starts with !)
-                            if e_idx + 2 < len(topic_parts):
-                                potential_node_id = topic_parts[e_idx + 2]
-                                if potential_node_id.startswith('!'):
-                                    # Extract the numeric node ID (remove the '!')
-                                    try:
-                                        node_id_str = potential_node_id[1:]
-                                        node_id = int(node_id_str)
-                                        
-                                        # Store the topic for this node
-                                        node_topics[node_id] = msg.topic
-                                        
-                                        # Only log on first discovery of new node
-                                        if node_id not in getattr(on_raw_message, 'seen_nodes', set()):
-                                            logger.debug(f"Discovered node {node_id} on channel {potential_channel}")
-                                            on_raw_message.seen_nodes.add(node_id)
-                                    except ValueError:
-                                        pass  # Not a valid node ID
-                except Exception as e:
-                    logger.debug(f"Error extracting info from topic {msg.topic}: {e}")
-            
-            on_raw_message.seen_nodes = set()
-            
-            # Now connect to broker - this will internally create and use the paho client
             logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
             logger.info(f'Root topic: {config.MQTT_ROOT_TOPIC}')
             
-            # Use first available channel for library initialization
-            channels = getattr(config, 'MQTT_CHANNELS', ['MediumSlow', 'MediumFast'])
-            init_channel = channels[0] if channels else 'MediumSlow'
-            logger.info(f'Initializing with channel: {init_channel}')
+            # Create paho-mqtt client
+            client = mqtt_client.Client(
+                mqtt_client.CallbackAPIVersion.VERSION2,
+                client_id='',
+                clean_session=True,
+                userdata=None
+            )
+            client.connect_timeout = 10
             
-            try:
-                client.connect(
-                    broker=config.MQTT_BROKER,
-                    port=config.MQTT_PORT,
-                    root=config.MQTT_ROOT_TOPIC.rstrip('/') + '/',
-                    channel=init_channel,
-                    username=config.MQTT_USERNAME if config.MQTT_USERNAME else None,
-                    password=config.MQTT_PASSWORD if config.MQTT_PASSWORD else None,
-                    key=config.MQTT_KEY if hasattr(config, 'MQTT_KEY') else 'AQ=='
+            # Set credentials if provided
+            if config.MQTT_USERNAME:
+                client.username_pw_set(
+                    username=config.MQTT_USERNAME,
+                    password=config.MQTT_PASSWORD
                 )
-                logger.info('✅ Connected to MQTT broker')
-            except Exception as connect_err:
-                logger.error(f"Connect error: {connect_err}")
+            
+            # Prepare encryption key
+            key_str = getattr(config, 'MQTT_KEY', 'AQ==')
+            if key_str == 'AQ==':
+                key_str = '1PG7OiApB1nwvP+rz05pAQ=='
+            
+            # Decode and pad base64 key
+            padded_key = key_str.ljust(len(key_str) + ((4 - (len(key_str) % 4)) % 4), '=')
+            replaced_key = padded_key.replace('-', '+').replace('_', '/')
+            try:
+                key_bytes = base64.b64decode(replaced_key.encode('ascii'))
+            except Exception as e:
+                logger.error(f"Error decoding encryption key: {e}")
                 raise
             
-            # After connect() returns (or times out), override the paho client's on_message callback
-            # with ours to intercept raw messages and extract channel names
-            if hasattr(client, '_client') and client._client:
-                logger.info("Setting raw message callback to extract channel names from MQTT topics")
-                client._client.on_message = on_raw_message
-                logger.info("✅ Raw message callback set for channel extraction")
-                
-                # Also subscribe to the root topic with wildcard to get all channels
-                root_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/#'
-                try:
-                    client._client.subscribe(root_topic)
-                    logger.info(f"✅ Subscribed to root topic: {root_topic}")
-                except Exception as e:
-                    logger.warning(f"Failed to subscribe to root topic: {e}")
+            # Set callbacks and userdata
+            client.on_message = _on_mqtt_message
+            client.user_data_set({'key_bytes': key_bytes})
             
-            logger.info('✅ MQTT client ready')
+            # Connect to broker
+            try:
+                client.connect(config.MQTT_BROKER, config.MQTT_PORT, 60)
+                logger.info('✅ Connected to MQTT broker')
+            except Exception as e:
+                logger.error(f"Failed to connect to broker: {e}")
+                client = None
+                raise
             
-            # Mark as receiving messages
+            # Subscribe to root topic with wildcard to get all channels
+            root_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/#'
+            client.subscribe(root_topic)
+            logger.info(f"✅ Subscribed to: {root_topic}")
+            
+            # Start the loop
+            client.loop_start()
+            logger.info('✅ MQTT loop started')
+            
+            # Mark as connected
             message_received = True
             last_message_time = time.time()
             
+            logger.info('✅ MQTT client ready and listening for packets')
+            
         except Exception as e:
             logger.error(f'Failed to connect to MQTT broker: {e}', exc_info=True)
+            if client:
+                try:
+                    client.loop_stop()
+                except:
+                    pass
             client = None
             raise
     
@@ -1007,10 +1183,13 @@ def disconnect_mqtt():
         if client:
             # Save all persisted data before disconnecting
             _save_special_nodes_data(force=True)
+            client.loop_stop()
             client.disconnect()
             logger.info("Disconnected from MQTT broker")
     except Exception as e:
         logger.error(f'Error disconnecting from MQTT broker: {e}')
+    finally:
+        client = None
 
 
 def update_special_nodes():

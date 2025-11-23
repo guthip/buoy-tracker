@@ -8,11 +8,9 @@ gunicorn>=21.0.0
 # Meshtastic mesh network (uses protobufs for data encoding)
 meshtastic==2.7.4
 paho-mqtt==2.1.0
-meshtastic-mqtt-json==2.0.0
+
+# Protocol buffer JSON conversion for compatibility
+protobuf>=3.20
 
 # Optional: SQLAlchemy (kept as optional runtime DB dependency)
 SQLAlchemy>=2.0
-
-# Development/testing tools intentionally removed from this file to avoid
-# build complications on macOS/Python 3.13. Re-add them to a separate dev
-# requirements file if needed.
