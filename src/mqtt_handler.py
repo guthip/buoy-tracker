@@ -15,6 +15,7 @@ from pathlib import Path
 import os
 import math
 import re
+import signal
 
 logger = logging.getLogger(__name__)
 
@@ -420,6 +421,28 @@ def _extract_modem_preset(obj):
     return None
 
 
+def _extract_channel_from_topic(node_id):
+    """Extract channel name from stored topic path for this node."""
+    if node_id not in node_topics:
+        return "Unknown"
+    
+    topic = node_topics[node_id]
+    try:
+        # Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
+        parts = topic.split('/')
+        if 'e' in parts:
+            e_idx = parts.index('e')
+            if e_idx + 1 < len(parts):
+                channel = parts[e_idx + 1]
+                # Make sure it's not a node id part (starts with !)
+                if not channel.startswith('!'):
+                    return channel
+    except Exception as e:
+        logger.debug(f"Error extracting channel from topic {topic}: {e}")
+    
+    return "Unknown"
+
+
 def on_nodeinfo(json_data):
     """Process node info messages - update node names."""
     global message_received, last_message_time
@@ -432,7 +455,11 @@ def on_nodeinfo(json_data):
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
         channel = json_data.get("channel")
-        channel_name = json_data.get("channel_name", "Unknown")
+        # Try to get channel_name from our extracted topic mapping first
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        # Fallback to what the library provides (usually "Unknown")
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         # Track special node packets and channel info
         if node_id:
@@ -530,7 +557,11 @@ def on_position(json_data):
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
         channel = json_data.get("channel")
-        channel_name = json_data.get("channel_name", "Unknown")
+        # Try to get channel_name from our extracted topic mapping first
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        # Fallback to what the library provides (usually "Unknown")
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         # Track special node packets and channel info
         if node_id:
@@ -647,7 +678,11 @@ def on_telemetry(json_data):
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
-        channel_name = json_data.get("channel_name", "Unknown")
+        # Try to get channel_name from our extracted topic mapping first
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        # Fallback to what the library provides (usually "Unknown")
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         # Track special node packets and channel info
         if node_id:
@@ -770,7 +805,11 @@ def on_mapreport(json_data):
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
-        channel_name = json_data.get("channel_name", "Unknown")
+        # Try to get channel_name from our extracted topic mapping first
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        # Fallback to what the library provides (usually "Unknown")
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         # Track special node packets and channel info
         if node_id:
@@ -840,8 +879,8 @@ def on_mapreport(json_data):
 def connect_mqtt():
     """Connect to MQTT broker using meshtastic_mqtt_json library.
     
-    This library handles encryption/decryption automatically and provides
-    callbacks for different message types.
+    Subscribes to root topic to receive ALL packets from all channels,
+    then filters for special nodes in callbacks.
     """
     global client
     
@@ -867,58 +906,114 @@ def connect_mqtt():
             client.register_callback('MAP_REPORT_APP', on_mapreport)
             logger.info('Callbacks registered successfully')
             
-            # Connect to broker and subscribe to all configured channels
-            # The library will handle decryption automatically for each channel
+            # Connect to broker
             logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
-            logger.info(f'Monitoring channels: {", ".join(config.MQTT_CHANNELS)}')
+            logger.info(f'Root topic: {config.MQTT_ROOT_TOPIC}')
             
-            # The MeshtasticMQTT library only handles one channel per connect() call
-            # To receive from multiple channels, we need to manually subscribe to each
-            # First, connect to the primary broker (sets up paho-mqtt client internally)
-            first_channel = config.MQTT_CHANNELS[0] if config.MQTT_CHANNELS else 'MediumFast'
-            logger.info(f'Primary channel: {first_channel}')
-            client.connect(
-                broker=config.MQTT_BROKER,
-                port=config.MQTT_PORT,
-                root=config.MQTT_ROOT_TOPIC.rstrip('/') + '/',
-                channel=first_channel,
-                username=config.MQTT_USERNAME if config.MQTT_USERNAME else None,
-                password=config.MQTT_PASSWORD if config.MQTT_PASSWORD else None,
-                key=config.MQTT_KEY if hasattr(config, 'MQTT_KEY') else 'AQ=='
-            )
-            logger.info('Primary channel connection established')
+            # Use first available channel for library initialization
+            channels = getattr(config, 'MQTT_CHANNELS', ['MediumSlow', 'MediumFast'])
+            init_channel = channels[0] if channels else 'MediumSlow'
+            logger.info(f'Initializing with channel: {init_channel}')
             
-            # Manually subscribe to all channels (including first) to ensure we get all packets
-            # Topic format: msh/region/area/channel_id/e/CHANNEL_NAME/#
-            root = config.MQTT_ROOT_TOPIC.rstrip('/')
-            for channel in config.MQTT_CHANNELS:
-                topic = f"{root}/{channel}/#"
+            try:
+                client.connect(
+                    broker=config.MQTT_BROKER,
+                    port=config.MQTT_PORT,
+                    root=config.MQTT_ROOT_TOPIC.rstrip('/') + '/',
+                    channel=init_channel,
+                    username=config.MQTT_USERNAME if config.MQTT_USERNAME else None,
+                    password=config.MQTT_PASSWORD if config.MQTT_PASSWORD else None,
+                    key=config.MQTT_KEY if hasattr(config, 'MQTT_KEY') else 'AQ=='
+                )
+                logger.info('✅ Connected to MQTT broker')
+            except Exception as connect_err:
+                logger.error(f"Connect error: {connect_err}")
+                raise
+            
+            # Note: client.connect() appears to hang indefinitely in background, so wrap setup in timeout
+            import threading
+            import time as time_module
+            
+            setup_done = threading.Event()
+            
+            def setup_subscriptions():
+                """Set up subscriptions and raw message callback."""
                 try:
+                    # Give the connection a moment to actually establish
+                    time_module.sleep(1)
+                    
+                    # Subscribe to root topic - receive ALL messages from all channels
+                    root_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/#'
                     if hasattr(client, '_client') and client._client:
-                        client._client.subscribe(topic)
-                        logger.info(f"Subscribed to channel topic: {topic}")
-                    else:
-                        logger.warning(f"Client not ready for channel subscription: {channel}")
-                except Exception as e:
-                    logger.error(f"Failed to subscribe to channel {channel}: {e}")
+                        try:
+                            # Subscribe to root topic and set a raw message callback to extract channel names
+                            client._client.subscribe(root_topic)
+                            logger.info(f"✅ Subscribed to root topic: {root_topic}")
+                            
+                            # Add raw message callback to extract channel names from topic path
+                            def on_message(client_obj, userdata, msg):
+                                """Intercept raw MQTT messages to extract channel name and node ID from topic."""
+                                try:
+                                    # Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
+                                    topic_parts = msg.topic.split('/')
+                                    
+                                    # Extract channel name if present
+                                    if 'e' in topic_parts:
+                                        e_idx = topic_parts.index('e')
+                                        if e_idx + 1 < len(topic_parts):
+                                            potential_channel = topic_parts[e_idx + 1]
+                                            
+                                            # Look for node ID (starts with !)
+                                            if e_idx + 2 < len(topic_parts):
+                                                potential_node_id = topic_parts[e_idx + 2]
+                                                if potential_node_id.startswith('!'):
+                                                    # Extract the numeric node ID (remove the '!')
+                                                    try:
+                                                        node_id_str = potential_node_id[1:]
+                                                        node_id = int(node_id_str)
+                                                        
+                                                        # Store the topic and channel for this node
+                                                        node_topics[node_id] = msg.topic
+                                                        
+                                                        # Only log on first discovery of new node
+                                                        if node_id not in getattr(on_message, 'seen_nodes', set()):
+                                                            logger.debug(f"Discovered node {node_id} on channel {potential_channel}")
+                                                            on_message.seen_nodes.add(node_id)
+                                                    except ValueError:
+                                                        pass  # Not a valid node ID
+                                except Exception as e:
+                                    logger.debug(f"Error extracting info from topic {msg.topic}: {e}")
+                            
+                            # Initialize set to track nodes we've logged
+                            on_message.seen_nodes = set()
+                            client._client.on_message = on_message
+                            logger.info("✅ Raw message callback registered for channel extraction")
+                            
+                        except Exception as e:
+                            logger.error(f"Failed to subscribe to root topic: {e}")
+                finally:
+                    setup_done.set()
             
-            # Ensure background loop is running for paho-mqtt client
-            # The MeshtasticMQTT wrapper uses paho-mqtt internally
+            # Start subscription setup in background thread
+            setup_thread = threading.Thread(target=setup_subscriptions, daemon=True)
+            setup_thread.start()
+            
+            # Start background loop
             if hasattr(client._client, 'loop_start'):
                 try:
                     client._client.loop_start()
-                    logger.info('MQTT background loop started')
+                    logger.info('✅ MQTT background loop started')
                 except Exception as e:
                     logger.warning(f'Could not start explicit MQTT loop: {e}')
             
-            logger.info('MQTT client connected and callbacks registered')
+            logger.info('✅ MQTT client ready')
             
             # Mark as receiving messages (will be updated by callbacks)
             message_received = True
             last_message_time = time.time()
             
         except Exception as e:
-            logger.error(f'Failed to connect to MQTT broker: {e}')
+            logger.error(f'Failed to connect to MQTT broker: {e}', exc_info=True)
             client = None
             raise
     

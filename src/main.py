@@ -95,7 +95,6 @@ def index():
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           show_offline_specials=getattr(config, 'SPECIAL_SHOW_OFFLINE', True),
                           stale_special_symbol=getattr(config, 'STALE_SPECIAL_SYMBOL', '☆'),
-                          mqtt_channels=','.join(config.MQTT_CHANNELS),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page

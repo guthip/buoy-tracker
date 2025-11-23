@@ -88,8 +88,6 @@ APP_VERSION = config.get('app', 'version', fallback='0.1')
 MQTT_BROKER = config.get('mqtt', 'broker', fallback='mqtt.bayme.sh')
 MQTT_PORT = config.getint('mqtt', 'port', fallback=1883)
 MQTT_ROOT_TOPIC = config.get('mqtt', 'root_topic', fallback='msh/US/bayarea/2/e/')
-# Parse MQTT channels (comma-separated list of LoRa modem presets)
-MQTT_CHANNELS = [c.strip() for c in config.get('mqtt', 'mqtt_channels', fallback='MediumFast').split(',') if c.strip()]
 # SECURITY: Try environment variables first, fallback to config file
 # This allows production deployments to keep secrets out of version control
 MQTT_USERNAME = os.getenv('MQTT_USERNAME') or config.get('mqtt', 'username', fallback='meshdev')
