@@ -897,7 +897,7 @@ def connect_mqtt():
             logger.info('Creating MeshtasticMQTT client instance')
             client = MeshtasticMQTT()
             
-            # Register callbacks for each message type
+            # Register callbacks for each message type FIRST
             logger.info('Registering MQTT callbacks')
             client.register_callback('NODEINFO_APP', on_nodeinfo)
             client.register_callback('POSITION_APP', on_position)
@@ -906,7 +906,44 @@ def connect_mqtt():
             client.register_callback('MAP_REPORT_APP', on_mapreport)
             logger.info('Callbacks registered successfully')
             
-            # Connect to broker
+            # BEFORE calling connect(), set up the raw message callback on the internal paho client
+            # This will be used to extract channel names from MQTT topic paths
+            def on_raw_message(client_obj, userdata, msg):
+                """Intercept raw MQTT messages to extract channel name and node ID from topic."""
+                try:
+                    # Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
+                    topic_parts = msg.topic.split('/')
+                    
+                    # Extract channel name if present
+                    if 'e' in topic_parts:
+                        e_idx = topic_parts.index('e')
+                        if e_idx + 1 < len(topic_parts):
+                            potential_channel = topic_parts[e_idx + 1]
+                            
+                            # Look for node ID (starts with !)
+                            if e_idx + 2 < len(topic_parts):
+                                potential_node_id = topic_parts[e_idx + 2]
+                                if potential_node_id.startswith('!'):
+                                    # Extract the numeric node ID (remove the '!')
+                                    try:
+                                        node_id_str = potential_node_id[1:]
+                                        node_id = int(node_id_str)
+                                        
+                                        # Store the topic for this node
+                                        node_topics[node_id] = msg.topic
+                                        
+                                        # Only log on first discovery of new node
+                                        if node_id not in getattr(on_raw_message, 'seen_nodes', set()):
+                                            logger.debug(f"Discovered node {node_id} on channel {potential_channel}")
+                                            on_raw_message.seen_nodes.add(node_id)
+                                    except ValueError:
+                                        pass  # Not a valid node ID
+                except Exception as e:
+                    logger.debug(f"Error extracting info from topic {msg.topic}: {e}")
+            
+            on_raw_message.seen_nodes = set()
+            
+            # Now connect to broker - this will internally create and use the paho client
             logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
             logger.info(f'Root topic: {config.MQTT_ROOT_TOPIC}')
             
@@ -930,85 +967,24 @@ def connect_mqtt():
                 logger.error(f"Connect error: {connect_err}")
                 raise
             
-            # Note: client.connect() appears to hang indefinitely in background, so wrap setup in timeout
-            import threading
-            import time as time_module
-            
-            setup_done = threading.Event()
-            
-            def setup_subscriptions():
-                """Set up subscriptions and raw message callback."""
+            # After connect() returns (or times out), override the paho client's on_message callback
+            # with ours to intercept raw messages and extract channel names
+            if hasattr(client, '_client') and client._client:
+                logger.info("Setting raw message callback to extract channel names from MQTT topics")
+                client._client.on_message = on_raw_message
+                logger.info("✅ Raw message callback set for channel extraction")
+                
+                # Also subscribe to the root topic with wildcard to get all channels
+                root_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/#'
                 try:
-                    # Give the connection a moment to actually establish
-                    time_module.sleep(1)
-                    
-                    # Subscribe to root topic - receive ALL messages from all channels
-                    root_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/#'
-                    if hasattr(client, '_client') and client._client:
-                        try:
-                            # Subscribe to root topic and set a raw message callback to extract channel names
-                            client._client.subscribe(root_topic)
-                            logger.info(f"✅ Subscribed to root topic: {root_topic}")
-                            
-                            # Add raw message callback to extract channel names from topic path
-                            def on_message(client_obj, userdata, msg):
-                                """Intercept raw MQTT messages to extract channel name and node ID from topic."""
-                                try:
-                                    # Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
-                                    topic_parts = msg.topic.split('/')
-                                    
-                                    # Extract channel name if present
-                                    if 'e' in topic_parts:
-                                        e_idx = topic_parts.index('e')
-                                        if e_idx + 1 < len(topic_parts):
-                                            potential_channel = topic_parts[e_idx + 1]
-                                            
-                                            # Look for node ID (starts with !)
-                                            if e_idx + 2 < len(topic_parts):
-                                                potential_node_id = topic_parts[e_idx + 2]
-                                                if potential_node_id.startswith('!'):
-                                                    # Extract the numeric node ID (remove the '!')
-                                                    try:
-                                                        node_id_str = potential_node_id[1:]
-                                                        node_id = int(node_id_str)
-                                                        
-                                                        # Store the topic and channel for this node
-                                                        node_topics[node_id] = msg.topic
-                                                        
-                                                        # Only log on first discovery of new node
-                                                        if node_id not in getattr(on_message, 'seen_nodes', set()):
-                                                            logger.debug(f"Discovered node {node_id} on channel {potential_channel}")
-                                                            on_message.seen_nodes.add(node_id)
-                                                    except ValueError:
-                                                        pass  # Not a valid node ID
-                                except Exception as e:
-                                    logger.debug(f"Error extracting info from topic {msg.topic}: {e}")
-                            
-                            # Initialize set to track nodes we've logged
-                            on_message.seen_nodes = set()
-                            client._client.on_message = on_message
-                            logger.info("✅ Raw message callback registered for channel extraction")
-                            
-                        except Exception as e:
-                            logger.error(f"Failed to subscribe to root topic: {e}")
-                finally:
-                    setup_done.set()
-            
-            # Start subscription setup in background thread
-            setup_thread = threading.Thread(target=setup_subscriptions, daemon=True)
-            setup_thread.start()
-            
-            # Start background loop
-            if hasattr(client._client, 'loop_start'):
-                try:
-                    client._client.loop_start()
-                    logger.info('✅ MQTT background loop started')
+                    client._client.subscribe(root_topic)
+                    logger.info(f"✅ Subscribed to root topic: {root_topic}")
                 except Exception as e:
-                    logger.warning(f'Could not start explicit MQTT loop: {e}')
+                    logger.warning(f"Failed to subscribe to root topic: {e}")
             
             logger.info('✅ MQTT client ready')
             
-            # Mark as receiving messages (will be updated by callbacks)
+            # Mark as receiving messages
             message_received = True
             last_message_time = time.time()
             
