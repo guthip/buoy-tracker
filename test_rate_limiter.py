@@ -55,8 +55,8 @@ def test_rate_limiter():
     print(f"   Polling interval: {polling_interval} seconds")
     
     # Calculate how many requests to make
-    # We'll make enough to use up 50% of the hourly limit, which should trigger limits
-    requests_to_make = limit_per_hour // 2
+    # Make enough to definitely exceed the hourly limit
+    requests_to_make = int(limit_per_hour * 0.6) + 100  # Make 60% + 100 to ensure we exceed
     
     print(f"\n🔥 Test Plan:")
     print(f"   Making {requests_to_make} rapid requests")
@@ -89,17 +89,19 @@ def test_rate_limiter():
     
     elapsed = time.time() - start_time
     
-    # Get final status
     print(f"\n⏱️  Total time: {elapsed:.1f}s ({requests_to_make/elapsed:.1f} req/sec)")
+    print(f"\n📊 Final Status (calculated from test):")
+    print(f"   Started with: {initial_remaining} remaining")
+    print(f"   Made {requests_to_make} requests")
     
-    final_status = get_rate_limit_status()
-    if final_status:
-        final_remaining = final_status['requests_remaining_this_hour']
-        used = initial_remaining - final_remaining
-        print(f"\n📊 Final Status:")
-        print(f"   Started with: {initial_remaining} remaining")
-        print(f"   Now have: {final_remaining} remaining")
-        print(f"   Used: {used} requests")
+    # Calculate how many succeeded vs were limited
+    successful = results.get(200, 0)
+    limited = results.get(429, 0)
+    used = successful + limited  # All requests (successful or rate-limited) count against quota
+    
+    print(f"   Successful requests: {successful}")
+    print(f"   Rate-limited responses: {limited}")
+    print(f"   Total quota used: {used}")
     
     # Print results
     print(f"\n📈 Response Summary:")
