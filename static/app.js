@@ -4,63 +4,7 @@
   
   // Get API configuration from page data attributes
   var apiKeyRequired = document.body.dataset.apiKeyRequired === 'true';
-  var isLocalhost = document.body.dataset.isLocalhost === 'true';
-  var apiKey = document.body.dataset.apiKey || '';
-  
-  // For remote access: check localStorage for previously entered API key
-  if (apiKeyRequired && !isLocalhost && !apiKey) {
-    var storedKey = localStorage.getItem('tracker_api_key');
-    if (storedKey) {
-      apiKey = storedKey;
-      // Try to use stored key - if it fails (401), we'll prompt again
-    }
-  }
-  
-  // Show API key modal if needed
-  function showApiKeyModal() {
-    var modal = document.getElementById('api-key-modal');
-    if (modal) {
-      modal.style.display = 'flex';
-      document.getElementById('api-key-input').focus();
-    }
-  }
-  
-  // Initialize API key modal handlers
-  function initApiKeyModal() {
-    var submitBtn = document.getElementById('api-key-submit');
-    var clearBtn = document.getElementById('api-key-clear');
-    var input = document.getElementById('api-key-input');
-    var modal = document.getElementById('api-key-modal');
-    
-    if (!submitBtn) return; // Modal not in DOM
-    
-    submitBtn.onclick = function() {
-      var key = input.value.trim();
-      if (key) {
-        apiKey = key;
-        // Store in localStorage so user doesn't need to enter it again
-        localStorage.setItem('tracker_api_key', key);
-        if (modal) modal.style.display = 'none';
-        input.value = ''; // Clear input field for security
-        // Refresh data with new key
-        refreshAllData();
-      }
-    };
-    
-    clearBtn.onclick = function() {
-      input.value = '';
-      apiKey = '';
-      localStorage.removeItem('tracker_api_key');
-      if (modal) modal.style.display = 'none';
-    };
-    
-    // Allow Enter key to submit
-    input.onkeypress = function(e) {
-      if (e.key === 'Enter') {
-        submitBtn.click();
-      }
-    };
-  }
+  var apiKey = document.body.dataset.apiKey;
   
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback) {
@@ -80,13 +24,6 @@
       
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
-          // If 401 Unauthorized and we need auth, prompt for key
-          // This happens when stored key expires or is invalid
-          if (xhr.status === 401 && apiKeyRequired && !isLocalhost) {
-            apiKey = ''; // Clear invalid key
-            localStorage.removeItem('tracker_api_key'); // Don't try again
-            showApiKeyModal();
-          }
           callback(xhr);
         }
       };
@@ -798,30 +735,7 @@
   window.centerNode = function(lat, lon){ 
     if (map) map.setView([lat, lon], 13); 
   };
-  
-  window.refreshAllData = function() {
-    // Refresh all data after API key is set
-    try {
-      fetchSpecialPackets(function() {
-        try {
-          updateNodes();
-        } catch(e) {
-          console.error('Error refreshing nodes:', e);
-        }
-      });
-      updateStatus();
-    } catch(e) {
-      console.error('Error refreshing data:', e);
-    }
-  };
 
-  // Initialize API key modal if needed
-  initApiKeyModal();
-  
-  // Show modal if API key required but not provided (remote access without key)
-  if (apiKeyRequired && !apiKey && !isLocalhost) {
-    showApiKeyModal();
-  }
 
   // initChannels removed: channel filter no longer used
   initMap(); 
@@ -897,12 +811,6 @@
     }, 60000);
   } catch(e) {
     console.error('[INIT] Error setting up voltage polling:', e);
-  }
-  
-  // Initialize modal
-  initApiKeyModal();
-  if (apiKeyRequired && !isLocalhost && !apiKey) {
-    showApiKeyModal();
   }
 })();
 
