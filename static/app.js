@@ -93,9 +93,14 @@
       
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
-          // Track connection state
+          // Track connection state - check if this is a network error (status 0)
           window.lastApiResponseTime = Date.now();
-          window.connectionLost = false;
+          if (xhr.status === 0) {
+            console.error('[CONNECTION] Network error - status 0 (server unreachable)');
+            window.connectionLost = true;
+          } else {
+            window.connectionLost = false;
+          }
           
           // If 401 Unauthorized and we need auth, prompt for key
           // This happens when stored key expires or is invalid
@@ -955,6 +960,7 @@
         // Determine color based on connection and rate limit state
         if (window.connectionLost) {
           // Gray when connection is lost
+          console.log('[PROGRESS] Connection lost detected - showing gray bar');
           progressBar.style.background = '#999';
           progressBar.style.boxShadow = 'none';
         } else if (isRateLimitPaused()) {
