@@ -136,8 +136,8 @@ def index():
                           default_lat=config.DEFAULT_LAT,
                           default_lon=config.DEFAULT_LON,
                           default_zoom=config.DEFAULT_ZOOM,
-                          node_refresh=config.NODE_REFRESH_INTERVAL,
-                          status_refresh=config.STATUS_REFRESH_INTERVAL,
+                          node_refresh=config.API_POLLING_INTERVAL_MS,
+                          status_refresh=config.API_POLLING_INTERVAL_MS,
                           special_symbol=config.SPECIAL_NODE_SYMBOL,
                           special_highlight_color='#FFD700',  # Gold color - hardcoded as not configurable
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),

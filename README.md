@@ -215,9 +215,40 @@ status_blue_threshold = 1
 status_orange_threshold = 12
 
 # Data refresh intervals (in seconds)
-node_refresh_interval = 2
-status_refresh_interval = 5
+# How often the client polls the server for updates
+# Default: 60 seconds (1 minute) to reduce server load
+# Minimum recommended: 5 seconds for immediate updates
+# Adjust based on your network's needs and server resources
+node_refresh_interval = 60
+status_refresh_interval = 60
 ```
+
+### Rate Limiting
+
+API rate limits are defined in code and apply to all data endpoints:
+- **Limit**: 60 requests per hour per IP address
+- **Applies to**: `/api/status`, `/api/nodes`, `/api/recent_messages`, `/api/special/*` endpoints
+- **Why**: Prevents abuse and reduces server load
+- **With default 60-second polling**: Each endpoint gets ~1 request/minute = 60/hour, staying within limits
+- **Client Notification**: If a client exceeds the rate limit, the browser shows an orange warning: "⚠️ Rate limit reached - polling paused for 1 minute"
+
+The rate limit and polling intervals are designed to work together:
+- **Configurable polling** in `tracker.config` (`node_refresh_interval`, `status_refresh_interval`)
+- **Hardcoded rate limit** in code (`API_RATE_LIMIT = '60/hour'` in `src/config.py`)
+- At 1 poll/minute per endpoint, 3 concurrent requests = 180/hour total (well within limits)
+
+To change polling frequency, edit `tracker.config`:
+```bash
+# For more frequent updates (5 seconds):
+node_refresh_interval = 5
+status_refresh_interval = 5
+
+# For less frequent updates (2 minutes):
+node_refresh_interval = 120
+status_refresh_interval = 120
+```
+
+**Note**: Changes take effect after server restart or page reload.
 
 ### Special Nodes
 

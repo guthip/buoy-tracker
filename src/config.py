@@ -150,15 +150,22 @@ STATUS_ORANGE_THRESHOLD = _status_orange_threshold_hours * 3600
 NODE_REFRESH_INTERVAL = config.getint('webapp', 'node_refresh_interval', fallback=2) * 1000
 STATUS_REFRESH_INTERVAL = config.getint('webapp', 'status_refresh_interval', fallback=5) * 1000
 
-# API Rate Limiting - requests per hour per IP address
-# All data endpoints use the same rate limit for simplicity
-# At 1 poll/min per endpoint, 60/hour comfortably accommodates normal usage
-API_RATE_LIMIT = '60/hour'
+# API Polling Interval - single unified interval for all endpoints
+# Read from config (defaults to 60 seconds if not specified)
+_api_polling_interval_seconds = config.getint('webapp', 'api_polling_interval', fallback=60)
 
-# API Polling Intervals - how often the client polls the server (in milliseconds)
-# Set to once per minute (60000ms) for production to reduce server load
-API_STATUS_POLL_INTERVAL = 60000  # milliseconds
-API_NODES_POLL_INTERVAL = 60000   # milliseconds
+# Convert polling interval (seconds) to milliseconds for client
+API_POLLING_INTERVAL_MS = _api_polling_interval_seconds * 1000
+
+# Auto-calculate API rate limit based on polling interval
+# At 3 concurrent endpoints (status, nodes, special/packets) polling every N seconds:
+# - 1 hour = 3600 seconds
+# - Requests per endpoint = 3600 / N seconds
+# - Total requests = (3600 / N) * 3 endpoints * 1.5 (safety margin)
+# Round up to nearest 10 for clean numbers
+_requests_per_hour = int((3600.0 / _api_polling_interval_seconds) * 3 * 1.5)
+_rounded_limit = ((_requests_per_hour + 9) // 10) * 10  # Round up to nearest 10
+API_RATE_LIMIT = f'{_rounded_limit}/hour'
 
 # API Authentication - key must be in secret.config (never in public tracker.config)
 # If not set, API endpoints will not require authentication (development mode)
