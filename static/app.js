@@ -1,6 +1,40 @@
 /* Buoy Tracker Client Script (ES5) */
 (function(){
   var APP_JS_VERSION = 'v3';
+  
+  // Get API configuration from page data attributes
+  var apiKeyRequired = document.body.dataset.apiKeyRequired === 'true';
+  var apiKey = document.body.dataset.apiKey;
+  
+  // Helper function to make authenticated API requests
+  function makeApiRequest(method, url, callback) {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open(method, url, true);
+      
+      // Add API key header if authentication is required
+      if (apiKeyRequired && apiKey) {
+        xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+      }
+      
+      // Add cache-busting parameter for GET requests
+      if (method === 'GET' && url.indexOf('?') === -1) {
+        url += '?_=' + Date.now();
+      }
+      
+      xhr.onreadystatechange = function(){
+        if (xhr.readyState === 4){
+          callback(xhr);
+        }
+      };
+      
+      xhr.send();
+    } catch(e) {
+      console.error('API request error:', e);
+      if (callback) callback({ status: 0, statusText: 'Network error' });
+    }
+  }
+  
   var map = null;
   var markers = {};
   var trails = {};
@@ -18,26 +52,27 @@
   // Load thresholds from server config on startup
   function loadConfigThresholds() {
     try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'api/status', false); // synchronous for startup
-      xhr.onload = function() {
-        if (xhr.status === 200) {
-          var data = JSON.parse(xhr.responseText);
-          if (data && data.config) {
-            // API returns thresholds already in seconds - use directly
-            if (data.config.status_blue_threshold) {
-              statusBlueThreshold = data.config.status_blue_threshold;
-            }
-            if (data.config.status_orange_threshold) {
-              statusOrangeThreshold = data.config.status_orange_threshold;
-            }
-            if (data.config.special_movement_threshold) {
-              specialMovementThreshold = data.config.special_movement_threshold;
+      makeApiRequest('GET', 'api/status', function(xhr) {
+        try {
+          if (xhr.status === 200) {
+            var data = JSON.parse(xhr.responseText);
+            if (data && data.config) {
+              // API returns thresholds already in seconds - use directly
+              if (data.config.status_blue_threshold) {
+                statusBlueThreshold = data.config.status_blue_threshold;
+              }
+              if (data.config.status_orange_threshold) {
+                statusOrangeThreshold = data.config.status_orange_threshold;
+              }
+              if (data.config.special_movement_threshold) {
+                specialMovementThreshold = data.config.special_movement_threshold;
+              }
             }
           }
+        } catch(e) {
+          // Silent - use defaults if config load fails
         }
-      };
-      xhr.send();
+      });
     } catch(e) {
       // Silent - use defaults if config load fails
     }
@@ -279,26 +314,21 @@
 
   function fetchSpecialPackets(callback){
     try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', 'api/special/packets?limit=10', true);
-      xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4){
-          if (xhr.status === 200){
-            try {
-              var data = JSON.parse(xhr.responseText);
-              specialPackets = data.packets || {};
-              if (callback) callback();
-            } catch(e){ 
-              console.warn('Failed to parse special packets', e); 
-              if (callback) callback(); // Call callback even on error
-            }
-          } else {
-            console.warn('Special packets request failed:', xhr.status);
+      makeApiRequest('GET', 'api/special/packets?limit=10', function(xhr){
+        if (xhr.status === 200){
+          try {
+            var data = JSON.parse(xhr.responseText);
+            specialPackets = data.packets || {};
+            if (callback) callback();
+          } catch(e){ 
+            console.warn('Failed to parse special packets', e); 
             if (callback) callback(); // Call callback even on error
           }
+        } else {
+          console.warn('Special packets request failed:', xhr.status);
+          if (callback) callback(); // Call callback even on error
         }
-      };
-      xhr.send();
+      });
     } catch(e){ 
       console.error('Failed to fetch special packets', e); 
       if (callback) callback(); // Call callback even on error
@@ -307,19 +337,14 @@
 
   function updateNodes(){
     try {
-      var xhr = new XMLHttpRequest();
-      // Add cache-busting parameter to prevent browser caching
-      var cacheBuster = '?_=' + Date.now();
-      xhr.open('GET', 'api/nodes' + cacheBuster, true);
-      xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4){
-          if (xhr.status !== 200){ console.warn('nodes request failed', xhr.status); return; }
-          var data; try { data = JSON.parse(xhr.responseText); } catch(e){ console.warn('bad json', e); return; }
-          if (!data || !data.nodes || !data.nodes.length){ 
-            document.getElementById('nodes').innerHTML=''; 
-            document.getElementById('node-count').textContent='0'; 
-            return; 
-          }
+      makeApiRequest('GET', 'api/nodes', function(xhr){
+        if (xhr.status !== 200){ console.warn('nodes request failed', xhr.status); return; }
+        var data; try { data = JSON.parse(xhr.responseText); } catch(e){ console.warn('bad json', e); return; }
+        if (!data || !data.nodes || !data.nodes.length){ 
+          document.getElementById('nodes').innerHTML=''; 
+          document.getElementById('node-count').textContent='0'; 
+          return; 
+        }
             
             // Channel filter removed: skip discoveredChannels logic
             var list = data.nodes.slice(0);
@@ -639,10 +664,8 @@
                 if(!sn.is_special) continue;
                 (function(node){
                   var hours = parseInt(hoursEl.value || '24', 10);
-                  var xhr2 = new XMLHttpRequest();
-                  xhr2.open('GET', 'api/special/history?node_id=' + node.id + '&hours=' + hours, true);
-                  xhr2.onreadystatechange = function(){
-                    if (xhr2.readyState === 4 && xhr2.status === 200){
+                  makeApiRequest('GET', 'api/special/history?node_id=' + node.id + '&hours=' + hours, function(xhr2){
+                    if (xhr2.status === 200){
                       try { 
                         var h = JSON.parse(xhr2.responseText); 
                         var pts = h.points || []; 
@@ -662,8 +685,7 @@
                         console.warn('trail parse error', e); 
                       }
                     }
-                  }; 
-                  xhr2.send();
+                  }); 
                 })(sn);
               }
             } else { 
@@ -676,8 +698,7 @@
             }
           }
         }
-      }; 
-      xhr.send();
+      });
     } catch(e){ 
       console.error('Update error:', e); 
     }
@@ -688,11 +709,7 @@
       var statusEl = document.getElementById('mqtt-status');
       if (!statusEl) return;
       
-      var xhr = new XMLHttpRequest(); 
-      xhr.open('GET', 'api/status', true); 
-      xhr.timeout = 3000;
-      
-      xhr.onload = function(){ 
+      makeApiRequest('GET', 'api/status', function(xhr){ 
         try {
           if (xhr.status === 200){ 
             var data2 = JSON.parse(xhr.responseText); 
@@ -709,49 +726,12 @@
         } catch(e) {
           // Silent catch - don't let callback errors propagate
         }
-      };
-      
-      xhr.onerror = function(){ 
-        // Network error - silent
-      };
-      
-      xhr.ontimeout = function(){
-        // Timeout - silent
-      };
-      
-      xhr.send(); 
+      });
     } catch(e) {
       // Silent - don't let updateStatus errors break the poll loop
     }
   }
 
-  window.showRecent = function(){
-    try { 
-      var xhr = new XMLHttpRequest(); 
-      xhr.open('GET', 'api/recent_messages', true); 
-      xhr.onreadystatechange = function(){ 
-        if (xhr.readyState === 4){ 
-          if (xhr.status !== 200){ 
-            alert('Failed to fetch recent messages'); 
-            return; 
-          } 
-          try { 
-            var data = JSON.parse(xhr.responseText); 
-            var pretty = JSON.stringify(data, null, 2); 
-            var blob = new Blob([pretty], {type:'application/json'}); 
-            var url = URL.createObjectURL(blob); 
-            window.open(url, '_blank'); 
-          } catch(e){ 
-            alert('Failed to parse recent messages'); 
-          } 
-        } 
-      }; 
-      xhr.send(); 
-    } catch(e){ 
-      alert('Error fetching recent messages'); 
-    }
-  };
-  
   window.centerNode = function(lat, lon){ 
     if (map) map.setView([lat, lon], 13); 
   };

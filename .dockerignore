@@ -1,0 +1,50 @@
+# Docker ignore file - exclude unnecessary files from build context
+
+# Virtual environments and caches
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+*.so
+.Python
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Logs (will be mounted as volume in production)
+*.log
+logs/
+
+# Git and editor metadata
+.git/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test files
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Examples and documentation (optional - keep these if needed)
+examples/
+
+# Docker override files
+docker-compose.override.yml
+
+# Secret configuration (do not include in image)
+# tracker.config is public - can be included
+# Only secret.config is excluded
+secret.config
+
+# Note: tracker.config and data/ directory are INCLUDED in the container
+# This provides a fully pre-configured deployment with retained node data

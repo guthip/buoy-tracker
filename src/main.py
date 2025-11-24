@@ -1,6 +1,9 @@
 """Buoy Tracker Application - Flask web interface for Meshtastic node tracking"""
 
 from flask import Flask, jsonify, render_template, url_for, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from functools import wraps
 import logging
 import threading
 import sys
@@ -25,6 +28,45 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Configure socket reuse for faster restarts
 app.config['ENV_SOCKET_REUSE'] = True
+
+# Initialize rate limiter - use X-Forwarded-For for reverse proxy clients
+def get_client_ip():
+    """Extract client IP from X-Forwarded-For header (reverse proxy) or remote_addr."""
+    return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+
+limiter = Limiter(
+    app=app,
+    key_func=get_client_ip,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# API Key authentication - stored server-side in secret.config (never in code or env)
+# If no API key configured, endpoints will not require authentication (development mode)
+API_KEY = config.API_KEY
+if API_KEY:
+    logger.info('API key authentication enabled')
+else:
+    logger.warning('API key not configured in secret.config - API endpoints will not be protected')
+
+def require_api_key(f):
+    """Decorator to require API key in Authorization header."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not API_KEY:
+            # If no API key configured, allow access (development mode)
+            return f(*args, **kwargs)
+        
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Missing or invalid Authorization header'}), 401
+        
+        provided_key = auth_header[7:]  # Strip "Bearer " prefix
+        if provided_key != API_KEY:
+            return jsonify({'error': 'Invalid API key'}), 401
+        
+        return f(*args, **kwargs)
+    return decorated
 
 # Add cache control for static files (JS, CSS, etc)
 @app.after_request
@@ -91,9 +133,11 @@ def index():
                           node_refresh=config.NODE_REFRESH_INTERVAL,
                           status_refresh=config.STATUS_REFRESH_INTERVAL,
                           special_symbol=config.SPECIAL_NODE_SYMBOL,
-                          special_highlight_color='#FFD700',  # Gold color - hardcoded as not configurable
+                          special_highlight_color='#FFD700',
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
+                          api_key_required=(API_KEY is not None),
+                          api_key=API_KEY or '',
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -107,35 +151,12 @@ def health_check():
     return jsonify({'status': 'ok'})
 
 
-@app.route('/api/mqtt/connect', methods=['POST'])
-def mqtt_connect():
-    global mqtt_thread
-    try:
-        if mqtt_thread is None or not mqtt_thread.is_alive():
-            mqtt_thread = threading.Thread(target=run_mqtt_in_background, daemon=True)
-            mqtt_thread.start()
-            logger.info('MQTT connect requested - thread started')
-        return jsonify({'status': 'connecting'}), 200
-    except Exception as e:
-        logger.exception('Failed to start MQTT thread')
-        return jsonify({'error': str(e)}), 500
 
-
-@app.route('/api/mqtt/disconnect', methods=['POST'])
-def mqtt_disconnect():
-    mqtt_handler.disconnect_mqtt()
-    logger.info('MQTT disconnect requested')
-    return jsonify({'status': 'disconnected'}), 200
-
-
-
-@app.route('/api/mqtt/status', methods=['GET'])
-def mqtt_status():
-    status = mqtt_handler.is_connected()
-    return jsonify({'status': status})
 
 
 @app.route('/api/status', methods=['GET'])
+@require_api_key
+@limiter.limit("100/hour")
 def api_status():
     """Compatibility status endpoint used by the simple.html UI."""
     nodes = mqtt_handler.get_nodes()
@@ -153,17 +174,12 @@ def api_status():
     })
 
 
-@app.route('/api/recent_messages', methods=['GET'])
-def recent_messages():
-    try:
-        msgs = mqtt_handler.get_recent(limit=100)
-        return jsonify({'recent': msgs, 'count': len(msgs)})
-    except Exception as e:
-        logger.exception('Failed to return recent messages')
-        return jsonify({'error': str(e)}), 500
+
 
 
 @app.route('/api/nodes', methods=['GET'])
+@require_api_key
+@limiter.limit("100/hour")
 def get_nodes():
     """Return all tracked nodes with their current status."""
     nodes = mqtt_handler.get_nodes()
@@ -171,6 +187,8 @@ def get_nodes():
 
 
 @app.route('/api/special/history', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def special_history():
     from flask import request
     try:
@@ -185,19 +203,9 @@ def special_history():
         logger.exception('Failed to get special history')
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/special/all_history', methods=['GET'])
-def all_special_history():
-    from flask import request
-    try:
-        hours = request.args.get('hours', type=int) or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
-        data = mqtt_handler.get_all_special_history(hours)
-        return jsonify({'hours': hours, 'histories': data})
-    except Exception as e:
-        logger.exception('Failed to get all special histories')
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/api/special/packets', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def special_packets_all():
     """Get recent packets for all special nodes."""
     from flask import request
@@ -208,201 +216,6 @@ def special_packets_all():
     except Exception as e:
         logger.exception('Failed to get special node packets')
         return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/special/packets/<int:node_id>', methods=['GET'])
-def special_packets_single(node_id):
-    """Get recent packets for a specific special node."""
-    from flask import request
-    try:
-        limit = request.args.get('limit', type=int, default=50)
-        data = mqtt_handler.get_special_node_packets(node_id=node_id, limit=limit)
-        return jsonify({'node_id': node_id, 'packets': data, 'count': len(data)})
-    except Exception as e:
-        logger.exception('Failed to get special node packets')
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/special/voltage_history/<int:node_id>', methods=['GET'])
-def voltage_history(node_id):
-    """Get voltage history for a specific node from past week of telemetry packets."""
-    from flask import request
-    try:
-        # Get time range (default 1 week)
-        days = request.args.get('days', type=int, default=7)
-        cutoff_time = time.time() - (days * 24 * 3600)
-        
-        # Get packets and extract voltage data
-        packets = mqtt_handler.get_special_node_packets(node_id=node_id, limit=None)
-        voltage_data = []
-        
-        for pkt in packets:
-            if pkt.get('packet_type') == 'TELEMETRY_APP':
-                timestamp = pkt.get('timestamp')
-                voltage = pkt.get('voltage')
-                battery_level = pkt.get('battery_level')
-                
-                # Filter by time range and valid voltage
-                if timestamp and timestamp >= cutoff_time and voltage is not None:
-                    voltage_data.append({
-                        'timestamp': timestamp,
-                        'voltage': voltage,
-                        'battery_level': battery_level
-                    })
-        
-        # Sort by timestamp (oldest first)
-        voltage_data.sort(key=lambda x: x['timestamp'])
-        
-        return jsonify({
-            'node_id': node_id,
-            'days': days,
-            'count': len(voltage_data),
-            'data': voltage_data
-        })
-    except Exception as e:
-        logger.exception('Failed to get voltage history')
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/config/reload', methods=['POST'])
-def reload_config():
-    """Reload configuration from tracker.config without restarting the server."""
-    try:
-        import importlib
-        importlib.reload(config)
-        
-        # Update special nodes in mqtt_handler
-        mqtt_handler.update_special_nodes()
-        
-        logger.info('Configuration reloaded successfully')
-        return jsonify({
-            'status': 'success', 
-            'message': 'Configuration reloaded',
-            'special_nodes': len(getattr(config, 'SPECIAL_NODE_IDS', []))
-        }), 200
-    except Exception as e:
-        logger.error(f'Failed to reload config: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@app.route('/api/restart', methods=['POST'])
-def restart_server():
-    """Restart the server by spawning a new process and exiting."""
-    def do_restart():
-        """Execute restart in background thread."""
-        try:
-            logger.info('Server restart requested - waiting 2 seconds to send response')
-            time.sleep(2)  # Give time for HTTP response to be sent
-            
-            logger.info('Disconnecting MQTT')
-            mqtt_handler.disconnect_mqtt()
-            
-            logger.info('Starting new server process...')
-            # Get the path to the current Python interpreter
-            python = sys.executable
-            
-            # Use run.py in the current directory
-            import subprocess
-            import os
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            run_script = os.path.join(os.path.dirname(script_dir), 'run.py')
-            
-            # Start new process with output redirected to same log file
-            subprocess.Popen(
-                [python, run_script],
-                stdout=open('/tmp/buoy.log', 'a'),
-                stderr=subprocess.STDOUT,
-                start_new_session=True  # Detach from parent
-            )
-            
-            logger.info('New process started, exiting old process')
-            # Exit current process forcefully
-            os._exit(0)
-        except Exception as e:
-            logger.error(f'Failed to restart server: {e}')
-    
-    # Start restart in background thread to allow response to be sent
-    threading.Thread(target=do_restart, daemon=True).start()
-    logger.info('Server restart initiated')
-    return jsonify({'status': 'restarting', 'message': 'Server will restart in 2 seconds'}), 200
-
-
-@app.route('/api/test-alert', methods=['POST'])
-def test_alert():
-    """Test the email alert system configuration."""
-    from . import alerts
-    
-    if not getattr(config, 'ALERT_ENABLED', False):
-        return jsonify({'status': 'error', 'message': 'Alerts are disabled in configuration'}), 400
-    
-    try:
-        # Test email configuration
-        alerts.test_email_config()
-        return jsonify({'status': 'success', 'message': 'Test email sent successfully'}), 200
-    except Exception as e:
-        logger.error(f'Alert test failed: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@app.route('/api/test-alert-movement', methods=['POST'])
-def test_alert_movement():
-    """Test movement alert with sample data."""
-    from . import alerts
-    
-    if not getattr(config, 'ALERT_ENABLED', False):
-        return jsonify({'status': 'error', 'message': 'Alerts are disabled in configuration'}), 400
-    
-    try:
-        # Get first special node as test case
-        if not config.SPECIAL_NODE_IDS:
-            return jsonify({'status': 'error', 'message': 'No special nodes configured'}), 400
-        
-        test_node_id = config.SPECIAL_NODE_IDS[0]
-        test_node_data = {
-            'long_name': 'Test Node',
-            'short_name': 'TEST',
-            'latitude': 37.5800,
-            'longitude': -122.2200,
-            'origin_lat': 37.5637,
-            'origin_lon': -122.2190,
-            'battery_level': 75
-        }
-        
-        # Send movement alert (300m from origin)
-        alerts.send_movement_alert(test_node_id, test_node_data, 300.0)
-        return jsonify({'status': 'success', 'message': 'Movement alert test sent successfully'}), 200
-    except Exception as e:
-        logger.error(f'Movement alert test failed: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@app.route('/api/test-alert-battery', methods=['POST'])
-def test_alert_battery():
-    """Test battery alert with sample data."""
-    from . import alerts
-    
-    if not getattr(config, 'ALERT_ENABLED', False):
-        return jsonify({'status': 'error', 'message': 'Alerts are disabled in configuration'}), 400
-    
-    try:
-        # Get first special node as test case
-        if not config.SPECIAL_NODE_IDS:
-            return jsonify({'status': 'error', 'message': 'No special nodes configured'}), 400
-        
-        test_node_id = config.SPECIAL_NODE_IDS[0]
-        test_node_data = {
-            'long_name': 'Test Node',
-            'short_name': 'TEST',
-            'latitude': 37.5800,
-            'longitude': -122.2200,
-        }
-        
-        # Send battery alert (15% battery, below threshold)
-        alerts.send_battery_alert(test_node_id, test_node_data, 15)
-        return jsonify({'status': 'success', 'message': 'Battery alert test sent successfully'}), 200
-    except Exception as e:
-        logger.error(f'Battery alert test failed: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 
 if __name__ == '__main__':
@@ -417,43 +230,3 @@ def add_no_cache_headers(response):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
-
-
-@app.route('/api/inject-telemetry', methods=['POST'])
-def inject_telemetry():
-    """Inject fake MQTT telemetry data for testing.
-    
-    POST data:
-    {
-        "node_id": 2512106321,        # Node ID (SYCA)
-        "battery_level": 40,           # Battery percentage
-        "channel_name": "MediumFast",  # Optional, default "TEST"
-        "from_name": "Test Node"       # Optional, default "Test Node"
-    }
-    """
-    try:
-        data = request.get_json()
-        node_id = data.get('node_id')
-        battery_level = data.get('battery_level')
-        channel_name = data.get('channel_name', 'TEST')
-        from_name = data.get('from_name', 'Test Node')
-        
-        if not node_id or battery_level is None:
-            return jsonify({'status': 'error', 'message': 'Missing node_id or battery_level'}), 400
-        
-        # Inject the telemetry data
-        success = mqtt_handler.inject_telemetry_data(node_id, battery_level, channel_name, from_name)
-        
-        if success:
-            return jsonify({
-                'status': 'success',
-                'message': f'Injected telemetry for node {node_id}',
-                'node_id': node_id,
-                'battery_level': battery_level
-            }), 200
-        else:
-            return jsonify({'status': 'error', 'message': 'Failed to inject telemetry'}), 500
-            
-    except Exception as e:
-        logger.error(f'Telemetry injection failed: {e}')
-        return jsonify({'status': 'error', 'message': str(e)}), 500

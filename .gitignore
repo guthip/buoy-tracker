@@ -73,5 +73,6 @@ ssl/
 # Only secret.config is ignored
 secret.config
 
-# Docker ignore helper
-.dockerignore
+# Project documentation (local/development only - not for public GitHub)
+PROJECT_LEARNINGS.md
+CHANGELOG.md

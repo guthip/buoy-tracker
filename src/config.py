@@ -150,6 +150,13 @@ STATUS_ORANGE_THRESHOLD = _status_orange_threshold_hours * 3600
 NODE_REFRESH_INTERVAL = config.getint('webapp', 'node_refresh_interval', fallback=2) * 1000
 STATUS_REFRESH_INTERVAL = config.getint('webapp', 'status_refresh_interval', fallback=5) * 1000
 
+# API Authentication - key must be in secret.config (never in public tracker.config)
+# If not set, API endpoints will not require authentication (development mode)
+# Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+# Format in secret.config: [webapp]
+#                         api_key = your-secret-key-here
+API_KEY = config.get('webapp', 'api_key', fallback=None)
+
 # Debug Configuration
 LOG_LEVEL = config.get('debug', 'log_level', fallback='INFO')
 RECENT_MESSAGE_BUFFER_SIZE = config.getint('debug', 'recent_message_buffer_size', fallback=200)

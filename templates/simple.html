@@ -109,7 +109,7 @@
         .channel-chip:hover { opacity: 0.8; }
     </style>
 </head>
-<body data-status-refresh="{{ status_refresh }}" data-node-refresh="{{ node_refresh }}" data-default-lat="{{ default_lat }}" data-default-lon="{{ default_lon }}" data-default-zoom="{{ default_zoom }}" data-move-threshold="{{ special_move_threshold }}" style="--special-highlight-color: {{ special_highlight_color }};">
+<body data-status-refresh="{{ status_refresh }}" data-node-refresh="{{ node_refresh }}" data-default-lat="{{ default_lat }}" data-default-lon="{{ default_lon }}" data-default-zoom="{{ default_zoom }}" data-move-threshold="{{ special_move_threshold }}" data-api-key-required="{{ api_key_required|lower }}" data-api-key="{{ api_key or '' }}" style="--special-highlight-color: {{ special_highlight_color }};">
     <!-- Menu Modal Popup -->
     <div id="menu-modal" onclick="closeMenuOnBackdrop(event)">
         <div id="menu-panel">

@@ -2,6 +2,53 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-11-23] - Security Hardening - v0.71
+
+### Security Improvements (Critical)
+- **Removed all unsafe/unnecessary API endpoints** - reduced attack surface from 19 to 5 endpoints:
+  - Removed: `/api/mqtt/connect`, `/api/mqtt/disconnect`, `/api/mqtt/status` (manual MQTT control - unnecessary)
+  - Removed: `/api/recent_messages` (debug endpoint)
+  - Removed: `/api/special/voltage_history/<node_id>` (redundant with `/api/special/packets`)
+  - Removed: `/api/special/all_history` (unused by frontend)
+  - Removed: `/api/special/packets/<node_id>` (unused by frontend)
+  - Removed: `/api/config/reload` (configuration changes - admin-only via file)
+  - Removed: `/api/restart` (remote DoS vulnerability)
+  - Removed: `/api/test-alert*` (3 debug endpoints for email testing)
+  - Removed: `/api/inject-telemetry` (test endpoint for fake data injection)
+
+- **Added API Key Authentication** - all remaining endpoints (except `/`) require `Authorization: Bearer {key}` header
+  - API key stored securely in `secret.config` (git-ignored, never exposed)
+  - Frontend retrieves key at startup and includes in all API requests
+  - Development mode: API calls work without key if not configured
+
+- **Added Rate Limiting**:
+  - `/api/status`, `/api/nodes`: 100 requests/hour per client
+  - `/api/special/history`, `/api/special/packets`: 200 requests/hour per client
+  - IP detection from `X-Forwarded-For` header (reverse proxy support)
+  - Uses in-memory store (sufficient for single-instance deployment)
+
+- **Remaining Public Endpoints** (5 total, all requiring API key):
+  - `GET /` - main UI (public, no authentication)
+  - `GET /api/status` - MQTT and config status
+  - `GET /api/nodes` - current node positions
+  - `GET /api/special/history?node_id=X&hours=Y` - position history trails
+  - `GET /api/special/packets?limit=N` - recent special node packets
+
+### Changed
+- **Frontend API calls** now include `Authorization` header with API key
+  - New `makeApiRequest()` helper function handles header injection
+  - All XMLHttpRequest calls updated to use helper
+  - Removed obsolete `showRecent()` function (called deleted `/api/recent_messages`)
+
+### Dependencies
+- Added `Flask-Limiter>=3.3.0` for rate limiting
+
+### Setup Instructions
+1. Copy `secret.config.example` to `secret.config`
+2. Generate API key: `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`
+3. Replace placeholder in `secret.config` with generated key
+4. Never commit `secret.config` to Git (already in `.gitignore`)
+
 ## [2025-11-23] - Configuration Cleanup - v0.7
 
 ### Changed
