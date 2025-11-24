@@ -8,6 +8,9 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
 - **Interactive Map**: Leaflet-based map with color-coded status markers
 - **Node Details**: Battery levels, hardware info, last-seen times, and channel information
 - **Status Color-Coding**: Blue (recent), Orange (stale), Red (very old)
+- **Polling Progress Bar**: Visual indicator in the header showing time until next data refresh
+  - White progress bar fills left to right, resets at each poll
+  - Configurable polling interval (5-120 seconds)
 - **Time Indicators**: Each node card shows:
   - **LPU** (Last Position Update): Time since last GPS position packet
   - **SoL** (Sign of Life): Time since any packet received
@@ -217,11 +220,14 @@ status_orange_threshold = 12
 # Data polling interval (in seconds)
 # How often the client polls the server for updates (applies to all endpoints)
 # Default: 60 seconds (1 minute) - rate limit auto-scales based on this value
+# Range: 5-120 seconds (validated on startup)
 # Examples:
 #   5 seconds  = 3240/hour (aggressive, high server load)
+#   10 seconds = 1620/hour (frequent updates, excellent for demos)
 #   30 seconds = 540/hour (balanced)
-#   60 seconds = 270/hour (conservative, recommended)
+#   60 seconds = 270/hour (conservative, recommended for production)
 #   120 seconds = 140/hour (low load)
+# ⚠️ Progress bar in UI updates every 100ms, filling from 0-100% over the polling interval
 api_polling_interval = 60
 ```
 
@@ -230,7 +236,17 @@ api_polling_interval = 60
 API rate limits are **automatically calculated** based on the polling interval:
 - **Formula**: `(3600 / polling_seconds) * 3_endpoints * 1.5_safety_margin`, rounded up to nearest 10
 - **Current setting**: At 60-second polling → **270 requests/hour per IP address**
-- **Client Notification**: If a client exceeds the rate limit, the browser shows an orange warning: "⚠️ Rate limit reached - polling paused for 1 minute"
+- **Client Notification**: If a client exceeds the rate limit:
+  - The **progress bar turns orange** and displays remaining pause time
+  - Polling automatically pauses for 60 seconds, then resumes
+  - Browser console shows `[RATELIMIT]` messages for debugging
+
+**Progress Bar Indicator:**
+- Located in the header bar (blue background)
+- **White fill** shows time elapsed since last data poll
+- **Fills 0→100%** over the polling interval
+- **Orange display** during rate limit pause with countdown
+- **Updates every 100ms** for smooth animation
 
 The rate limit automatically adjusts when you change the polling interval:
 ```bash
