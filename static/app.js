@@ -83,7 +83,7 @@
         url += '?_=' + Date.now();
       }
       
-      console.log('[XHR] ' + method + ' ' + url);
+      console.log('[XHR-SEND] ' + method + ' ' + url);
       
       var xhr = new XMLHttpRequest();
       xhr.open(method, url, true);
@@ -100,6 +100,7 @@
       
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
+          console.log('[XHR-RESPONSE] status=' + xhr.status + ', readyState=' + xhr.readyState);
           // Track connection state - check if this is a network error (status 0)
           window.lastApiResponseTime = Date.now();
           if (xhr.status === 0) {
@@ -156,7 +157,7 @@
       
       // Detect connection loss (server not responding)
       xhr.onerror = function() {
-        console.error('[CONNECTION] Network error - server unreachable');
+        console.error('[XHR-ERROR] Network error - server unreachable');
         window.connectionLost = true;
         var progressBar = document.getElementById('refresh-progress-bar');
         if (progressBar) {
@@ -166,7 +167,7 @@
       };
       
       xhr.ontimeout = function() {
-        console.error('[CONNECTION] Request timeout - server not responding');
+        console.error('[XHR-TIMEOUT] Request timeout - server not responding');
         window.connectionLost = true;
         var progressBar = document.getElementById('refresh-progress-bar');
         if (progressBar) {
@@ -175,11 +176,14 @@
         }
       };
       
+      console.log('[XHR-SENDING] About to send ' + method + ' request');
       xhr.send();
+      console.log('[XHR-SENT] Request queued to network');
     } catch(e) {
       console.error('API request error:', e);
       if (callback) callback({ status: 0, statusText: 'Network error' });
     }
+  }
   }
   
   // Configuration thresholds (in seconds) - will be loaded from server
