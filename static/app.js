@@ -78,20 +78,22 @@
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback) {
     try {
-      // Add cache-busting parameter for GET requests BEFORE opening
-      if (method === 'GET' && url.indexOf('?') === -1) {
-        url += '?_=' + Date.now();
+      // Add cache-busting parameter with truly random value
+      if (method === 'GET') {
+        var separator = (url.indexOf('?') === -1) ? '?' : '&';
+        url += separator + '_t=' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
       }
       
       console.log('[XHR-SEND] ' + method + ' ' + url);
       
       var xhr = new XMLHttpRequest();
+      xhr.timeout = 5000; // 5 second timeout
       xhr.open(method, url, true);
       
-      // Disable caching on XHR requests
-      xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      // Aggressive no-cache headers
+      xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
       xhr.setRequestHeader('Pragma', 'no-cache');
-      xhr.setRequestHeader('Expires', '0');
+      xhr.setRequestHeader('Expires', '-1');
       
       // Add API key header if authentication is required
       if (apiKeyRequired && apiKey) {
@@ -101,12 +103,34 @@
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
           console.log('[XHR-RESPONSE] status=' + xhr.status + ', readyState=' + xhr.readyState);
+          
+          // Check if response is from cache by examining server timestamp
+          var serverTime = xhr.getResponseHeader('X-Server-Time');
+          var now = Date.now();
+          var isStaleCache = false;
+          
+          if (serverTime) {
+            var serverTimeMs = parseInt(serverTime, 10);
+            var timeDiff = now - serverTimeMs;
+            console.log('[XHR-TIME] Server time: ' + serverTimeMs + ', Now: ' + now + ', Diff: ' + timeDiff + 'ms');
+            
+            // If server timestamp is more than 3 polling intervals old, it's a cached response
+            var maxAge = (window.apiPollingInterval || 10) * 3000; // 3x polling interval in ms
+            if (timeDiff > maxAge) {
+              console.error('[CACHE] Response is stale (cached): ' + timeDiff + 'ms old, max: ' + maxAge + 'ms');
+              isStaleCache = true;
+              window.connectionLost = true;
+            }
+          }
+          
           // Track connection state - check if this is a network error (status 0)
           window.lastApiResponseTime = Date.now();
-          if (xhr.status === 0) {
-            console.error('[CONNECTION] Network error - status 0 (server unreachable)');
+          if (xhr.status === 0 || isStaleCache) {
+            if (xhr.status === 0) {
+              console.error('[CONNECTION] Network error - status 0 (server unreachable)');
+            }
             window.connectionLost = true;
-          } else {
+          } else if (xhr.status === 200 || xhr.status === 304) {
             window.connectionLost = false;
           }
           
@@ -159,21 +183,11 @@
       xhr.onerror = function() {
         console.error('[XHR-ERROR] Network error - server unreachable');
         window.connectionLost = true;
-        var progressBar = document.getElementById('refresh-progress-bar');
-        if (progressBar) {
-          progressBar.style.background = '#999'; // Gray for connection lost
-          progressBar.style.boxShadow = 'none';
-        }
       };
       
       xhr.ontimeout = function() {
-        console.error('[XHR-TIMEOUT] Request timeout - server not responding');
+        console.error('[XHR-TIMEOUT] Request timeout (5s) - server not responding');
         window.connectionLost = true;
-        var progressBar = document.getElementById('refresh-progress-bar');
-        if (progressBar) {
-          progressBar.style.background = '#999'; // Gray for connection lost
-          progressBar.style.boxShadow = 'none';
-        }
       };
       
       console.log('[XHR-SENDING] About to send ' + method + ' request');
@@ -181,6 +195,7 @@
       console.log('[XHR-SENT] Request queued to network');
     } catch(e) {
       console.error('API request error:', e);
+      window.connectionLost = true;
       if (callback) callback({ status: 0, statusText: 'Network error' });
     }
   }

@@ -77,6 +77,8 @@ def set_cache_headers(response):
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
+    # Add server timestamp so client can detect cached responses
+    response.headers['X-Server-Time'] = str(int(time.time() * 1000))  # milliseconds
     return response
 
 # Flag to track if MQTT is running
