@@ -2,7 +2,6 @@
 
 from flask import Flask, jsonify, render_template, url_for, request, redirect
 from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from functools import wraps
 import logging
 import threading
@@ -18,7 +17,6 @@ if __name__ == '__main__':
 else:
     from . import mqtt_handler, config
 import time
-import socket
 
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL), 
                    format='%(asctime)s - %(levelname)s - %(message)s')
@@ -127,7 +125,7 @@ def start_mqtt_on_startup():
 
 
 @app.before_request
-def _():
+def ensure_mqtt_started():
     """Ensure MQTT is started on first request."""
     global mqtt_thread
     if mqtt_thread is None or not mqtt_thread.is_alive():
@@ -158,13 +156,6 @@ def index():
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
-
-
-@app.route('/health', methods=['GET'])
-def health_check():
-    return jsonify({'status': 'ok'})
-
-
 
 
 
@@ -241,12 +232,3 @@ def special_packets_all():
 if __name__ == '__main__':
     logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}')
     app.run(debug=False, host=config.WEBAPP_HOST, port=config.WEBAPP_PORT, threaded=True)
-
-
-@app.after_request
-def add_no_cache_headers(response):
-    """Disable caching so template/script updates are seen immediately."""
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
