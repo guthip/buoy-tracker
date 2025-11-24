@@ -1,11 +1,14 @@
 """Buoy Tracker Application - Flask web interface for Meshtastic node tracking"""
 
 from flask import Flask, jsonify, render_template, url_for, request
+from flask_limiter import Limiter
+from functools import wraps
 import logging
 import threading
 import sys
 import os
 from pathlib import Path
+import hmac
 # Add parent dir to path so relative imports work when run as script
 if __name__ == '__main__':
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,6 +28,46 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Configure socket reuse for faster restarts
 app.config['ENV_SOCKET_REUSE'] = True
+
+# Initialize rate limiter - use X-Forwarded-For for reverse proxy clients
+def get_client_ip():
+    """Extract client IP from X-Forwarded-For header (reverse proxy) or remote_addr."""
+    return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+
+limiter = Limiter(
+    app=app,
+    key_func=get_client_ip,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
+
+# API Key authentication - stored server-side in secret.config (never in code or env)
+# If no API key configured, endpoints will not require authentication (development mode)
+API_KEY = config.API_KEY
+if API_KEY:
+    logger.info('API key authentication enabled')
+else:
+    logger.warning('API key not configured in secret.config - API endpoints will not be protected')
+
+def require_api_key(f):
+    """Decorator to require API key in Authorization header."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not API_KEY:
+            # If no API key configured, allow access (development mode)
+            return f(*args, **kwargs)
+        
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        provided_key = auth_header[7:]  # Strip "Bearer " prefix
+        # Use constant-time comparison to prevent timing attacks
+        if not hmac.compare_digest(provided_key, API_KEY):
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        return f(*args, **kwargs)
+    return decorated
 
 # Add cache control for static files (JS, CSS, etc)
 @app.after_request
@@ -82,6 +125,11 @@ def _():
 def index():
     """Serve the main map page."""
     from flask import make_response
+    # Determine if this is localhost access
+    is_localhost = request.remote_addr in ['127.0.0.1', 'localhost', '::1']
+    # API key is only sent to client if on localhost (remote users enter it in modal)
+    client_api_key = config.API_KEY if is_localhost else ''
+    
     response = make_response(render_template('simple.html',
                           app_title=config.APP_TITLE,
                           app_version=config.APP_VERSION,
@@ -94,6 +142,9 @@ def index():
                           special_highlight_color='#FFD700',  # Gold color - hardcoded as not configurable
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
+                          api_key_required=bool(API_KEY),  # Tell client if auth is needed
+                          api_key=client_api_key,  # Send actual key only for localhost
+                          is_localhost=is_localhost,
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -136,6 +187,8 @@ def mqtt_status():
 
 
 @app.route('/api/status', methods=['GET'])
+@require_api_key
+@limiter.limit("100/hour")
 def api_status():
     """Compatibility status endpoint used by the simple.html UI."""
     nodes = mqtt_handler.get_nodes()
@@ -154,6 +207,8 @@ def api_status():
 
 
 @app.route('/api/recent_messages', methods=['GET'])
+@require_api_key
+@limiter.limit("100/hour")
 def recent_messages():
     try:
         msgs = mqtt_handler.get_recent(limit=100)
@@ -164,6 +219,8 @@ def recent_messages():
 
 
 @app.route('/api/nodes', methods=['GET'])
+@require_api_key
+@limiter.limit("100/hour")
 def get_nodes():
     """Return all tracked nodes with their current status."""
     nodes = mqtt_handler.get_nodes()
@@ -171,6 +228,8 @@ def get_nodes():
 
 
 @app.route('/api/special/history', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def special_history():
     from flask import request
     try:
@@ -186,6 +245,8 @@ def special_history():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/special/all_history', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def all_special_history():
     from flask import request
     try:
@@ -198,6 +259,8 @@ def all_special_history():
 
 
 @app.route('/api/special/packets', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def special_packets_all():
     """Get recent packets for all special nodes."""
     from flask import request
@@ -211,6 +274,8 @@ def special_packets_all():
 
 
 @app.route('/api/special/packets/<int:node_id>', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def special_packets_single(node_id):
     """Get recent packets for a specific special node."""
     from flask import request
@@ -224,6 +289,8 @@ def special_packets_single(node_id):
 
 
 @app.route('/api/special/voltage_history/<int:node_id>', methods=['GET'])
+@require_api_key
+@limiter.limit("200/hour")
 def voltage_history(node_id):
     """Get voltage history for a specific node from past week of telemetry packets."""
     from flask import request
