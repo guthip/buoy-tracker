@@ -231,8 +231,6 @@ def health_check():
 @require_api_key
 def api_status():
     """Compatibility status endpoint used by the simple.html UI."""
-    client_ip = get_client_ip()
-    logger.debug(f'[LIMITER] /api/status request from {client_ip}')
     nodes = mqtt_handler.get_nodes()
     mqtt_status = mqtt_handler.is_connected()
     return jsonify({
