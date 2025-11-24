@@ -146,10 +146,6 @@ _status_blue_threshold_hours = config.getint('webapp', 'status_blue_threshold', 
 STATUS_BLUE_THRESHOLD = _status_blue_threshold_hours * 3600
 _status_orange_threshold_hours = config.getint('webapp', 'status_orange_threshold', fallback=12)
 STATUS_ORANGE_THRESHOLD = _status_orange_threshold_hours * 3600
-# Refresh intervals: configured in seconds, converted to milliseconds for frontend
-NODE_REFRESH_INTERVAL = config.getint('webapp', 'node_refresh_interval', fallback=2) * 1000
-STATUS_REFRESH_INTERVAL = config.getint('webapp', 'status_refresh_interval', fallback=5) * 1000
-
 # API Polling Interval - single unified interval for all endpoints
 # Read from config (defaults to 60 seconds if not specified)
 _api_polling_interval_seconds = config.getint('webapp', 'api_polling_interval', fallback=60)
