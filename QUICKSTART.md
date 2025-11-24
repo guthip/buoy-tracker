@@ -99,7 +99,7 @@ Edit `tracker.config` to:
 - Add special nodes to track with movement alerts
 - Configure email alerts
 - Adjust display settings
-- **Polling frequency**: `node_refresh_interval` and `status_refresh_interval` (default: 60 seconds)
+- **Polling frequency**: `api_polling_interval` (seconds) - rate limits auto-adjust based on this value
 
 See [README.md](README.md) for complete configuration options and API documentation.
 

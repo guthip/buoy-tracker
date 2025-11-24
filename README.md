@@ -214,41 +214,38 @@ default_zoom = 13
 status_blue_threshold = 1
 status_orange_threshold = 12
 
-# Data refresh intervals (in seconds)
-# How often the client polls the server for updates
-# Default: 60 seconds (1 minute) to reduce server load
-# Minimum recommended: 5 seconds for immediate updates
-# Adjust based on your network's needs and server resources
-node_refresh_interval = 60
-status_refresh_interval = 60
+# Data polling interval (in seconds)
+# How often the client polls the server for updates (applies to all endpoints)
+# Default: 60 seconds (1 minute) - rate limit auto-scales based on this value
+# Examples:
+#   5 seconds  = 3240/hour (aggressive, high server load)
+#   30 seconds = 540/hour (balanced)
+#   60 seconds = 270/hour (conservative, recommended)
+#   120 seconds = 140/hour (low load)
+api_polling_interval = 60
 ```
 
 ### Rate Limiting
 
-API rate limits are defined in code and apply to all data endpoints:
-- **Limit**: 60 requests per hour per IP address
-- **Applies to**: `/api/status`, `/api/nodes`, `/api/recent_messages`, `/api/special/*` endpoints
-- **Why**: Prevents abuse and reduces server load
-- **With default 60-second polling**: Each endpoint gets ~1 request/minute = 60/hour, staying within limits
+API rate limits are **automatically calculated** based on the polling interval:
+- **Formula**: `(3600 / polling_seconds) * 3_endpoints * 1.5_safety_margin`, rounded up to nearest 10
+- **Current setting**: At 60-second polling → **270 requests/hour per IP address**
 - **Client Notification**: If a client exceeds the rate limit, the browser shows an orange warning: "⚠️ Rate limit reached - polling paused for 1 minute"
 
-The rate limit and polling intervals are designed to work together:
-- **Configurable polling** in `tracker.config` (`node_refresh_interval`, `status_refresh_interval`)
-- **Hardcoded rate limit** in code (`API_RATE_LIMIT = '60/hour'` in `src/config.py`)
-- At 1 poll/minute per endpoint, 3 concurrent requests = 180/hour total (well within limits)
-
-To change polling frequency, edit `tracker.config`:
+The rate limit automatically adjusts when you change the polling interval:
 ```bash
-# For more frequent updates (5 seconds):
-node_refresh_interval = 5
-status_refresh_interval = 5
-
-# For less frequent updates (2 minutes):
-node_refresh_interval = 120
-status_refresh_interval = 120
+# Change polling frequency in tracker.config:
+api_polling_interval = 10   # Auto-calculates to 1620/hour (more frequent updates)
+api_polling_interval = 30   # Auto-calculates to 540/hour (balanced)
+api_polling_interval = 60   # Auto-calculates to 270/hour (default, conservative)
+api_polling_interval = 120  # Auto-calculates to 140/hour (infrequent updates)
 ```
 
-**Note**: Changes take effect after server restart or page reload.
+**Why auto-calculation?**
+- Rate limit stays proportional to polling frequency
+- No need to manually adjust two separate settings
+- Prevents users from setting aggressive polling with restrictive rate limits
+- One config value controls both behavior
 
 ### Special Nodes
 
