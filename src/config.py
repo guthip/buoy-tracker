@@ -150,6 +150,16 @@ STATUS_ORANGE_THRESHOLD = _status_orange_threshold_hours * 3600
 NODE_REFRESH_INTERVAL = config.getint('webapp', 'node_refresh_interval', fallback=2) * 1000
 STATUS_REFRESH_INTERVAL = config.getint('webapp', 'status_refresh_interval', fallback=5) * 1000
 
+# API Rate Limiting - requests per hour per IP address
+# All data endpoints use the same rate limit for simplicity
+# At 1 poll/min per endpoint, 60/hour comfortably accommodates normal usage
+API_RATE_LIMIT = '60/hour'
+
+# API Polling Intervals - how often the client polls the server (in milliseconds)
+# Set to once per minute (60000ms) for production to reduce server load
+API_STATUS_POLL_INTERVAL = 60000  # milliseconds
+API_NODES_POLL_INTERVAL = 60000   # milliseconds
+
 # API Authentication - key must be in secret.config (never in public tracker.config)
 # If not set, API endpoints will not require authentication (development mode)
 # Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(32))"

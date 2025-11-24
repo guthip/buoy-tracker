@@ -164,7 +164,7 @@ def health_check():
 
 @app.route('/api/status', methods=['GET'])
 @require_api_key
-@limiter.limit("100/hour")
+@limiter.limit(config.API_RATE_LIMIT)
 def api_status():
     """Compatibility status endpoint used by the simple.html UI."""
     nodes = mqtt_handler.get_nodes()
@@ -184,7 +184,7 @@ def api_status():
 
 @app.route('/api/recent_messages', methods=['GET'])
 @require_api_key
-@limiter.limit("100/hour")
+@limiter.limit(config.API_RATE_LIMIT)
 def recent_messages():
     try:
         msgs = mqtt_handler.get_recent(limit=100)
@@ -196,7 +196,7 @@ def recent_messages():
 
 @app.route('/api/nodes', methods=['GET'])
 @require_api_key
-@limiter.limit("100/hour")
+@limiter.limit(config.API_RATE_LIMIT)
 def get_nodes():
     """Return all tracked nodes with their current status."""
     nodes = mqtt_handler.get_nodes()
@@ -205,7 +205,7 @@ def get_nodes():
 
 @app.route('/api/special/history', methods=['GET'])
 @require_api_key
-@limiter.limit("200/hour")
+@limiter.limit(config.API_RATE_LIMIT)
 def special_history():
     from flask import request
     try:
@@ -225,7 +225,7 @@ def special_history():
 
 @app.route('/api/special/packets', methods=['GET'])
 @require_api_key
-@limiter.limit("200/hour")
+@limiter.limit(config.API_RATE_LIMIT)
 def special_packets_all():
     """Get recent packets for all special nodes."""
     from flask import request

@@ -96,6 +96,19 @@
             localStorage.removeItem('tracker_api_key'); // Don't try again
             showApiKeyModal();
           }
+          // If 429 Too Many Requests (rate limit), show message
+          if (xhr.status === 429) {
+            var rateLimitMsg = document.getElementById('rate-limit-message');
+            if (!rateLimitMsg) {
+              rateLimitMsg = document.createElement('div');
+              rateLimitMsg.id = 'rate-limit-message';
+              rateLimitMsg.style.cssText = 'position: fixed; top: 10px; right: 10px; background-color: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; z-index: 10000; box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
+              document.body.appendChild(rateLimitMsg);
+            }
+            rateLimitMsg.textContent = '⚠️ Rate limit reached - polling paused for 1 minute';
+            // Auto-hide after 5 seconds
+            setTimeout(function() { if (rateLimitMsg && rateLimitMsg.parentNode) rateLimitMsg.parentNode.removeChild(rateLimitMsg); }, 5000);
+          }
           callback(xhr);
         }
       };
@@ -804,6 +817,8 @@
               txt = '⏳ Connecting...';
             }
             statusEl.textContent = txt;
+          } else if (xhr.status === 429) {
+            statusEl.textContent = '⏸️ Rate limited';
           }
         } catch(e) {
           // Silent catch - don't let callback errors propagate
@@ -858,8 +873,8 @@
     console.error('[INIT] Error in fetchSpecialPackets:', e);
   }
   
-  var statusRefresh = parseInt(document.body.dataset.statusRefresh || '5000', 10);
-  var nodeRefresh = parseInt(document.body.dataset.nodeRefresh || '5000', 10);
+  var statusRefresh = parseInt(document.body.dataset.statusRefresh || '60000', 10);
+  var nodeRefresh = parseInt(document.body.dataset.nodeRefresh || '60000', 10);
   
   // Poll status continuously every 500ms to ensure live updates
   var statusPollInterval = null;
@@ -879,7 +894,7 @@
         } catch(e) {
           console.error('Error in polling:', e);
         }
-      }, 500);
+      }, 60000);
     } catch(e) {
       console.error('Error starting polling:', e);
     }
