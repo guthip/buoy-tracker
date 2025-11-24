@@ -78,17 +78,24 @@
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback) {
     try {
+      // Add cache-busting parameter for GET requests BEFORE opening
+      if (method === 'GET' && url.indexOf('?') === -1) {
+        url += '?_=' + Date.now();
+      }
+      
+      console.log('[XHR] ' + method + ' ' + url);
+      
       var xhr = new XMLHttpRequest();
       xhr.open(method, url, true);
+      
+      // Disable caching on XHR requests
+      xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      xhr.setRequestHeader('Pragma', 'no-cache');
+      xhr.setRequestHeader('Expires', '0');
       
       // Add API key header if authentication is required
       if (apiKeyRequired && apiKey) {
         xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
-      }
-      
-      // Add cache-busting parameter for GET requests
-      if (method === 'GET' && url.indexOf('?') === -1) {
-        url += '?_=' + Date.now();
       }
       
       xhr.onreadystatechange = function(){
