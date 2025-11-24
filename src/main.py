@@ -149,7 +149,8 @@ def index():
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
                           api_key_required=(API_KEY is not None),
-                          api_key=API_KEY or '',
+                          api_key=(API_KEY if request.remote_addr in ('127.0.0.1', '::1') else ''),
+                          is_localhost=(request.remote_addr in ('127.0.0.1', '::1')),
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
