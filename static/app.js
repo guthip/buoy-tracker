@@ -11,8 +11,40 @@
   var specialPackets = {}; // cache of special node packets
   
   // Configuration thresholds (in seconds) - will be loaded from server
-  var statusBlueThreshold = 3600; // default: 1 hour
-  var statusOrangeThreshold = 43200; // default: 12 hours
+  var statusBlueThreshold = 3600; // default: 1 hour (will be overwritten by config from API)
+  var statusOrangeThreshold = 43200; // default: 12 hours (will be overwritten by config from API)
+  var specialMovementThreshold = 50; // default: 50m (will be overwritten by config from API)
+  
+  // Load thresholds from server config on startup
+  function loadConfigThresholds() {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', 'api/status', false); // synchronous for startup
+      xhr.onload = function() {
+        if (xhr.status === 200) {
+          var data = JSON.parse(xhr.responseText);
+          if (data && data.config) {
+            // API returns thresholds already in seconds - use directly
+            if (data.config.status_blue_threshold) {
+              statusBlueThreshold = data.config.status_blue_threshold;
+            }
+            if (data.config.status_orange_threshold) {
+              statusOrangeThreshold = data.config.status_orange_threshold;
+            }
+            if (data.config.special_movement_threshold) {
+              specialMovementThreshold = data.config.special_movement_threshold;
+            }
+          }
+        }
+      };
+      xhr.send();
+    } catch(e) {
+      // Silent - use defaults if config load fails
+    }
+  }
+  
+  // Load config on page load
+  loadConfigThresholds();
 
   
   var showAllNodesEl = document.getElementById('show-all-nodes');
@@ -20,7 +52,12 @@
   var trailsEl = document.getElementById('toggle-trails');
   var hoursEl = document.getElementById('trail-hours');
 
-    // Ensure the menu checkbox for trails is always checked on load\n  if (trailsEl) trailsEl.checked = true;\n  \n  // Default to showing ALL nodes on page load (for debugging)\n  if (showAllNodesEl) showAllNodesEl.checked = true;\n  if (trailsEl) trailsEl.checked = true;
+    // Ensure the menu checkbox for trails is always checked on load
+  if (trailsEl) trailsEl.checked = true;
+  
+  // Default to NOT showing all nodes (show only nodes with positions)
+  if (showAllNodesEl) showAllNodesEl.checked = false;
+  if (trailsEl) trailsEl.checked = true;
   function attachChange(el){ if(el && el.addEventListener){ el.addEventListener('change', function(){ updateNodes(); }); } }
   attachChange(showAllNodesEl); attachChange(trailsEl);
   
@@ -197,10 +234,7 @@
     if (node.is_special && node.distance_from_origin_m != null && node.origin_lat != null && node.origin_lon != null) {
       var distm = Math.round(Number(node.distance_from_origin_m));
       distStr = !isNaN(distm) ? distm + 'M' : '?';
-      var threshold = 50;
-      if (typeof window !== 'undefined' && document.body && document.body.dataset.moveThreshold) {
-        threshold = parseInt(document.body.dataset.moveThreshold, 10) || 50;
-      }
+      var threshold = specialMovementThreshold;
       if (distm < threshold/2) distColor = 'green';
       else if (distm < threshold) distColor = 'yellow';
       else distColor = 'red';
@@ -226,10 +260,6 @@
     var info = indicators;
     var extraInfo = '';
     
-    // Add channel name if available
-    if (node.channel_name) {
-      extraInfo += '<div style="font-size:0.75em;color:#666;margin-top:2px;padding-top:2px;border-top:1px solid #eee;">📡 ' + node.channel_name + '</div>';
-    }
     var classes = 'node ' + node.status + (node.is_special ? ' special' : '');
     // Add moved-alert class if special node has moved beyond threshold
     if (node.is_special && node.moved_far) {
@@ -724,35 +754,6 @@
   
   window.centerNode = function(lat, lon){ 
     if (map) map.setView([lat, lon], 13); 
-  };
-
-  window.reloadConfig = function(){
-    if (!confirm('Reload configuration from tracker.config?\n\nThis will update special nodes and other settings without restarting the server.')) {
-      return;
-    }
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('POST', 'api/config/reload', true);
-      xhr.onreadystatechange = function(){
-        if (xhr.readyState === 4){
-          if (xhr.status === 200){
-            try {
-              var data = JSON.parse(xhr.responseText);
-              alert('Configuration reloaded!\n\n' + data.message + '\nSpecial nodes: ' + data.special_nodes);
-              // Refresh the page to show updated data
-              setTimeout(function(){ window.location.reload(); }, 1000);
-            } catch(e){
-              alert('Configuration reloaded, but response parsing failed');
-            }
-          } else {
-            alert('Failed to reload configuration. Check server logs.');
-          }
-        }
-      };
-      xhr.send();
-    } catch(e){
-      alert('Error reloading configuration: ' + e.message);
-    }
   };
 
 

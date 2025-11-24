@@ -4,7 +4,7 @@
 
 [app]
 title = SYC buoy tracker
-version = 0.68
+version = 0.7
 
 [mqtt]
 # MQTT broker settings
@@ -61,11 +61,11 @@ low_battery_threshold = 50
 
 [special_nodes_settings]
 # Special nodes configuration
-show_offline = true
-history_hours = 24
+history_hours = 168
 persist_path = data/special_history.json
 stale_after_hours = 12
-stale_symbol = ☆
+# Symbol displayed for special nodes on map
+special_symbol = ⭐
 
 [special_nodes]
 # Highlight specific nodes with custom symbols and home positions

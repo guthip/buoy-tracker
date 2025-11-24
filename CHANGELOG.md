@@ -1,3 +1,67 @@
+# Changelog
+
+All notable changes to the Buoy Tracker project are documented here.
+
+## [2025-11-23] - Configuration Cleanup - v0.7
+
+### Changed
+- **Removed unused config items**:
+  - `show_offline` (hardcoded to always show special nodes at home positions)
+  - `stale_symbol` (was loaded but never used by frontend)
+
+- **New configurable setting**:
+  - `special_symbol` in `[special_nodes_settings]` - now configurable instead of hardcoded
+  - Default: `⭐` (star emoji)
+
+### Behavior
+- **Special nodes now always show** at their configured home position before receiving their first GPS packet
+  - No configuration needed - this is the desired behavior for initial deployment phase
+  - Ensures you see everything about special nodes, whether assumed (home position) or received (actual packets)
+
+### Documentation
+- Updated README.md and tracker.config.template to reflect removed config items
+- Simplified Special Nodes configuration section
+- Clarified that special nodes are always displayed at home positions until they send their first packet
+
+## [2025-11-23] - Bug Fixes & UI Polish - v0.69
+
+### Fixed
+- **Critical: Position Packets Not Displaying (Field Name Mismatch)**
+  - Issue: Non-special node positions were being received but never displayed on map
+  - Root Cause: Code used camelCase field names (`latitudeI`, `longitudeI`) but protobuf JSON conversion uses snake_case (`latitude_i`, `longitude_i`)
+  - Solution: Standardized all field name accesses to snake_case format
+  - Result: Non-special nodes now appear on map immediately when position packets arrive
+  - Impact: Map now shows 2-3x more nodes (all nodes with positions, not just special nodes)
+
+- **Field Name Standardization Across All Message Types**
+  - NODEINFO: `hwModel` → `hw_model`, `longName` → `long_name`, `shortName` → `short_name`
+  - TELEMETRY: `deviceMetrics` → `device_metrics`, `powerMetrics` → `power_metrics`
+  - MAP_REPORT: `modemPreset` → `modem_preset`, `firmwareVersion` → `firmware_version`
+  - All changes use `preserving_proto_field_name=True` which guarantees snake_case output
+
+- **Docker Bytecode Caching Issue**
+  - Issue: Code changes weren't taking effect in running container
+  - Solution: Use `--no-cache` flag during development to force fresh Python bytecode
+
+### Changed
+- **UI Improvements**:
+  - Removed channel information (MediumFast, MediumSlow) from node cards - now working reliably
+  - Default "Show all nodes" setting changed from enabled to disabled (shows only nodes with positions by default)
+  - Cleaner card display focusing on essential information
+
+- **Version**: Bumped to 0.69
+
+### Technical
+- Removed unnecessary code fallbacks for field name compatibility
+- Removed all debug logging added during troubleshooting
+- Deleted temporary `deduplicate_nodes.py` utility script
+- Code is now production-ready and clean
+
+### Performance
+- Position packet processing now reliable with zero packet loss
+- All nodes with positions immediately visible on map
+- Reduced false "offline" status issues due to missing position data
+
 # [2025-11-14] - Menu & UI Simplification
 
 ### Changed

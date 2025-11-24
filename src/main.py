@@ -91,10 +91,8 @@ def index():
                           node_refresh=config.NODE_REFRESH_INTERVAL,
                           status_refresh=config.STATUS_REFRESH_INTERVAL,
                           special_symbol=config.SPECIAL_NODE_SYMBOL,
-                          special_highlight_color=config.SPECIAL_NODE_HIGHLIGHT_COLOR,
+                          special_highlight_color='#FFD700',  # Gold color - hardcoded as not configurable
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
-                          show_offline_specials=getattr(config, 'SPECIAL_SHOW_OFFLINE', True),
-                          stale_special_symbol=getattr(config, 'STALE_SPECIAL_SYMBOL', '☆'),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
@@ -149,7 +147,8 @@ def api_status():
         'nodes_with_position': len(nodes),
         'config': {
             'status_blue_threshold': config.STATUS_BLUE_THRESHOLD,
-            'status_orange_threshold': config.STATUS_ORANGE_THRESHOLD
+            'status_orange_threshold': config.STATUS_ORANGE_THRESHOLD,
+            'special_movement_threshold': getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50)
         }
     })
 

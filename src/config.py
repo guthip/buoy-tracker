@@ -159,8 +159,7 @@ LOW_BATTERY_THRESHOLD = config.getint('battery', 'low_battery_threshold', fallba
 
 # Special Nodes Configuration (parse format: node_id = label,home_lat,home_lon)
 SPECIAL_NODES = {}
-SPECIAL_NODE_SYMBOL = '⭐'  # Default symbol for all special nodes
-SPECIAL_NODE_HIGHLIGHT_COLOR = '#FFD700'  # Gold color for highlighting
+SPECIAL_NODE_SYMBOL = config.get('special_nodes_settings', 'special_symbol', fallback='⭐')  # Symbol for special nodes
 
 if config.has_section('special_nodes'):
     for key, value in config.items('special_nodes'):
@@ -211,7 +210,6 @@ if config.has_section('special_nodes'):
 SPECIAL_NODE_IDS = list(SPECIAL_NODES.keys())
 
 # Special nodes advanced settings
-SPECIAL_SHOW_OFFLINE = config.getboolean('special_nodes_settings', 'show_offline', fallback=True)
 SPECIAL_HISTORY_HOURS = config.getint('special_nodes_settings', 'history_hours', fallback=24)
 # Default persist path under project data/ (use relative path for Docker/portability)
 _default_history_path = 'data/special_history.json'
@@ -219,7 +217,6 @@ SPECIAL_HISTORY_PERSIST_PATH = config.get('special_nodes_settings', 'persist_pat
 # Consider nodes stale when time since last seen exceeds this threshold (in hours)
 _stale_after_hours = config.getint('special_nodes_settings', 'stale_after_hours', fallback=12)
 STALE_AFTER_SECONDS = _stale_after_hours * 3600
-STALE_SPECIAL_SYMBOL = config.get('special_nodes_settings', 'stale_symbol', fallback='☆')
 
 # Alert Configuration
 ALERT_ENABLED = config.getboolean('alerts', 'enabled', fallback=False)

@@ -1,6 +1,6 @@
 # Buoy Tracker — Docker Deployment Guide
 
-Complete instructions for deploying Buoy Tracker v0.68 with Docker.
+Complete instructions for deploying Buoy Tracker v0.69 with Docker.
 
 ## Platform Support
 
@@ -13,7 +13,7 @@ Docker automatically selects the correct architecture for your platform.
 
 ## Quick Start
 
-**Buoy Tracker v0.68** - Real-time Meshtastic mesh network node tracking with data persistence
+**Buoy Tracker v0.69** - Real-time Meshtastic mesh network node tracking with data persistence
 
 **Using docker-compose (Recommended)**
 
@@ -334,9 +334,9 @@ docker inspect buoy-tracker | grep -A 10 Mounts
 ## Email Distribution Template
 
 ```
-Subject: Buoy Tracker v0.68 - Docker Container
+Subject: Buoy Tracker v0.69 - Docker Container
 
-Buoy Tracker v0.68 Docker image for real-time Meshtastic node tracking.
+Buoy Tracker v0.69 Docker image for real-time Meshtastic node tracking.
 
 Quick Start:
 1. mkdir buoy-tracker && cd buoy-tracker

@@ -14,8 +14,6 @@ from collections import deque
 from pathlib import Path
 import os
 import math
-import re
-import signal
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from google.protobuf.json_format import MessageToJson
@@ -60,12 +58,31 @@ def _is_special_node(node_id):
     return node_id in config.SPECIAL_NODES
 
 def _track_special_node_packet(node_id, packet_type, json_data):
-    """Track all packets from special nodes with detailed information."""
+    """Track all packets from special nodes with detailed information (deduplicating identical packets)."""
     if not _is_special_node(node_id):
         return
     
     if node_id not in special_node_packets:
         special_node_packets[node_id] = []  # Store ALL packets (no limit)
+    
+    current_time = time.time()
+    existing_count = len(special_node_packets[node_id])
+    
+    # Deduplication: Skip packets from same node within 2-second window
+    # BUT ONLY if they are the SAME packet type
+    # Mesh networks with low bit-rate send multiple copies of the same packet in rapid bursts
+    # If we see a packet of the SAME TYPE from this node within 2 seconds of the last SAME TYPE, it's a duplicate
+    DEDUP_WINDOW_SECONDS = 2
+    
+    if existing_count > 0:
+        last_packet = special_node_packets[node_id][-1]
+        time_since_last = current_time - last_packet['timestamp']
+        
+        # Only deduplicate if same packet type AND within time window
+        if last_packet['packet_type'] == packet_type and time_since_last < DEDUP_WINDOW_SECONDS:
+            # Same packet type arrived too soon after last one - skip it (duplicate)
+            logger.info(f'DEDUP: Skipping duplicate {packet_type} from node {node_id} (received {time_since_last:.3f}s after last {packet_type})')
+            return
     
     packet_info = {
         'timestamp': time.time(),
@@ -81,13 +98,13 @@ def _track_special_node_packet(node_id, packet_type, json_data):
     if packet_type == 'NODEINFO_APP':
         packet_info.update({
             'role': payload.get('role'),
-            'hw_model': payload.get('hwModel'),
-            'long_name': payload.get('longName'),
-            'short_name': payload.get('shortName')
+            'hw_model': payload.get('hw_model'),
+            'long_name': payload.get('long_name'),
+            'short_name': payload.get('short_name')
         })
     elif packet_type == 'POSITION_APP':
-        lat_i = payload.get('latitudeI')
-        lon_i = payload.get('longitudeI')
+        lat_i = payload.get('latitude_i')
+        lon_i = payload.get('longitude_i')
         if lat_i and lon_i:
             packet_info.update({
                 'lat': lat_i / 1e7,
@@ -95,21 +112,21 @@ def _track_special_node_packet(node_id, packet_type, json_data):
                 'altitude': payload.get('altitude')
             })
     elif packet_type == 'TELEMETRY_APP':
-        device_metrics = payload.get('deviceMetrics', {})
-        power_metrics = payload.get('powerMetrics', {})
+        device_metrics = payload.get('device_metrics', {})
+        power_metrics = payload.get('power_metrics', {})
         packet_info.update({
-            'battery_level': device_metrics.get('batteryLevel'),
+            'battery_level': device_metrics.get('battery_level'),
             'voltage': device_metrics.get('voltage'),
-            'channel_utilization': device_metrics.get('channelUtilization'),
-            'air_util_tx': device_metrics.get('airUtilTx'),
-            'power_voltage': power_metrics.get('ch3Voltage'),
-            'power_current': power_metrics.get('ch3Current')
+            'channel_utilization': device_metrics.get('channel_utilization'),
+            'air_util_tx': device_metrics.get('air_util_tx'),
+            'power_voltage': power_metrics.get('ch3_voltage') or power_metrics.get('ch1_voltage'),
+            'power_current': power_metrics.get('ch3_current')
         })
     elif packet_type == 'MAP_REPORT_APP':
         packet_info.update({
-            'modem_preset': payload.get('modemPreset'),
+            'modem_preset': payload.get('modem_preset'),
             'region': payload.get('region'),
-            'firmware_version': payload.get('firmwareVersion')
+            'firmware_version': payload.get('firmware_version')
         })
     
     special_node_packets[node_id].append(packet_info)
@@ -244,8 +261,9 @@ def _load_special_nodes_data():
                         if nodes_data[node_id].get("battery") is None:
                             voltage = None
                             telemetry = nodes_data[node_id].get("telemetry", {})
-                            if telemetry and 'powerMetrics' in telemetry:
-                                voltage = telemetry['powerMetrics'].get('ch3Voltage') or telemetry['powerMetrics'].get('ch1Voltage')
+                            if telemetry:
+                                power_metrics = telemetry.get('power_metrics', {})
+                                voltage = power_metrics.get('ch3_voltage') or power_metrics.get('ch1_voltage')
                             if voltage and 3.0 < voltage < 4.2:
                                 battery = int(((voltage - 3.0) / 1.2) * 100)
                                 nodes_data[node_id]["battery"] = battery
@@ -366,11 +384,8 @@ def _save_special_nodes_data(force=False):
     except Exception as e:
         logger.warning(f"Failed to save unified special nodes data: {e}")
 
-# Legacy load functions (for migration from old format)
 # Load any existing data on import using unified loader
-print("***** About to call _load_special_nodes_data() *****")
 _load_special_nodes_data()
-print("***** All load functions completed *****")
 
 
 def add_recent(json_data):
@@ -536,9 +551,9 @@ def on_nodeinfo(json_data):
 
             # Safely extract fields from payload (might be dict or string)
             if isinstance(payload, dict):
-                nodes_data[node_id]["long_name"] = name or payload.get("longName") or "Unknown"
-                nodes_data[node_id]["short_name"] = short or payload.get("shortName") or "?"
-                nodes_data[node_id]["hw_model"] = payload.get("hwModel", "Unknown")
+                nodes_data[node_id]["long_name"] = name or payload.get("long_name") or "Unknown"
+                nodes_data[node_id]["short_name"] = short or payload.get("short_name") or "?"
+                nodes_data[node_id]["hw_model"] = payload.get("hw_model") or "Unknown"
             else:
                 nodes_data[node_id]["long_name"] = name or "Unknown"
                 nodes_data[node_id]["short_name"] = short or "?"
@@ -561,7 +576,6 @@ def on_position(json_data):
     last_message_time = time.time()
     
     try:
-        logger.debug(f'on_position callback fired - processing message')
         add_recent(json_data)
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
@@ -583,7 +597,7 @@ def on_position(json_data):
             _track_special_node_packet(node_id, 'POSITION_APP', json_data)
             _save_special_nodes_data()  # Save packet history after tracking
         
-        if node_id and "latitudeI" in payload and "longitudeI" in payload:
+        if node_id and "latitude_i" in payload and "longitude_i" in payload:
             if node_id not in nodes_data:
                 nodes_data[node_id] = {}
             
@@ -597,8 +611,8 @@ def on_position(json_data):
             # For movement alerts on special nodes, track origin and distance
             try:
                 if node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
-                    lat = payload["latitudeI"] / 1e7
-                    lon = payload["longitudeI"] / 1e7
+                    lat = payload["latitude_i"] / 1e7
+                    lon = payload["longitude_i"] / 1e7
                     
                     # Get home position from config if defined, otherwise use first position seen
                     special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
@@ -634,8 +648,8 @@ def on_position(json_data):
                 pass
             
             # Convert from integer coordinates to decimal degrees
-            lat = payload["latitudeI"] / 1e7
-            lon = payload["longitudeI"] / 1e7
+            lat = payload["latitude_i"] / 1e7
+            lon = payload["longitude_i"] / 1e7
             alt = payload.get("altitude", 0)
             
             nodes_data[node_id]["latitude"] = lat
@@ -717,38 +731,22 @@ def on_telemetry(json_data):
             battery = None
             try:
                 if isinstance(payload, dict):
-                    # Try snake_case format first (from protobuf_to_json with preserving_proto_field_name=True)
+                    # Payload uses snake_case from protobuf (preserving_proto_field_name=True)
                     battery = payload.get("device_metrics", {}).get("battery_level")
                     
-                    # Try camelCase format as fallback
-                    if battery is None:
-                        battery = payload.get("deviceMetrics", {}).get("batteryLevel")
-                    
-                    # Try ADMIN_APP format: deviceState.power.battery
+                    # Try ADMIN_APP format: deviceState.power.battery (non-standard, just in case)
                     if battery is None:
                         battery = payload.get("deviceState", {}).get("power", {}).get("battery")
                     
                     if battery is None:
                         battery = payload.get("battery") or payload.get("batt")
-                    # some payloads put metrics under 'metrics'
-                    if battery is None:
-                        battery = payload.get("metrics", {}).get("batteryLevel") or payload.get("metrics", {}).get("battery_level")
                     
                     # If no battery level found, try to estimate from voltage
-                    # Priority: powerMetrics (SYCS), admin power metrics, deviceMetrics
                     if battery is None:
                         voltage = None
-                        # Check snake_case format first
+                        # Check power_metrics first (most accurate)
                         power_metrics = payload.get("power_metrics", {})
-                        if power_metrics:
-                            voltage = power_metrics.get("ch3_voltage") or power_metrics.get("ch1_voltage") or \
-                                    power_metrics.get("ch3Voltage") or power_metrics.get("ch1Voltage")
-                        
-                        # Try camelCase powerMetrics
-                        if voltage is None:
-                            power_metrics_cc = payload.get("powerMetrics", {})
-                            if power_metrics_cc:
-                                voltage = power_metrics_cc.get("ch3Voltage") or power_metrics_cc.get("ch1Voltage")
+                        voltage = power_metrics.get("ch3_voltage") or power_metrics.get("ch1_voltage")
                         
                         # If no powerMetrics, check admin power format voltage
                         if voltage is None:
@@ -756,14 +754,10 @@ def on_telemetry(json_data):
                             if admin_voltage:
                                 voltage = admin_voltage / 1000.0  # Admin format uses mV
                         
-                        # Fall back to deviceMetrics voltage (both formats)
+                        # Fall back to device_metrics voltage
                         if voltage is None:
                             device_metrics = payload.get("device_metrics", {})
-                            voltage = device_metrics.get("voltage") if device_metrics else None
-                        
-                        if voltage is None:
-                            device_metrics_cc = payload.get("deviceMetrics", {})
-                            voltage = device_metrics_cc.get("voltage") if device_metrics_cc else None
+                            voltage = device_metrics.get("voltage")
                         
                         # Estimate battery percentage from voltage (LiPo: 4.2V=100%, 3.0V=0%)
                         if voltage is not None and isinstance(voltage, (int, float)):
@@ -982,6 +976,8 @@ def _on_mqtt_message(client_obj, userdata, msg):
     """
     global message_received, last_message_time, packets_received
     
+    logger.info(f'_on_mqtt_message: topic={msg.topic}')
+    
     try:
         # Extract channel from MQTT topic path
         channel_name = _extract_channel_from_mqtt_topic(msg.topic)
@@ -1040,6 +1036,10 @@ def _route_message_to_handler(portnum, portnum_name, mp, json_packet):
     Decodes payload based on app type, then calls the corresponding handler.
     """
     try:
+        # Log all incoming packets to see what we're receiving
+        from_id = json_packet.get('from')
+        logger.info(f'MSG: portnum={portnum} ({portnum_name}), from={from_id}')
+        
         # Ensure decoded payload structure
         if 'decoded' not in json_packet:
             json_packet['decoded'] = {}
@@ -1057,6 +1057,7 @@ def _route_message_to_handler(portnum, portnum_name, mp, json_packet):
                 data = mesh_pb2.Position()
                 data.ParseFromString(mp.decoded.payload)
                 json_packet['decoded']['payload'] = _protobuf_to_json(data)
+                from_id = json_packet.get('from')
                 on_position(json_packet)
                 return
             
@@ -1340,14 +1341,14 @@ def get_nodes():
             "distance_from_origin_m": data.get("distance_from_origin_m"),
         }
         
-        # Extract voltage from telemetry (prefer powerMetrics over deviceMetrics)
+        # Extract voltage from telemetry (snake_case from protobuf)
         telemetry = data.get("telemetry", {})
         if isinstance(telemetry, dict):
-            power_metrics = telemetry.get("powerMetrics", {})
-            device_metrics = telemetry.get("deviceMetrics", {})
-            # Prefer ch3Voltage from powerMetrics, fall back to voltage from deviceMetrics
-            node_info["voltage"] = power_metrics.get("ch3Voltage") or device_metrics.get("voltage")
-            node_info["power_current"] = power_metrics.get("ch3Current")
+            power_metrics = telemetry.get("power_metrics", {})
+            device_metrics = telemetry.get("device_metrics", {})
+            # Prefer ch3_voltage from power_metrics, fall back to voltage from device_metrics
+            node_info["voltage"] = power_metrics.get("ch3_voltage") or power_metrics.get("ch1_voltage") or device_metrics.get("voltage")
+            node_info["power_current"] = power_metrics.get("ch3_current")
         
         # Check for low battery
         battery_level = node_info.get("battery")
@@ -1364,13 +1365,14 @@ def get_nodes():
         result.append(node_info)
         present_ids.add(node_id)
     
-    # Include offline special nodes at their home positions (if defined)
-    if getattr(config, 'SPECIAL_SHOW_OFFLINE', True):
-        for sid in getattr(config, 'SPECIAL_NODE_IDS', []):
-            if sid not in present_ids:
-                info = getattr(config, 'SPECIAL_NODES', {}).get(sid, {})
-                home_lat = info.get('home_lat')
-                home_lon = info.get('home_lon')
+    # Include offline special nodes at their home positions
+    # Always show special nodes at their configured home location, even before first packet received
+    for sid in getattr(config, 'SPECIAL_NODE_IDS', []):
+        if sid not in present_ids:
+            info = getattr(config, 'SPECIAL_NODES', {}).get(sid, {})
+            home_lat = info.get('home_lat')
+            home_lon = info.get('home_lon')
+            if home_lat is not None and home_lon is not None:
                 node_dict = {
                     "id": sid,
                     "name": info.get('label') or f"Node {sid}",
@@ -1489,14 +1491,14 @@ def inject_telemetry_data(node_id, battery_level, channel_name="TEST", from_name
                         }
                     }
                 },
-                "timestamp": int(time.time() * 1000),
+                "timestamp": int(time.time()),
                 "rxTime": int(time.time()),
                 "rxRssi": -100,
                 "rxSnr": 0,
                 "from_name": from_name
             }
         else:
-            # TELEMETRY_APP message with deviceMetrics (default)
+            # TELEMETRY_APP message with device_metrics (default) - using snake_case to match protobuf
             fake_json = {
                 "from": node_id,
                 "type": "TELEMETRY_APP",
@@ -1505,16 +1507,16 @@ def inject_telemetry_data(node_id, battery_level, channel_name="TEST", from_name
                 "decoded": {
                     "portnum": "TELEMETRY_APP",
                     "payload": {
-                        "deviceMetrics": {
-                            "batteryLevel": battery_level,
+                        "device_metrics": {
+                            "battery_level": battery_level,
                             "voltage": 4.0 if battery_level > 50 else 3.8,
-                            "channelUtilization": 0.0,
-                            "airUtilTx": 0.0,
-                            "uptimeSeconds": 1000000
+                            "channel_utilization": 0.0,
+                            "air_util_tx": 0.0,
+                            "uptime_seconds": 1000000
                         }
                     }
                 },
-                "timestamp": int(time.time() * 1000),
+                "timestamp": int(time.time()),
                 "rxTime": int(time.time()),
                 "rxRssi": -100,
                 "rxSnr": 0,

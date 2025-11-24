@@ -224,11 +224,11 @@ status_refresh_interval = 5
 Track specific nodes with extra detail:
 
 ```ini
-[special_nodes]
-show_offline = true
-movement_threshold = 50
+[special_nodes_settings]
 history_hours = 24
 persist_path = data/special_history.json
+stale_after_hours = 12
+special_symbol = ⭐
 
 # Format: node_id = label,home_lat,home_lon
 # Coordinates support two formats:
