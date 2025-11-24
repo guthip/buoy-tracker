@@ -861,6 +861,7 @@
       
       makeApiRequest('GET', 'api/status', function(xhr){ 
         try {
+          console.log('[STATUS] Response - status=' + xhr.status + ', connectionLost=' + window.connectionLost);
           if (xhr.status === 200){ 
             // Connection restored
             window.connectionLost = false;
@@ -881,13 +882,16 @@
             // Network error - server unreachable
             window.connectionLost = true;
             statusEl.textContent = '❌ Server Unreachable';
+            console.error('[STATUS] Server unreachable - status 0');
           }
         } catch(e) {
           // Silent catch - don't let callback errors propagate
+          console.error('[STATUS] Error in callback:', e);
         }
       });
     } catch(e) {
       // Silent - don't let updateStatus errors break the poll loop
+      console.error('[STATUS] Error calling updateStatus:', e);
     }
   }
 
@@ -1007,6 +1011,7 @@
           }
           pollAttempts++;
           lastPollTime = Date.now();  // Reset poll timer
+          console.log('[POLL] Attempt #' + pollAttempts + ' - connectionLost=' + window.connectionLost);
           updateStatus();
         } catch(e) {
           console.error('Error in polling:', e);
