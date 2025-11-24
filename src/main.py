@@ -1,7 +1,6 @@
 """Buoy Tracker Application - Flask web interface for Meshtastic node tracking"""
 
 from flask import Flask, jsonify, render_template, url_for, request
-from flask_limiter import Limiter
 from functools import wraps
 import logging
 import threading
@@ -18,6 +17,7 @@ else:
     from . import mqtt_handler, config
 import time
 import socket
+from collections import defaultdict
 
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL), 
                    format='%(asctime)s - %(levelname)s - %(message)s')
@@ -29,17 +29,66 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 # Configure socket reuse for faster restarts
 app.config['ENV_SOCKET_REUSE'] = True
 
-# Initialize rate limiter - use X-Forwarded-For for reverse proxy clients
+# Initialize simple custom rate limiter - use X-Forwarded-For for reverse proxy clients
 def get_client_ip():
     """Extract client IP from X-Forwarded-For header (reverse proxy) or remote_addr."""
     return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
 
-limiter = Limiter(
-    app=app,
-    key_func=get_client_ip,
-    default_limits=["200 per day", "50 per hour"],
-    storage_uri="memory://"
-)
+# Custom rate limiter - tracks requests per IP per hour
+class SimpleRateLimiter:
+    def __init__(self, requests_per_hour):
+        self.requests_per_hour = requests_per_hour
+        self.request_history = defaultdict(list)  # IP -> list of timestamps
+        self.lock = threading.Lock()
+    
+    def is_allowed(self, client_ip):
+        """Check if request is allowed for this IP."""
+        now = time.time()
+        hour_ago = now - 3600
+        
+        with self.lock:
+            # Clean old requests (older than 1 hour)
+            self.request_history[client_ip] = [
+                ts for ts in self.request_history[client_ip] 
+                if ts > hour_ago
+            ]
+            
+            # Check if under limit
+            if len(self.request_history[client_ip]) < self.requests_per_hour:
+                self.request_history[client_ip].append(now)
+                return True
+            else:
+                return False
+    
+    def get_remaining(self, client_ip):
+        """Get remaining requests for this IP this hour."""
+        now = time.time()
+        hour_ago = now - 3600
+        
+        with self.lock:
+            recent = [ts for ts in self.request_history[client_ip] if ts > hour_ago]
+            return max(0, self.requests_per_hour - len(recent))
+
+# Calculate rate limit from config
+_requests_per_hour = int((3600.0 / (config.API_POLLING_INTERVAL_MS // 1000)) * 3 * 1.5)
+_rounded_limit = ((_requests_per_hour + 9) // 10) * 10
+rate_limiter = SimpleRateLimiter(_rounded_limit)
+logger.info(f'Rate limiter initialized: {_rounded_limit} requests/hour')
+
+def check_rate_limit(f):
+    """Decorator to check rate limit before executing endpoint."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        client_ip = get_client_ip()
+        if not rate_limiter.is_allowed(client_ip):
+            remaining = rate_limiter.get_remaining(client_ip)
+            logger.warning(f'Rate limit exceeded for IP {client_ip}')
+            return jsonify({
+                'error': 'Rate limit exceeded',
+                'retry_after': 3600
+            }), 429
+        return f(*args, **kwargs)
+    return decorated
 
 # API Key authentication - stored server-side in secret.config (never in code or env)
 # If no API key configured, endpoints will not require authentication (development mode)
@@ -72,13 +121,18 @@ def require_api_key(f):
 # Add cache control for static files (JS, CSS, etc)
 @app.after_request
 def set_cache_headers(response):
-    """Set cache headers to prevent stale content."""
+    """Set cache headers to prevent stale content and add CORS headers."""
     # Force no-cache on all responses to prevent stale data
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     # Add server timestamp so client can detect cached responses
     response.headers['X-Server-Time'] = str(int(time.time() * 1000))  # milliseconds
+    # Add CORS headers to allow requests from same origin
+    response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
 # Flag to track if MQTT is running
@@ -123,6 +177,14 @@ def _():
         start_mqtt_on_startup()
 
 
+# Handle CORS preflight requests
+@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@app.route('/<path:path>', methods=['OPTIONS'])
+def handle_options(path):
+    """Handle CORS preflight OPTIONS requests."""
+    return '', 204
+
+
 @app.route('/', methods=['GET'])
 def index():
     """Serve the main map page."""
@@ -165,10 +227,12 @@ def health_check():
 
 
 @app.route('/api/status', methods=['GET'])
+@check_rate_limit
 @require_api_key
-@limiter.limit(config.API_RATE_LIMIT)
 def api_status():
     """Compatibility status endpoint used by the simple.html UI."""
+    client_ip = get_client_ip()
+    logger.debug(f'[LIMITER] /api/status request from {client_ip}')
     nodes = mqtt_handler.get_nodes()
     mqtt_status = mqtt_handler.is_connected()
     return jsonify({
@@ -186,7 +250,7 @@ def api_status():
 
 @app.route('/api/recent_messages', methods=['GET'])
 @require_api_key
-@limiter.limit(config.API_RATE_LIMIT)
+@check_rate_limit
 def recent_messages():
     try:
         msgs = mqtt_handler.get_recent(limit=100)
@@ -198,7 +262,7 @@ def recent_messages():
 
 @app.route('/api/nodes', methods=['GET'])
 @require_api_key
-@limiter.limit(config.API_RATE_LIMIT)
+@check_rate_limit
 def get_nodes():
     """Return all tracked nodes with their current status."""
     nodes = mqtt_handler.get_nodes()
@@ -207,7 +271,7 @@ def get_nodes():
 
 @app.route('/api/special/history', methods=['GET'])
 @require_api_key
-@limiter.limit(config.API_RATE_LIMIT)
+@check_rate_limit
 def special_history():
     from flask import request
     try:
@@ -227,7 +291,7 @@ def special_history():
 
 @app.route('/api/special/packets', methods=['GET'])
 @require_api_key
-@limiter.limit(config.API_RATE_LIMIT)
+@check_rate_limit
 def special_packets_all():
     """Get recent packets for all special nodes."""
     from flask import request
@@ -244,6 +308,22 @@ def special_packets_all():
 # /api/config/reload removed - security risk
 # /api/restart removed - security risk (remote DoS)
 # Alert test endpoints removed - debug only
+
+
+@app.route('/api/debug/rate-limit', methods=['GET'])
+@check_rate_limit
+def debug_rate_limit():
+    """Debug endpoint to check rate limiter status - rate-limited but not auth-protected for testing."""
+    client_ip = get_client_ip()
+    remaining = rate_limiter.get_remaining(client_ip)
+    limit = rate_limiter.requests_per_hour
+    return jsonify({
+        'client_ip': client_ip,
+        'rate_limit_per_hour': limit,
+        'requests_remaining_this_hour': remaining,
+        'polling_interval_seconds': config.API_POLLING_INTERVAL_MS // 1000,
+        'note': 'This endpoint is rate-limited and used for testing'
+    })
 
 
 if __name__ == '__main__':
