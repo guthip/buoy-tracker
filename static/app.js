@@ -2,6 +2,10 @@
 (function(){
   var APP_JS_VERSION = 'v3';
   
+  // Connection state tracking
+  window.connectionLost = false;
+  window.lastApiResponseTime = Date.now();
+  
   // Get API configuration from page data attributes
   var apiKeyRequired = document.body.dataset.apiKeyRequired === 'true';
   var isLocalhost = document.body.dataset.isLocalhost === 'true';
@@ -89,6 +93,10 @@
       
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
+          // Track connection state
+          window.lastApiResponseTime = Date.now();
+          window.connectionLost = false;
+          
           // If 401 Unauthorized and we need auth, prompt for key
           // This happens when stored key expires or is invalid
           if (xhr.status === 401 && apiKeyRequired && !isLocalhost) {
@@ -98,19 +106,60 @@
           }
           // If 429 Too Many Requests (rate limit), pause polling and show message
           if (xhr.status === 429) {
+            console.warn('[RATELIMIT] 429 Too Many Requests - pausing polling');
             pausePollingForRateLimit();
+            
+            // Make progress bar RED for visibility
+            var progressBar = document.getElementById('refresh-progress-bar');
+            if (progressBar) {
+              progressBar.style.background = '#f44336';
+              progressBar.style.boxShadow = '0 0 10px rgba(244, 67, 54, 0.8)';
+            }
+            
+            // Create banner
             var rateLimitMsg = document.getElementById('rate-limit-message');
             if (!rateLimitMsg) {
               rateLimitMsg = document.createElement('div');
               rateLimitMsg.id = 'rate-limit-message';
-              rateLimitMsg.style.cssText = 'position: fixed; top: 10px; right: 10px; background-color: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; z-index: 10000; box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
+              rateLimitMsg.style.cssText = 'position: fixed; top: 10px; right: 10px; background-color: #f44336; color: white; padding: 15px 20px; border-radius: 4px; font-weight: bold; z-index: 10000; box-shadow: 0 4px 15px rgba(244, 67, 54, 0.6); font-size: 16px; animation: pulse 0.5s infinite;';
               document.body.appendChild(rateLimitMsg);
             }
-            rateLimitMsg.textContent = '⚠️ Rate limit reached - polling paused for 60 seconds';
-            // Auto-hide after 5 seconds (but polling stays paused for 60)
-            setTimeout(function() { if (rateLimitMsg && rateLimitMsg.parentNode) rateLimitMsg.parentNode.removeChild(rateLimitMsg); }, 5000);
+            rateLimitMsg.textContent = '🛑 RATE LIMIT EXCEEDED - Polling Paused 60s';
+            rateLimitMsg.style.animation = 'pulse 0.5s infinite';
+            
+            // Add pulse animation if not already in page
+            if (!document.getElementById('pulse-animation')) {
+              var style = document.createElement('style');
+              style.id = 'pulse-animation';
+              style.textContent = '@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }';
+              document.head.appendChild(style);
+            }
+            
+            // Auto-hide after 10 seconds
+            setTimeout(function() { if (rateLimitMsg && rateLimitMsg.parentNode) rateLimitMsg.parentNode.removeChild(rateLimitMsg); }, 10000);
           }
           callback(xhr);
+        }
+      };
+      
+      // Detect connection loss (server not responding)
+      xhr.onerror = function() {
+        console.error('[CONNECTION] Network error - server unreachable');
+        window.connectionLost = true;
+        var progressBar = document.getElementById('refresh-progress-bar');
+        if (progressBar) {
+          progressBar.style.background = '#999'; // Gray for connection lost
+          progressBar.style.boxShadow = 'none';
+        }
+      };
+      
+      xhr.ontimeout = function() {
+        console.error('[CONNECTION] Request timeout - server not responding');
+        window.connectionLost = true;
+        var progressBar = document.getElementById('refresh-progress-bar');
+        if (progressBar) {
+          progressBar.style.background = '#999'; // Gray for connection lost
+          progressBar.style.boxShadow = 'none';
         }
       };
       
@@ -808,6 +857,8 @@
       makeApiRequest('GET', 'api/status', function(xhr){ 
         try {
           if (xhr.status === 200){ 
+            // Connection restored
+            window.connectionLost = false;
             var data2 = JSON.parse(xhr.responseText); 
             var txt = '❌ Disconnected';
             if (data2 && data2.mqtt_status === 'receiving_packets') {
@@ -821,6 +872,10 @@
           } else if (xhr.status === 429) {
             pausePollingForRateLimit();
             statusEl.textContent = '⏸️ Rate limited (paused 60s)';
+          } else if (xhr.status === 0) {
+            // Network error - server unreachable
+            window.connectionLost = true;
+            statusEl.textContent = '❌ Server Unreachable';
           }
         } catch(e) {
           // Silent catch - don't let callback errors propagate
@@ -892,10 +947,25 @@
       var timeSinceLastPoll = now - lastPollTime;
       var progress = (timeSinceLastPoll / statusRefresh) * 100;
       
-      // Update progress bar width
+      // Update progress bar width and color
       var progressBar = document.getElementById('refresh-progress-bar');
       if (progressBar) {
         progressBar.style.width = Math.min(progress, 100) + '%';
+        
+        // Determine color based on connection and rate limit state
+        if (window.connectionLost) {
+          // Gray when connection is lost
+          progressBar.style.background = '#999';
+          progressBar.style.boxShadow = 'none';
+        } else if (isRateLimitPaused()) {
+          // Red when rate limited
+          progressBar.style.background = '#f44336';
+          progressBar.style.boxShadow = '0 0 10px rgba(244, 67, 54, 0.8)';
+        } else {
+          // White normally
+          progressBar.style.background = 'white';
+          progressBar.style.boxShadow = 'none';
+        }
       }
     } catch(e) {
       console.error('[PROGRESS] Error updating refresh progress:', e);
