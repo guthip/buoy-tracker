@@ -78,3 +78,5 @@ secret.config
 PROJECT_LEARNINGS.md
 CHANGELOG.md
 DEPLOYMENT_CHECKLIST.md
+RATE_LIMIT_TESTING.md
+kill_server.sh
