@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Test</h1>
+    <div id="result">Loading...</div>
+    <script>
+        console.log('[TEST] Page loaded');
+        
+        var apiKey = 'SycLovesBoats';
+        
+        function testApi() {
+            console.log('[TEST] Making API request');
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', '/api/status', true);
+            xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+            
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    console.log('[TEST] Response:', xhr.status);
+                    document.getElementById('result').textContent = 'Status: ' + xhr.status + ', Response: ' + xhr.responseText.substring(0, 100);
+                }
+            };
+            
+            xhr.send();
+        }
+        
+        setTimeout(testApi, 500);
+    </script>
+</body>
+</html>
