@@ -1,6 +1,6 @@
 """Buoy Tracker Application - Flask web interface for Meshtastic node tracking"""
 
-from flask import Flask, jsonify, render_template, url_for, request
+from flask import Flask, jsonify, render_template, url_for, request, redirect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from functools import wraps
@@ -9,6 +9,7 @@ import threading
 import sys
 import os
 from pathlib import Path
+import hmac
 # Add parent dir to path so relative imports work when run as script
 if __name__ == '__main__':
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -59,11 +60,12 @@ def require_api_key(f):
         
         auth_header = request.headers.get('Authorization', '')
         if not auth_header.startswith('Bearer '):
-            return jsonify({'error': 'Missing or invalid Authorization header'}), 401
+            return jsonify({'error': 'Unauthorized'}), 401
         
         provided_key = auth_header[7:]  # Strip "Bearer " prefix
-        if provided_key != API_KEY:
-            return jsonify({'error': 'Invalid API key'}), 401
+        # Use constant-time comparison to prevent timing attacks
+        if not hmac.compare_digest(provided_key, API_KEY):
+            return jsonify({'error': 'Unauthorized'}), 401
         
         return f(*args, **kwargs)
     return decorated
@@ -77,6 +79,18 @@ def set_cache_headers(response):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+
+@app.before_request
+def enforce_https():
+    """Enforce HTTPS when behind reverse proxy (X-Forwarded-Proto header)."""
+    # Check X-Forwarded-Proto header set by reverse proxy
+    if request.headers.get('X-Forwarded-Proto', 'http') == 'http':
+        # Only redirect if we're actually behind a reverse proxy
+        # Check for reverse proxy indicators (X-Forwarded-For, X-Forwarded-Host)
+        if request.headers.get('X-Forwarded-For') or request.headers.get('X-Forwarded-Host'):
+            url = request.url.replace('http://', 'https://', 1)
+            return redirect(url, code=301)
 
 # Flag to track if MQTT is running
 mqtt_thread = None
@@ -194,14 +208,17 @@ def special_history():
     try:
         node_id = int(request.args.get('node_id'))
     except Exception:
-        return jsonify({'error': 'node_id is required'}), 400
+        return jsonify({'error': 'Invalid request'}), 400
     try:
         hours = request.args.get('hours', type=int) or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
+        # Validate bounds to prevent DoS via excessive data requests
+        if hours < 1 or hours > 168:  # Max 7 days
+            return jsonify({'error': 'Invalid request'}), 400
         data = mqtt_handler.get_special_history(node_id, hours)
         return jsonify({'node_id': node_id, 'hours': hours, 'points': data, 'count': len(data)})
     except Exception as e:
         logger.exception('Failed to get special history')
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/special/packets', methods=['GET'])
 @require_api_key
@@ -211,11 +228,14 @@ def special_packets_all():
     from flask import request
     try:
         limit = request.args.get('limit', type=int, default=50)
+        # Validate bounds to prevent DoS via excessive data requests
+        if limit < 1 or limit > 1000:
+            return jsonify({'error': 'Invalid request'}), 400
         data = mqtt_handler.get_special_node_packets(node_id=None, limit=limit)
         return jsonify({'packets': data, 'count': sum(len(v) for v in data.values())})
     except Exception as e:
         logger.exception('Failed to get special node packets')
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Internal server error'}), 500
 
 
 if __name__ == '__main__':

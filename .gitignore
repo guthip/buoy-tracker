@@ -76,3 +76,4 @@ secret.config
 # Project documentation (local/development only - not for public GitHub)
 PROJECT_LEARNINGS.md
 CHANGELOG.md
+DEPLOYMENT_CHECKLIST.md
