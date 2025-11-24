@@ -882,6 +882,40 @@
   var rateLimitPauseUntil = 0;  // Timestamp when rate limit pause ends
   var rateLimitPauseInterval = 60000;  // Pause for 60 seconds after hitting limit
   
+  // Polling progress state
+  var lastPollTime = Date.now();
+  var progressInterval = null;
+  
+  function updateRefreshProgress() {
+    try {
+      var now = Date.now();
+      var timeSinceLastPoll = now - lastPollTime;
+      var progress = (timeSinceLastPoll / statusRefresh) * 100;
+      var secondsRemaining = Math.max(0, Math.ceil((statusRefresh - timeSinceLastPoll) / 1000));
+      
+      // Update progress bar width
+      var progressBar = document.getElementById('refresh-progress-bar');
+      if (progressBar) {
+        progressBar.style.width = Math.min(progress, 100) + '%';
+      }
+      
+      // Update countdown text
+      var countdownEl = document.getElementById('refresh-countdown');
+      if (countdownEl) {
+        if (isRateLimitPaused()) {
+          var pauseRemaining = Math.max(0, Math.ceil((rateLimitPauseUntil - now) / 1000));
+          countdownEl.textContent = '⏸️ ' + pauseRemaining;
+          countdownEl.style.color = '#FF6F00';
+        } else {
+          countdownEl.textContent = secondsRemaining;
+          countdownEl.style.color = '#666';
+        }
+      }
+    } catch(e) {
+      console.error('[PROGRESS] Error updating refresh progress:', e);
+    }
+  }
+  
   function isRateLimitPaused() {
     return Date.now() < rateLimitPauseUntil;
   }
@@ -910,6 +944,7 @@
             return;
           }
           pollAttempts++;
+          lastPollTime = Date.now();  // Reset poll timer
           updateStatus();
         } catch(e) {
           console.error('Error in polling:', e);
@@ -950,6 +985,15 @@
     }, statusRefresh);
   } catch(e) {
     console.error('[INIT] Error setting up voltage polling:', e);
+  }
+  
+  // Update refresh progress bar every 100ms
+  try {
+    progressInterval = setInterval(function() {
+      updateRefreshProgress();
+    }, 100);
+  } catch(e) {
+    console.error('[INIT] Error setting up progress bar:', e);
   }
 })();
 
