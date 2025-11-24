@@ -184,7 +184,6 @@
       if (callback) callback({ status: 0, statusText: 'Network error' });
     }
   }
-  }
   
   // Configuration thresholds (in seconds) - will be loaded from server
   var statusBlueThreshold = 3600; // default: 1 hour (will be overwritten by config from API)
