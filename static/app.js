@@ -914,7 +914,7 @@
         } catch(e) {
           console.error('Error in polling:', e);
         }
-      }, 60000);
+      }, statusRefresh);
     } catch(e) {
       console.error('Error starting polling:', e);
     }
@@ -939,7 +939,7 @@
     console.error('Error setting up node polling:', e);
   }
   
-  // Update voltage graphs every 60 seconds
+  // Update voltage graphs every polling interval
   try {
     setInterval(function(){
       try {
@@ -947,7 +947,7 @@
       } catch(e) {
         console.error('[VOLT] Error updating voltage graphs:', e);
       }
-    }, 60000);
+    }, statusRefresh);
   } catch(e) {
     console.error('[INIT] Error setting up voltage polling:', e);
   }
