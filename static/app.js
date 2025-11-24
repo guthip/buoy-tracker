@@ -96,8 +96,9 @@
             localStorage.removeItem('tracker_api_key'); // Don't try again
             showApiKeyModal();
           }
-          // If 429 Too Many Requests (rate limit), show message
+          // If 429 Too Many Requests (rate limit), pause polling and show message
           if (xhr.status === 429) {
+            pausePollingForRateLimit();
             var rateLimitMsg = document.getElementById('rate-limit-message');
             if (!rateLimitMsg) {
               rateLimitMsg = document.createElement('div');
@@ -105,8 +106,8 @@
               rateLimitMsg.style.cssText = 'position: fixed; top: 10px; right: 10px; background-color: #ff9800; color: white; padding: 10px 15px; border-radius: 4px; font-weight: bold; z-index: 10000; box-shadow: 0 2px 5px rgba(0,0,0,0.3);';
               document.body.appendChild(rateLimitMsg);
             }
-            rateLimitMsg.textContent = '⚠️ Rate limit reached - polling paused for 1 minute';
-            // Auto-hide after 5 seconds
+            rateLimitMsg.textContent = '⚠️ Rate limit reached - polling paused for 60 seconds';
+            // Auto-hide after 5 seconds (but polling stays paused for 60)
             setTimeout(function() { if (rateLimitMsg && rateLimitMsg.parentNode) rateLimitMsg.parentNode.removeChild(rateLimitMsg); }, 5000);
           }
           callback(xhr);
@@ -818,7 +819,8 @@
             }
             statusEl.textContent = txt;
           } else if (xhr.status === 429) {
-            statusEl.textContent = '⏸️ Rate limited';
+            pausePollingForRateLimit();
+            statusEl.textContent = '⏸️ Rate limited (paused 60s)';
           }
         } catch(e) {
           // Silent catch - don't let callback errors propagate
@@ -876,6 +878,19 @@
   var statusRefresh = parseInt(document.body.dataset.statusRefresh || '60000', 10);
   var nodeRefresh = parseInt(document.body.dataset.nodeRefresh || '60000', 10);
   
+  // Rate limit pause state
+  var rateLimitPauseUntil = 0;  // Timestamp when rate limit pause ends
+  var rateLimitPauseInterval = 60000;  // Pause for 60 seconds after hitting limit
+  
+  function isRateLimitPaused() {
+    return Date.now() < rateLimitPauseUntil;
+  }
+  
+  function pausePollingForRateLimit() {
+    rateLimitPauseUntil = Date.now() + rateLimitPauseInterval;
+    console.warn('[RATELIMIT] Pausing polls for 60 seconds');
+  }
+  
   // Poll status continuously every 500ms to ensure live updates
   var statusPollInterval = null;
   var pollAttempts = 0;
@@ -889,6 +904,11 @@
       
       statusPollInterval = setInterval(function() {
         try {
+          // Skip polling if rate limited
+          if (isRateLimitPaused()) {
+            console.log('[RATELIMIT] Skipping poll - paused until', new Date(rateLimitPauseUntil).toLocaleTimeString());
+            return;
+          }
           pollAttempts++;
           updateStatus();
         } catch(e) {

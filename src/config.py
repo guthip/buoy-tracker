@@ -154,6 +154,20 @@ STATUS_REFRESH_INTERVAL = config.getint('webapp', 'status_refresh_interval', fal
 # Read from config (defaults to 60 seconds if not specified)
 _api_polling_interval_seconds = config.getint('webapp', 'api_polling_interval', fallback=60)
 
+# Validate polling interval is reasonable
+if _api_polling_interval_seconds < 1:
+    print(f"\n*** CONFIGURATION WARNING ***")
+    print(f"api_polling_interval is too low: {_api_polling_interval_seconds}s")
+    print(f"Minimum recommended: 5 seconds")
+    print(f"Setting to 5 seconds instead\n")
+    _api_polling_interval_seconds = 5
+elif _api_polling_interval_seconds > 60:
+    print(f"\n*** CONFIGURATION WARNING ***")
+    print(f"api_polling_interval is inefficient: {_api_polling_interval_seconds}s")
+    print(f"Polling intervals > 60 seconds waste the rate limit.")
+    print(f"Recommended: 5-60 seconds. Using 60 seconds instead.\n")
+    _api_polling_interval_seconds = 60
+
 # Convert polling interval (seconds) to milliseconds for client
 API_POLLING_INTERVAL_MS = _api_polling_interval_seconds * 1000
 
