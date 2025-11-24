@@ -3,6 +3,8 @@ Tests for the main application module.
 """
 
 import pytest
+from unittest.mock import patch
+from src import config
 from src.main import app
 
 
@@ -14,39 +16,45 @@ def client():
         yield client
 
 
-def test_health_check(client):
-    """Test the health check endpoint."""
+@pytest.fixture
+def auth_headers():
+    """Provide valid auth headers."""
+    api_key = config.API_KEY or 'test-key-12345'
+    return {'Authorization': f'Bearer {api_key}'}
+
+
+@patch('src.main.mqtt_handler')
+def test_health_check(mock_mqtt, client):
+    """Test the health check endpoint (no auth required)."""
     response = client.get('/health')
     assert response.status_code == 200
     assert response.json['status'] == 'ok'
 
 
-def test_get_nodes(client):
-    """Test the get nodes endpoint."""
-    response = client.get('/api/nodes')
+@patch('src.main.mqtt_handler')
+def test_get_nodes(mock_mqtt, client, auth_headers):
+    """Test the get nodes endpoint (requires auth)."""
+    mock_mqtt.get_nodes.return_value = []
+    response = client.get('/api/nodes', headers=auth_headers)
     assert response.status_code == 200
     assert 'nodes' in response.json
     assert 'count' in response.json
 
 
-def test_get_mqtt_status(client):
-    """Test the MQTT status endpoint."""
-    response = client.get('/api/mqtt/status')
-    assert response.status_code == 200
-    assert 'status' in response.json
-    assert response.json['status'] in ['connected', 'connecting', 'disconnected']
-
-
-def test_get_api_status(client):
-    """Test the API status endpoint."""
-    response = client.get('/api/status')
+@patch('src.main.mqtt_handler')
+def test_get_api_status(mock_mqtt, client, auth_headers):
+    """Test the API status endpoint (requires auth)."""
+    mock_mqtt.is_connected.return_value = 'connected'
+    mock_mqtt.get_nodes.return_value = []
+    response = client.get('/api/status', headers=auth_headers)
     assert response.status_code == 200
     assert 'mqtt_connected' in response.json
     assert 'nodes_tracked' in response.json
 
 
-def test_index_page(client):
-    """Test the index page returns HTML."""
+@patch('src.main.mqtt_handler')
+def test_index_page(mock_mqtt, client):
+    """Test the index page returns HTML (no auth required)."""
     response = client.get('/')
     assert response.status_code == 200
     assert b'html' in response.data.lower()

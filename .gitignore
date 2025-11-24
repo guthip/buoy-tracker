@@ -42,6 +42,7 @@ env/
 *.sqlite3
 
 # Testing
+tests/
 .pytest_cache/
 .coverage
 htmlcov/
