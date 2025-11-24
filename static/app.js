@@ -84,8 +84,6 @@
         url += separator + '_t=' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
       }
       
-      console.log('[XHR-SEND] ' + method + ' ' + url);
-      
       var xhr = new XMLHttpRequest();
       xhr.timeout = 5000; // 5 second timeout
       xhr.open(method, url, true);
@@ -102,8 +100,6 @@
       
       xhr.onreadystatechange = function(){
         if (xhr.readyState === 4){
-          console.log('[XHR-RESPONSE] status=' + xhr.status + ', readyState=' + xhr.readyState);
-          
           // Check if response is from cache by examining server timestamp
           var serverTime = xhr.getResponseHeader('X-Server-Time');
           var now = Date.now();
@@ -112,12 +108,11 @@
           if (serverTime) {
             var serverTimeMs = parseInt(serverTime, 10);
             var timeDiff = now - serverTimeMs;
-            console.log('[XHR-TIME] Server time: ' + serverTimeMs + ', Now: ' + now + ', Diff: ' + timeDiff + 'ms');
             
             // If server timestamp is more than 3 polling intervals old, it's a cached response
             var maxAge = (window.apiPollingInterval || 10) * 3000; // 3x polling interval in ms
             if (timeDiff > maxAge) {
-              console.error('[CACHE] Response is stale (cached): ' + timeDiff + 'ms old, max: ' + maxAge + 'ms');
+              console.error('[CONNECTION] Stale cache detected - server unreachable');
               isStaleCache = true;
               window.connectionLost = true;
             }
@@ -181,18 +176,16 @@
       
       // Detect connection loss (server not responding)
       xhr.onerror = function() {
-        console.error('[XHR-ERROR] Network error - server unreachable');
+        console.error('[CONNECTION] Network error - server unreachable');
         window.connectionLost = true;
       };
       
       xhr.ontimeout = function() {
-        console.error('[XHR-TIMEOUT] Request timeout (5s) - server not responding');
+        console.error('[CONNECTION] Request timeout - server not responding');
         window.connectionLost = true;
       };
       
-      console.log('[XHR-SENDING] About to send ' + method + ' request');
       xhr.send();
-      console.log('[XHR-SENT] Request queued to network');
     } catch(e) {
       console.error('API request error:', e);
       window.connectionLost = true;
@@ -886,7 +879,6 @@
       
       makeApiRequest('GET', 'api/status', function(xhr){ 
         try {
-          console.log('[STATUS] Response - status=' + xhr.status + ', connectionLost=' + window.connectionLost);
           if (xhr.status === 200){ 
             // Connection restored
             window.connectionLost = false;
@@ -907,11 +899,9 @@
             // Network error - server unreachable
             window.connectionLost = true;
             statusEl.textContent = '❌ Server Unreachable';
-            console.error('[STATUS] Server unreachable - status 0');
           }
         } catch(e) {
           // Silent catch - don't let callback errors propagate
-          console.error('[STATUS] Error in callback:', e);
         }
       });
     } catch(e) {
@@ -989,7 +979,6 @@
         // Determine color based on connection and rate limit state
         if (window.connectionLost) {
           // Gray when connection is lost
-          console.log('[PROGRESS] Connection lost detected - showing gray bar');
           progressBar.style.background = '#999';
           progressBar.style.boxShadow = 'none';
         } else if (isRateLimitPaused()) {
@@ -1036,7 +1025,6 @@
           }
           pollAttempts++;
           lastPollTime = Date.now();  // Reset poll timer
-          console.log('[POLL] Attempt #' + pollAttempts + ' - connectionLost=' + window.connectionLost);
           updateStatus();
         } catch(e) {
           console.error('Error in polling:', e);
