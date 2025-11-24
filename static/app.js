@@ -898,6 +898,12 @@
   } catch(e) {
     console.error('[INIT] Error setting up voltage polling:', e);
   }
+  
+  // Initialize modal
+  initApiKeyModal();
+  if (apiKeyRequired && !isLocalhost && !apiKey) {
+    showApiKeyModal();
+  }
 })();
 
 
