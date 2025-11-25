@@ -7,8 +7,13 @@ on:
     branches:
       - main
 
+# DISABLED: Using local docker buildx for manual builds instead
+# This workflow was failing due to missing DOCKER_USERNAME/DOCKER_PASSWORD secrets
+# Manual push command: docker buildx build --platform linux/amd64,linux/arm64 --push -t guthip/buoy-tracker:TAG .
+
 jobs:
   build-and-push:
+    if: false  # Workflow disabled - using manual docker buildx builds instead
     runs-on: ubuntu-latest
     
     steps:
