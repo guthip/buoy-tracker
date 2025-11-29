@@ -1617,6 +1617,10 @@ def get_special_history(node_id: int, hours: int = None):
     # Limit to 100 most recent datapoints
     return filtered[-100:] if len(filtered) > 100 else filtered
 
+def get_signal_history(node_id: int, hours: int = None):
+    """Alias for get_special_history() - returns battery, RSSI, SNR history for a node."""
+    return get_special_history(node_id, hours)
+
 def get_all_special_history(hours: int = None):
     """Return history for all special nodes as dict node_id -> list of points."""
     hours = hours or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
