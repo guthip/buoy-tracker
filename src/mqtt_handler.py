@@ -908,6 +908,27 @@ def on_telemetry(json_data):
             if "rx_snr" in json_data:
                 nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
             
+            # For special nodes: add telemetry to history with battery, RSSI, SNR and last known position
+            if _is_special_node(node_id):
+                _ensure_history_struct(node_id)
+                # Get last known position (may be empty if no position received yet)
+                lat = nodes_data[node_id].get("lat", 0)
+                lon = nodes_data[node_id].get("lon", 0)
+                alt = nodes_data[node_id].get("alt", 0)
+                
+                entry = {
+                    "ts": time.time(),
+                    "lat": lat,
+                    "lon": lon,
+                    "alt": alt,
+                    "battery": nodes_data[node_id].get("battery"),
+                    "rssi": json_data.get("rx_rssi"),
+                    "snr": json_data.get("rx_snr")
+                }
+                special_history[node_id].append(entry)
+                _prune_history(node_id, now_ts=entry['ts'])
+                logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}%, rssi={entry["rssi"]}, snr={entry["snr"]}')
+            
             # Check for battery alert if this is a special node
             if _is_special_node(node_id):
                 battery_level = nodes_data[node_id].get("battery")
@@ -1556,6 +1577,20 @@ def get_nodes():
                     node_dict["last_packet_time"] = special_node_last_packet[sid]
                 result.append(node_dict)
 
+    # Limit to 100 nodes to prevent response explosion
+    # Prioritize: special nodes first, then blue (recently seen), then orange, then red (stale)
+    special_nodes = [n for n in result if n.get('is_special')]
+    regular_nodes = [n for n in result if not n.get('is_special')]
+    
+    # Sort regular nodes by status priority (blue > orange > red)
+    status_priority = {'blue': 0, 'orange': 1, 'red': 2}
+    regular_nodes.sort(key=lambda n: status_priority.get(n.get('status'), 3))
+    
+    # Combine: all special nodes + up to remaining slots for regular nodes
+    result = special_nodes + regular_nodes
+    if len(result) > 100:
+        result = result[:100]
+    
     return result
 
 
