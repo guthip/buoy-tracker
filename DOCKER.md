@@ -24,16 +24,14 @@ Clone the repository and use docker-compose:
 git clone https://github.com/guthip/buoy-tracker.git
 cd buoy-tracker
 
-# 2. Create required directories for data and logs
-mkdir -p data logs
 
-# 3. Create minimal tracker.config (uses built-in defaults)
-touch tracker.config
+# 2. Create logs directory
+mkdir -p logs
 
-# 4. (Optional) Customize configuration - copy the template
+# 3. Copy and customize configuration files
 cp tracker.config.template tracker.config
-# Edit tracker.config if needed
-# nano tracker.config
+cp secret.config.example secret.config
+nano tracker.config  # Edit your local config
 
 # 5. Start the service (must run from repo directory)
 docker compose up -d
@@ -47,11 +45,11 @@ docker compose logs -f
 
 **What's created in your directory:**
 ```
-./tracker.config       # Configuration file (mounted read-only to container)
-./secret.config        # Secrets file for credentials (optional, mounted read-only)
-./data/                # Node data, history, packets (persisted)
-./logs/                # Application logs (persisted)
-./docs/                # Documentation files (mounted read-only)
+./tracker.config       # Local configuration file (mounted read-only to container, not tracked)
+./tracker.config.template # Template config (distributed, tracked)
+./secret.config        # Local secrets file (optional, not tracked)
+./secret.config.example # Example secrets file (distributed, tracked)
+./logs/                # Application logs
 ```
 
 **To update to a new version:**
@@ -60,7 +58,7 @@ docker compose pull
 docker compose up -d
 ```
 
-The existing `./data` directory is preserved across updates.
+All history is cleared on server restart; no data directory is used.
 
 ## Running Options
 
@@ -80,11 +78,11 @@ docker compose down
 ```
 
 **Automatic volume setup:**
-- `./tracker.config` → Configuration (public settings)
-- `./secret.config` → Secrets file (optional, only mount if you have one)
-- `./data/` → Persistent data
+- `./tracker.config` → Local configuration file (must be a file, not a folder; place next to secret.config, not tracked)
+- `./tracker.config.template` → Template config (distributed, tracked)
+- `./secret.config.example` → Example secrets file (should be copied to secret.config for deployment)
+- `./secret.config` → Local secrets file (optional, not tracked)
 - `./logs/` → Application logs
-- `./docs/` → Documentation
 
 ### Manual: docker run with Volumes
 
@@ -96,9 +94,10 @@ git clone https://github.com/guthip/buoy-tracker.git
 cd buoy-tracker
 docker build -t buoy-tracker:latest .
 
-# Create required files and directories
-mkdir -p data logs
-touch tracker.config
+
+# Create logs directory and local config
+mkdir -p logs
+cp tracker.config.template tracker.config
 
 # Run with volumes for persistence
 docker run -d \
@@ -106,7 +105,6 @@ docker run -d \
   -p 5102:5102 \
   --restart unless-stopped \
   -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/data:/app/data \
   -v $(pwd)/logs:/app/logs \
   buoy-tracker:latest
 ```
@@ -134,8 +132,8 @@ docker run -d \
 The app loads config in this order:
 1. Environment variables (highest priority)
 2. Mounted `secret.config` file (overrides tracker.config for sensitive fields)
-3. Mounted `tracker.config` file
-4. Built-in `tracker.config.template` (default fallback)
+3. Mounted `tracker.config` file (local, not tracked)
+4. Built-in `tracker.config.template` (default fallback, distributed)
 
 ## Volume Mounts Strategy
 
@@ -150,25 +148,9 @@ Separate volumes for different concerns makes deployment and upgrades seamless:
 - **Persistence**: Survives container restarts and image upgrades
 - **Security**: Read-only mount prevents accidental changes in container
 - **Multi-environment**: Use same image with different configs (dev/prod/staging)
-- **tracker.config**: Public configuration (MQTT broker, special nodes, thresholds)
+- **tracker.config**: Local configuration (not tracked)
+- **tracker.config.template**: Distributed template (tracked)
 - **secret.config**: Sensitive credentials (email passwords, SMTP credentials) - optional, only if using email alerts
-
-### Data Volume (Persistent Storage)
-```bash
--v $(pwd)/data:/app/data
--v $(pwd)/logs:/app/logs
-```
-- **data volume**: Node positions, special node history, packet cache
-- **logs volume**: Application logs for troubleshooting
-- **Atomic writes**: Prevents data corruption on ungraceful shutdowns
-- **7-day retention**: Auto-cleanup of old packets and position history
-
-### Documentation Volume (Optional)
-```bash
--v $(pwd)/docs:/app/docs:ro
-```
-- Serve project documentation from host without rebuilding
-- Keep docs in sync with deployed version
 
 ### Complete Volume Setup
 ```bash
@@ -269,30 +251,34 @@ Data in `./data/` is automatically preserved across upgrades.
 
 ## Historical Data
 
-**Important**: The `./data/` directory contains runtime data (node positions, packet history) that is **not** included in the GitHub repository. This data is specific to each deployment.
+**Important**: All runtime data (node positions, packet history) is stored in memory and cleared on server restart.
 
 ### Transferring Data Between Deployments
 
-If you're migrating to a new deployment and want to preserve historical data:
+If you're migrating to a new deployment:
 
-1. **From source deployment**, get the data files:
+**Note**: The server starts fresh on each restart. All history is rebuilt from incoming MQTT packets; no data is persisted. The server rebuilds real-time tracking data from incoming MQTT packets.
+
+To migrate to a new deployment:
+
+1. **From source deployment**, get the data files (if you want to preserve recent packet data):
    ```bash
-   # These files contain all historical tracking data
-   - data/special_nodes.json
-   - data/special_channels.json
+   - data/special_nodes.json (optional - recent packets)
    ```
 
 2. **To new deployment**, place them in the data directory:
    ```bash
-   # Copy files to new deployment's data/ directory
+   # Copy files to new deployment's data/ directory (optional)
    cp special_nodes.json ./data/
-   cp special_channels.json ./data/
    
    # Restart the service
    docker compose restart
    ```
 
-3. **Data will be preserved** across container restarts and image updates as long as you keep the volume mounts
+3. **On startup**, the application will:
+   - Start with empty historical data (fresh history begins from packet arrival time)
+   - Restore any packet data from `special_nodes.json` if present
+   - Begin tracking nodes as MQTT messages arrive
 
 If you don't have existing data files, the application will create them automatically when the first MQTT packets arrive.
 
@@ -346,7 +332,7 @@ Quick Start:
 5. Open: http://localhost:5102
 
 The container runs with sensible defaults. To customize:
-- Get tracker.config.template and edit it
+- Get tracker.config.template and copy to tracker.config, then edit
 - Restart: docker compose restart
 
 See DOCKER.md for complete instructions.
@@ -373,3 +359,11 @@ docker compose ps            # Check status
 docker compose restart       # Restart
 docker compose down          # Stop
 ```
+
+## Security & Authorization
+
+All API endpoints require authorization using an API key. The API key must be set in `secret.config` and provided by clients in the `Authorization: Bearer <API_KEY>` header for all requests.
+
+- The API key is securely stored in `secret.config` (not tracked by git).
+- Unauthorized requests will receive a 401 response.
+- For more details, see the security section in `CHANGELOG.md`.

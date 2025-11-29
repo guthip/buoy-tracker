@@ -48,10 +48,17 @@ status_orange_threshold = 12
 # Data polling interval (in seconds)
 # How often the client polls the server for updates
 # ⚠️ IMPORTANT: Recommended range is 5-60 seconds
-#    - Rate limits auto-scale based on this value
-#    - Polling > 60s is inefficient and wastes the rate limit
-#    - Minimum: 5 seconds (immediate updates, high server load)
-#    - Default: 60 seconds (conservative, recommended)
+#    - Rate limits auto-scale based on this value and number of special nodes
+# Actual requests per polling interval:
+#   - api/status, api/nodes, api/special/packets = 3 base
+#   - api/special/history (1 per special node) = N additional
+#   - Total: 3 + N special nodes
+# Rate limit formula: (3600 / polling_interval_seconds) * (3 + N_special_nodes) * 2.0
+# Examples (with 4 special nodes and 2.0x safety multiplier):
+#   5 seconds  = 7,200/hour rate limit
+#   10 seconds = 3,600/hour rate limit
+#   30 seconds = 1,200/hour rate limit
+#   60 seconds = 600/hour rate limit
 api_polling_interval = 60
 
 [debug]

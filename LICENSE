@@ -1,0 +1,43 @@
+GNU GENERAL PUBLIC LICENSE
+Version 3, 29 June 2007
+
+Copyright (C) 2024 Buoy Tracker Contributors
+
+Buoy Tracker is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Buoy Tracker is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with Buoy Tracker.  If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+FULL TEXT OF GPL v3 LICENSE
+
+See the full GPL v3 license text at: https://www.gnu.org/licenses/gpl-3.0.txt
+
+---
+
+ADDITIONAL TERMS
+
+This project integrates with Meshtastic, which is also licensed under GPL v3.
+By using Buoy Tracker, you acknowledge and agree to comply with:
+
+1. The GPL v3 license terms for this project
+2. The licenses of all dependencies listed in ATTRIBUTION.md
+3. OpenStreetMap's ODbL 1.0 license for map tiles and data
+4. Leaflet.js BSD 2-Clause license for map functionality
+
+If you modify and redistribute this software, you must:
+- Maintain GPL v3 or compatible license
+- Provide source code
+- Document all modifications
+- Retain all license notices and attribution
+
+For questions about licensing, see ATTRIBUTION.md

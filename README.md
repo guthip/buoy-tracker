@@ -6,36 +6,42 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
 
 - **Real-time Node Tracking**: Live MQTT feed of mesh node positions
 - **Interactive Map**: Leaflet-based map with color-coded status markers
+- **Responsive Design**: Works seamlessly on desktop and mobile devices
+  - **Desktop**: Fixed sidebar (320px) + full map view
+  - **Mobile**: Overlay sidebar drawer with FAB controls
+    - ☰ (Hamburger): Toggle sidebar
+    - ⚙️ (Gear): Access settings menu
+  - Touch-friendly controls and gestures on mobile
 - **Node Details**: Battery levels, hardware info, last-seen times, and channel information
 - **Status Color-Coding**: Blue (recent), Orange (stale), Red (very old)
 - **Polling Progress Bar**: Visual indicator in the header showing time until next data refresh
   - White progress bar fills left to right, resets at each poll
-  - Configurable polling interval (5-120 seconds)
+  - Configurable polling interval (5-120 seconds; default is 10 seconds)
 - **Time Indicators**: Each node card shows:
   - **LPU** (Last Position Update): Time since last GPS position packet
   - **SoL** (Sign of Life): Time since any packet received
   - **Position History**: Deduplicated by packet timestamp to show only unique positions (retransmitted packets are automatically filtered)
+- **Signal Strength Monitoring**: Traffic light indicators for:
+  - **Batt** (Battery): Voltage level status
+  - **RSSI** (Signal Strength): Radio signal quality (-120 to -50 dBm)
+  - **SNR** (Signal-to-Noise Ratio): Channel quality (-20 to +10 dB)
+- **Signal History Visualization**: Click 📊 button on any node card to view:
+  - Interactive histogram showing battery, RSSI, and SNR trends
+  - Hover tooltips with detailed readings and timestamps
+  - Full history (up to 2 weeks) of signal data
+  - Compact floating window overlaying the map
 - **Special Node Tracking**: Track specific nodes with home positions and movement alerts
   - Green dashed rings show movement threshold (50m default)
   - Red solid rings when nodes move beyond threshold
   - Light red card background alerts when nodes move outside expected range
   - Gray markers at home position until first GPS fix
   - Packet activity display with timestamps
-  - **Persistent Data**: Node info (battery, telemetry, channel, position) survives restarts
-  - **Packet History**: All packets per special node persisted to disk (7-day retention)
-  - **Position Trails**: Visual polylines showing movement history on the map
+- **Data Handling & Retention**: All packet history, node info, and position trails are stored in memory for the current session. When the server restarts, history is reset and rebuilt from incoming MQTT packets.
   - **Position Deduplication**: Retransmitted packets automatically filtered to show only unique positions
+  - **Signal History**: Up to 50 recent readings per node (battery, RSSI, SNR) stored in-memory
   - **Dynamic Config Updates**: Origin coordinates recalculated on config reload/restart
-- **Debug Tools**: View recent raw MQTT messages
-- **Data Retention**: Automatic 7-day retention policy
-  - Position history and packet data older than 7 days automatically cleaned up
-  - Prevents unlimited storage growth while preserving recent activity
-  - Cleanup runs on every save operation
-- **Efficient Persistence**: Event-driven data saves
-  - Saves to disk only when data changes (5-second minimum throttle to batch updates)
-  - Dramatically reduces unnecessary disk I/O compared to fixed-interval saves
-  - Responsive data persistence for mission-critical tracking
-- **Configurable**: All settings in `tracker.config`
+  - **Debug Tools**: View recent raw MQTT messages
+  - **Configurable**: All settings in `tracker.config`
 
 ## Interface Preview
 
@@ -56,6 +62,8 @@ The interface shows real-time node tracking with:
 pip install -r requirements.txt
 
 # (Optional) Customize configuration
+
+# Copy the template to create your local config:
 cp tracker.config.template tracker.config
 nano tracker.config
 
@@ -65,7 +73,7 @@ python3 run.py
 
 The web interface will be available at `http://localhost:5102`
 
-The application runs out-of-the-box with default settings. To customize MQTT broker, special nodes, or other settings, copy `tracker.config.template` to `tracker.config` and edit as needed.
+The application runs out-of-the-box with default settings. To customize MQTT broker, special nodes, or other settings, copy `tracker.config.template` to `tracker.config` and edit your local copy. **Note:** `tracker.config` is not included in the public repository or Docker images; only `tracker.config.template` is distributed.
 
 ### Docker Deployment (Recommended)
 
@@ -77,20 +85,17 @@ git clone https://github.com/guthip/buoy-tracker.git
 cd buoy-tracker
 ```
 
-2. Create required directories:
+
+2. Create logs directory:
 ```bash
-mkdir -p data logs
+mkdir -p logs
 ```
 
-3. Create minimal tracker.config (uses built-in defaults):
-```bash
-touch tracker.config
-```
-
-4. (Optional) Customize configuration - copy and edit the template:
+3. Copy and customize configuration files:
 ```bash
 cp tracker.config.template tracker.config
-nano tracker.config
+cp secret.config.example secret.config
+nano tracker.config  # Edit your local config
 ```
 
 5. Start the service (must run from repo directory with docker-compose.yml):
@@ -121,15 +126,15 @@ docker compose up -d
 
 **What's Included:**
 - ✅ Real-time Meshtastic mesh network node tracking
-- ✅ 7-day retention data (position history and telemetry)
-- ✅ Persistent volumes for config, data, and logs
+- ✅ In-memory history (position and telemetry) for current session
 - ✅ Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), Raspberry Pi (ARM64)
 
 **Volumes Created:**
-- `./tracker.config` → Container's config (read-only)
-- `./data/` → Node data, history, packets
+- `./tracker.config` → Local configuration file (read-only, not tracked; place next to secret.config)
+- `./tracker.config.template` → Template config (distributed, tracked)
+- `./secret.config.example` → Example secrets file (should be copied to secret.config for deployment)
+- `./secret.config` → Local secrets file (optional, not tracked)
 - `./logs/` → Application logs
-- `./docs/` → Documentation (optional)
 
 
 ## Using the Interface
@@ -157,11 +162,14 @@ docker compose up -d
 
 ## Configuration
 
-The application works out-of-the-box with default settings. To customize, copy the example config and edit:
+
+The application works out-of-the-box with default settings. To customize, copy the template config and edit your local copy:
 
 ```bash
 cp tracker.config.template tracker.config
 nano tracker.config
+cp secret.config.example secret.config
+nano secret.config
 ```
 
 ### Applying Configuration Changes
@@ -219,23 +227,31 @@ status_orange_threshold = 12
 
 # Data polling interval (in seconds)
 # How often the client polls the server for updates (applies to all endpoints)
-# Default: 60 seconds (1 minute) - rate limit auto-scales based on this value
+# Default: 10 seconds (fast updates; rate limit auto-scales based on polling interval and special nodes)
 # Range: 5-120 seconds (validated on startup)
-# Examples:
-#   5 seconds  = 3240/hour (aggressive, high server load)
-#   10 seconds = 1620/hour (frequent updates, excellent for demos)
-#   30 seconds = 540/hour (balanced)
-#   60 seconds = 270/hour (conservative, recommended for production)
-#   120 seconds = 140/hour (low load)
+# Note: Actual requests per interval = 3 base endpoints + N special nodes with trails enabled
+# Examples (with 4 special nodes):
+#   5 seconds  = 7,200/hour (aggressive, high server load)
+#   10 seconds = 3,600/hour (default, frequent updates, excellent for demos)
+#   30 seconds = 1,200/hour (balanced)
+#   60 seconds = 600/hour (conservative)
+#   120 seconds = 300/hour (low load)
 # ⚠️ Progress bar in UI updates every 100ms, filling from 0-100% over the polling interval
-api_polling_interval = 60
+api_polling_interval = 10
 ```
 
 ### Rate Limiting
 
-API rate limits are **automatically calculated** based on the polling interval:
-- **Formula**: `(3600 / polling_seconds) * 3_endpoints * 1.5_safety_margin`, rounded up to nearest 10
-- **Current setting**: At 60-second polling → **270 requests/hour per IP address**
+API rate limits are **automatically calculated** based on polling interval and number of special nodes:
+- **Formula**: `(3600 / polling_seconds) * (3_base_endpoints + N_special_nodes) * 2.0_safety_margin`, rounded up to nearest 10
+- **Base endpoints**: `api/status`, `api/nodes`, `api/special/packets` = 3 requests per interval
+- **Per special node**: `api/special/history` request when trails enabled = N additional requests
+- **Safety multiplier**: 2.0x provides headroom for traffic spikes
+- **Examples** (assuming 4 special nodes configured):
+  - At 10-second polling → **3,600 requests/hour per IP address** (current default)
+  - At 30-second polling → **1,200 requests/hour per IP address**
+  - At 60-second polling → **600 requests/hour per IP address**
+- **Dynamic scaling**: Rate limit automatically adjusts if you add/remove special nodes in `tracker.config`
 - **Client Notification**: If a client exceeds the rate limit:
   - The **progress bar turns orange** and displays remaining pause time
   - Polling automatically pauses for 60 seconds, then resumes
@@ -248,18 +264,19 @@ API rate limits are **automatically calculated** based on the polling interval:
 - **Orange display** during rate limit pause with countdown
 - **Updates every 100ms** for smooth animation
 
-The rate limit automatically adjusts when you change the polling interval:
+The rate limit automatically adjusts based on polling interval and special node count:
 ```bash
 # Change polling frequency in tracker.config:
-api_polling_interval = 10   # Auto-calculates to 1620/hour (more frequent updates)
-api_polling_interval = 30   # Auto-calculates to 540/hour (balanced)
-api_polling_interval = 60   # Auto-calculates to 270/hour (default, conservative)
-api_polling_interval = 120  # Auto-calculates to 140/hour (infrequent updates)
+api_polling_interval = 10   # Calculates rate limit from polling interval and special nodes in config
+api_polling_interval = 30   # Lower polling = lower rate limit
+api_polling_interval = 60   # Even more conservative
+api_polling_interval = 120  # Very conservative, minimal server load
 ```
 
 **Why auto-calculation?**
 - Rate limit stays proportional to polling frequency
-- No need to manually adjust two separate settings
+- Scales with number of special nodes configured
+- No need to manually adjust multiple settings
 - Prevents users from setting aggressive polling with restrictive rate limits
 - One config value controls both behavior
 
@@ -296,24 +313,28 @@ special_symbol = ⭐
   - Format: `[NSEW]degrees° minutes'`
   - **Important**: Separate latitude and longitude with a comma
 
+**Auto-Learn Origin** (Optional):
+If you omit home coordinates in the config, the system automatically learns the origin from the **first GPS position the node reports**. This is useful when you don't have a precise home location yet:
+```ini
+[special_nodes]
+# With coordinates (fixed origin for movement tracking)
+3681533965 = SYCS, N37° 33.81', W122° 13.13'
+
+# Without coordinates (learns from first GPS position received)
+492590216 = SYCE
+```
+Once a position is learned, movement alerts are triggered relative to that first position. The origin updates if you later add home coordinates to the config.
+
 **Movement Alerts**: Green dashed ring shows threshold boundary. Red solid ring appears when node moves beyond threshold from home position.
 
 **Email Alerts**: Configure email notifications when nodes move outside the fence (see Email Alerts section below).
 
-**Data Persistence**: Special node data automatically persists to the `data/` directory:
-- `special_nodes.json` - Unified storage for all special node data
-  - Position history for movement tracking (last 10,000 points in memory)
-  - Node info (battery, channel, telemetry, position, hardware)
-  - Packet history with full details
-- `special_channels.json` - Channel information
-- Data survives server restarts and is automatically updated as packets arrive
+**Data Handling**: Special node data is tracked in memory during server operation:
+- Position history (up to 2 weeks)
+- Node info (battery, channel, telemetry, position, hardware)
+- Packet history with full details
+- Data is **not persisted** across server restarts - starts fresh on each restart
 - Packet data includes: timestamps, packet types, channel info, position/telemetry/nodeinfo details
-
-**Data Retention**: Automatic 7-day retention policy keeps data manageable:
-- Packets and position history older than 7 days are automatically removed
-- Cleanup runs every save operation (60-second intervals)
-- Maintains recent data for analysis while preventing unlimited growth
-- File size stabilizes around 50KB depending on network activity
 
 ## Email Alerts
 
@@ -336,12 +357,13 @@ Linux servers have `sendmail` or `postfix` running by default. Use **localhost:2
 
 **In `tracker.config`:**
 ```ini
+
 [alerts]
 enabled = true
 alert_cooldown = 1
 
 tracker_url = http://your-server-address:5102
-email_from = norepy@sequoiayc.org
+email_from = noreply@example.com
 
 # SMTP Configuration for localhost:25 (sendmail/postfix)
 smtp_host = localhost
@@ -354,7 +376,7 @@ smtp_ssl = false
 ```ini
 [alerts]
 # Email recipient address(es)
-email_to = admin@sequoiayc.org
+email_to = your-email@example.com
 ```
 
 Verify sendmail is running:
@@ -375,12 +397,13 @@ macOS and Windows don't have sendmail/postfix running by default. Use an externa
 
 **In `tracker.config`:**
 ```ini
+
 [alerts]
 enabled = true
 alert_cooldown = 1
 
 tracker_url = http://localhost:5102
-email_from = norepy@sequoiayc.org
+email_from = noreply@example.com
 
 # Override SMTP settings for external provider
 smtp_host = smtp.gmail.com
@@ -498,11 +521,10 @@ buoy_tracker/
 │   └── simple.html          # Web UI (Leaflet map)
 ├── static/
 │   └── app.js               # Frontend JavaScript
-├── data/                    # Persistent data storage
-│   ├── special_nodes.json        # Unified: position history, node info, packets
-│   └── special_channels.json     # Channel information
+├── data/                    # Data directory (in-memory only, not persisted)
 ├── tests/                   # Test suite
-├── tracker.config           # Configuration file
+├── tracker.config.template  # Configuration template (public)
+├── tracker.config           # Your local configuration (not in repo or public images)
 ├── run.py                   # Application runner
 └── requirements.txt         # Python dependencies
 ```
@@ -681,6 +703,30 @@ This project follows PEP 8 guidelines. Use `black` for code formatting and `flak
 2. Make your changes
 3. Write/update tests
 4. Submit a pull request
+
+## License & Attribution
+
+**Buoy Tracker** is licensed under the **GNU General Public License v3.0 (GPL v3)**.
+
+This project builds upon several excellent open source libraries:
+- **Meshtastic** (GPL v3) - Mesh networking protocol
+- **Flask** (BSD 3-Clause) - Web framework
+- **Leaflet.js** (BSD 2-Clause) - Interactive maps
+- **OpenStreetMap** (ODbL 1.0) - Map tiles and data
+
+For complete attribution and license details, see:
+- **[LICENSE](LICENSE)** - Full GPL v3 license text
+- **[ATTRIBUTION.md](ATTRIBUTION.md)** - Detailed credits and compliance information
+
+### GPL v3 Requirements
+
+If you modify or redistribute Buoy Tracker, you must:
+- Maintain GPL v3 or compatible license
+- Provide source code
+- Document all modifications
+- Retain all license notices
+
+We recommend GPL v3 for derived works to ensure improvements benefit the community.
 
 ## Support
 

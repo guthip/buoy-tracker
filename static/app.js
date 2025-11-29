@@ -1,15 +1,174 @@
 /* Buoy Tracker Client Script (ES5) */
 (function(){
+    // Tab switching logic for menu: Legend/Controls
+    window.showMenuTab = function(tabName) {
+      var legendTabBtn = document.getElementById('legendTabBtn');
+      var controlsTabBtn = document.getElementById('controlsTabBtn');
+      var tabLegend = document.getElementById('tab-legend');
+      var tabControls = document.getElementById('tab-controls');
+      if (tabName === 'legend') {
+        legendTabBtn.classList.add('active');
+        legendTabBtn.classList.add('tab-legend');
+        controlsTabBtn.classList.remove('active');
+        controlsTabBtn.classList.remove('tab-controls');
+        tabLegend.style.display = 'block';
+        tabControls.style.display = 'none';
+      } else {
+        legendTabBtn.classList.remove('active');
+        legendTabBtn.classList.remove('tab-legend');
+        controlsTabBtn.classList.add('active');
+        controlsTabBtn.classList.add('tab-controls');
+        tabLegend.style.display = 'none';
+        tabControls.style.display = 'block';
+        setTimeout(initSettingsInputs, 100);
+      }
+    };
+
+    // Initialize settings inputs with config values from /api/status
+    function initSettingsInputs() {
+      makeApiRequest('GET', 'api/status', function(xhr) {
+        if (xhr.status !== 200) return;
+        var data = {};
+        try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
+        var cfg = data.config || {};
+        var features = data.features || {};
+        // Set controls to defaults from config
+        var controls = {
+          show_all_nodes: features.show_all_nodes || false,
+          show_gateways: features.show_gateways || true,
+          show_position_trails: features.show_position_trails || true,
+          show_gateway_connections: features.show_gateway_connections || true,
+          show_nautical_markers: features.show_nautical_markers || true,
+          trail_history_hours: features.trail_history_hours || 168,
+          low_battery_threshold: cfg.low_battery_threshold || 25,
+          api_polling_interval: cfg.api_polling_interval || 10
+        };
+        if (document.getElementById('showAllNodesInput')) {
+          document.getElementById('showAllNodesInput').checked = controls.show_all_nodes;
+        }
+        if (document.getElementById('showGatewaysInput')) {
+          document.getElementById('showGatewaysInput').checked = controls.show_gateways;
+        }
+        if (document.getElementById('showPositionTrailsInput')) {
+          document.getElementById('showPositionTrailsInput').checked = controls.show_position_trails;
+        }
+        if (document.getElementById('showGatewayConnectionsInput')) {
+          document.getElementById('showGatewayConnectionsInput').checked = controls.show_gateway_connections;
+        }
+        if (document.getElementById('showNauticalMarkersInput')) {
+          document.getElementById('showNauticalMarkersInput').checked = controls.show_nautical_markers;
+        }
+        if (document.getElementById('trailHistoryInput')) {
+          document.getElementById('trailHistoryInput').value = controls.trail_history_hours;
+        }
+        if (document.getElementById('lowBatteryInput')) {
+          document.getElementById('lowBatteryInput').value = controls.low_battery_threshold;
+        }
+        if (document.getElementById('apiPollingInput')) {
+          document.getElementById('apiPollingInput').value = controls.api_polling_interval;
+        }
+
+        // Wire up listeners to update UI state (not persistent)
+        document.getElementById('showAllNodesInput').onchange = function(e) {
+          appFeatures.show_all_nodes = e.target.checked;
+          updateNodes();
+        };
+        document.getElementById('showGatewaysInput').onchange = function(e) {
+          appFeatures.show_gateways = e.target.checked;
+          updateNodes();
+        };
+        document.getElementById('showPositionTrailsInput').onchange = function(e) {
+          appFeatures.show_position_trails = e.target.checked;
+          updateNodes();
+        };
+        document.getElementById('showGatewayConnectionsInput').onchange = function(e) {
+          appFeatures.show_gateway_connections = e.target.checked;
+          updateNodes();
+        };
+        document.getElementById('showNauticalMarkersInput').onchange = function(e) {
+          appFeatures.show_nautical_markers = e.target.checked;
+          if (window.seamarkOverlay && window.map) {
+            var map = window.map;
+            var overlay = window.seamarkOverlay;
+            var hasLayer = false;
+            // Use Leaflet's getLayers if available, else fallback to _layers
+            if (typeof map.hasLayer === 'function') {
+              hasLayer = map.hasLayer(overlay);
+            } else if (map._layers) {
+              for (var k in map._layers) {
+                if (map._layers[k] === overlay) {
+                  hasLayer = true;
+                  break;
+                }
+              }
+            }
+            if (appFeatures.show_nautical_markers) {
+              if (!hasLayer) {
+                overlay.addTo(map);
+              }
+            } else {
+              if (hasLayer) {
+                map.removeLayer(overlay);
+              }
+            }
+          }
+          updateNodes();
+        };
+        document.getElementById('trailHistoryInput').oninput = function(e) {
+          appFeatures.trail_history_hours = Number(e.target.value);
+          updateNodes();
+        };
+        document.getElementById('lowBatteryInput').oninput = function(e) {
+          appFeatures.low_battery_threshold = Number(e.target.value);
+          updateNodes();
+        };
+        document.getElementById('apiPollingInput').oninput = function(e) {
+          appFeatures.api_polling_interval = Number(e.target.value);
+          // If polling interval changes, you may want to restart polling logic here
+        };
+      });
+    }
+
+    // Call initSettingsInputs when menu opens (for Controls tab only)
+    var origToggleMenu = window.toggleMenu;
+    window.toggleMenu = function() {
+      origToggleMenu();
+      var modal = document.getElementById('menu-modal');
+      // Always show Legend tab by default when menu opens
+      showMenuTab('legend');
+    };
   var APP_JS_VERSION = 'v3';
   
   // Connection state tracking
   window.connectionLost = false;
   window.lastApiResponseTime = Date.now();
+
+  // Connection lost banner element
+  var connectionBanner = null;
+
+  function showConnectionBanner() {
+    if (!connectionBanner) {
+      connectionBanner = document.createElement('div');
+      connectionBanner.id = 'connection-lost-banner';
+      connectionBanner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:#999;color:#fff;padding:12px 0;text-align:center;font-size:18px;z-index:10001;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,0.15);';
+      connectionBanner.textContent = '⚠️ Connection to server lost. Data may be stale.';
+      document.body.appendChild(connectionBanner);
+    }
+  }
+
+  function hideConnectionBanner() {
+    if (connectionBanner && connectionBanner.parentNode) {
+      connectionBanner.parentNode.removeChild(connectionBanner);
+      connectionBanner = null;
+    }
+  }
   
   // Get API configuration from page data attributes
   var apiKeyRequired = document.body.dataset.apiKeyRequired === 'true';
   var isLocalhost = document.body.dataset.isLocalhost === 'true';
   var apiKey = document.body.dataset.apiKey || '';
+  var modalShownRecently = false; // Prevent rapid modal re-displays
+  var authCheckDisabled = false; // Disable 401 checks briefly after login attempt
   
   // For remote access: check localStorage for previously entered API key
   if (apiKeyRequired && !isLocalhost && !apiKey) {
@@ -22,10 +181,23 @@
   
   // Show API key modal if needed
   function showApiKeyModal() {
+    // Prevent showing modal multiple times in rapid succession
+    if (modalShownRecently) {
+      // Removed non-essential log
+      return;
+    }
+    
     var modal = document.getElementById('api-key-modal');
     if (modal) {
+      modalShownRecently = true;
       modal.style.display = 'flex';
-      document.getElementById('api-key-input').focus();
+      var input = document.getElementById('api-key-input');
+      if (input) input.focus();
+      
+      // Reset the flag after 2 seconds
+      setTimeout(function() {
+        modalShownRecently = false;
+      }, 2000);
     }
   }
   
@@ -46,8 +218,19 @@
         localStorage.setItem('tracker_api_key', key);
         if (modal) modal.style.display = 'none';
         input.value = ''; // Clear input field for security
-        // Refresh data with new key
-        refreshAllData();
+        
+        // Temporarily disable 401 auth checks to allow first successful request
+        // This prevents rapid modal re-display if auth fails on initial requests
+        authCheckDisabled = true;
+        setTimeout(function() {
+          authCheckDisabled = false;
+        }, 3000); // Re-enable after 3 seconds
+        
+        // Refresh data with new key - call updateStatus to verify auth works
+        setTimeout(function() {
+          updateStatus();
+          updateNodes();
+        }, 100);
       }
     };
     
@@ -72,8 +255,9 @@
   var movementCircles = {}; // origin-anchored movement alert circles per node
   var thresholdRings = {}; // threshold rings around home positions for special nodes
   var movementLines = {}; // red lines from origin to current position when moved
+  var gatewayLines = {}; // lines from special nodes to their best gateway receivers
+  var gatewayConnections = {}; // persistent historical gateway connections per node: {nodeId: Set of gateway IDs}
   var movedAlertShown = {}; // track one-time alerts per node id
-  var specialPackets = {}; // cache of special node packets
   
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback) {
@@ -115,6 +299,7 @@
               console.error('[CONNECTION] Stale cache detected - server unreachable');
               isStaleCache = true;
               window.connectionLost = true;
+                showConnectionBanner();
             }
           }
           
@@ -125,20 +310,26 @@
               console.error('[CONNECTION] Network error - status 0 (server unreachable)');
             }
             window.connectionLost = true;
+              showConnectionBanner();
           } else if (xhr.status === 200 || xhr.status === 304) {
             window.connectionLost = false;
+              hideConnectionBanner();
           }
           
           // If 401 Unauthorized and we need auth, prompt for key
           // This happens when stored key expires or is invalid
-          if (xhr.status === 401 && apiKeyRequired && !isLocalhost) {
+          // But skip if we just logged in (authCheckDisabled flag)
+          if (xhr.status === 401 && apiKeyRequired && !isLocalhost && !authCheckDisabled) {
+            // Removed non-essential warning
             apiKey = ''; // Clear invalid key
             localStorage.removeItem('tracker_api_key'); // Don't try again
             showApiKeyModal();
+          } else if (xhr.status === 401 && authCheckDisabled) {
+            // Removed non-essential log
           }
           // If 429 Too Many Requests (rate limit), pause polling and show message
           if (xhr.status === 429) {
-            console.warn('[RATELIMIT] 429 Too Many Requests - pausing polling');
+            // Removed non-essential warning
             pausePollingForRateLimit();
             
             // Make progress bar RED for visibility
@@ -178,11 +369,13 @@
       xhr.onerror = function() {
         console.error('[CONNECTION] Network error - server unreachable');
         window.connectionLost = true;
+          showConnectionBanner();
       };
       
       xhr.ontimeout = function() {
         console.error('[CONNECTION] Request timeout - server not responding');
         window.connectionLost = true;
+          showConnectionBanner();
       };
       
       xhr.send();
@@ -249,47 +442,40 @@
   }
 
 
-  var showAllNodesEl = document.getElementById('show-all-nodes');
-  // offlineEl removed: always show special nodes, even when offline
-  var trailsEl = document.getElementById('toggle-trails');
-  var hoursEl = document.getElementById('trail-hours');
+  var showAllNodesEl = null;  // Removed - now configured in tracker.config [app_features]
+  // All display options now configured via tracker.config [app_features]
+  
+  // Feature flags loaded from server config
+  var appFeatures = {
+    show_all_nodes: true,
+    show_gateways: true,
+    show_position_trails: true,
+    show_gateway_connections: true,
+    show_nautical_markers: true,
+    trail_history_hours: 168
+  };
+  
+  function loadAppFeatures() {
+    // Load app features from server config via /api/status
+    fetch('/api/status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.features) {
+          appFeatures = data.features;
+          // Display options are now config-driven; no toggles to update
+          // Trigger update to apply feature flags
+          updateNodes();
+        }
+      })
+      .catch(e => console.error('Failed to load app features:', e));
+  }
 
     // Ensure the menu checkbox for trails is always checked on load
-  if (trailsEl) trailsEl.checked = true;
+  // All display options are config-driven; no menu toggles to set
   
-  // Default to NOT showing all nodes (show only nodes with positions)
-  if (showAllNodesEl) showAllNodesEl.checked = false;
-  if (trailsEl) trailsEl.checked = true;
-  function attachChange(el){ if(el && el.addEventListener){ el.addEventListener('change', function(){ updateNodes(); }); } }
-  attachChange(showAllNodesEl); attachChange(trailsEl);
+  // All display options are config-driven; no menu toggles or listeners needed
   
-  // Add validation for trail-hours input
-  if (hoursEl) {
-    hoursEl.addEventListener('change', function() {
-      var val = parseInt(this.value, 10);
-      var max = parseInt(this.max, 10);
-      var min = parseInt(this.min, 10);
-      if (val > max) {
-        alert('Trail history maximum is ' + max + ' hours (7 days).\nValue has been adjusted to ' + max + ' hours.');
-        this.value = max;
-      } else if (val < min) {
-        alert('Trail history minimum is ' + min + ' hour.\nValue has been adjusted to ' + min + ' hour.');
-        this.value = min;
-      }
-      updateNodes();
-    });
-    hoursEl.addEventListener('input', function() {
-      var val = parseInt(this.value, 10);
-      var max = parseInt(this.max, 10);
-      if (!isNaN(val) && val > max) {
-        this.style.borderColor = '#f44336';
-        this.title = 'Maximum is ' + max + ' hours (7 days)';
-      } else {
-        this.style.borderColor = '';
-        this.title = '';
-      }
-    });
-  }
+  // All trail history duration is now config-driven via appFeatures.trail_history_hours
 
   window.toggleMenu = function(){
     var modal = document.getElementById('menu-modal');
@@ -301,6 +487,81 @@
       }
     }
   };
+
+  // Handle menu button click - behavior differs on mobile vs desktop
+  window.handleMenuButtonClick = function(){
+    if (window.innerWidth <= 768) {
+      // On mobile: close the sidebar drawer
+      toggleSidebar();
+    } else {
+      // On desktop: open the settings menu
+      toggleMenu();
+    }
+  };
+
+  // Toggle sidebar visibility on mobile
+  window.toggleSidebar = function(){
+    var sidebar = document.getElementById('sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) {
+      if (sidebar.classList.contains('visible')) {
+        sidebar.classList.remove('visible');
+        if (overlay) overlay.style.display = 'none';
+      } else {
+        sidebar.classList.add('visible');
+        if (overlay && window.innerWidth <= 768) overlay.style.display = 'block';
+      }
+    }
+  };
+
+  // Attach event listeners to traffic light dots for JavaScript-based tooltips
+  function attachTooltipListeners() {
+    var dots = document.querySelectorAll('.traffic-light-dot');
+    dots.forEach(function(dot) {
+      var tooltipText = dot.getAttribute('data-tooltip');
+      if (!tooltipText) return;
+      
+      // Remove any existing tooltip
+      var existingTooltip = dot.querySelector('.js-tooltip');
+      if (existingTooltip) existingTooltip.parentNode.removeChild(existingTooltip);
+      
+      // Create tooltip element
+      var tooltip = document.createElement('div');
+      tooltip.className = 'js-tooltip';
+      tooltip.textContent = tooltipText;
+      tooltip.style.cssText = 'position:absolute;bottom:120%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.95);color:#fff;padding:4px 8px;border-radius:3px;font-size:11px;white-space:nowrap;display:none;pointer-events:none;z-index:1001;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
+      dot.appendChild(tooltip);
+      
+      // Show tooltip on mouseenter
+      dot.addEventListener('mouseenter', function() {
+        tooltip.style.display = 'block';
+      });
+      
+      // Hide tooltip on mouseleave
+      dot.addEventListener('mouseleave', function() {
+        tooltip.style.display = 'none';
+      });
+    });
+  }
+
+  // Close sidebar when tapping outside on mobile
+  document.addEventListener('touchstart', function(e) {
+    if (window.innerWidth <= 768) {  // Only on mobile
+      var sidebar = document.getElementById('sidebar');
+      var overlay = document.getElementById('sidebar-overlay');
+      if (sidebar && sidebar.classList.contains('visible')) {
+        // If touch is outside sidebar and not on FAB/menu buttons, close sidebar
+        if (!sidebar.contains(e.target) &&
+            e.target.id !== 'menu-fab' &&
+            e.target.id !== 'menu-btn' &&
+            !e.target.closest('#menu-fab') &&
+            !e.target.closest('#menu-btn')) {
+          sidebar.classList.remove('visible');
+          if (overlay) overlay.style.display = 'none';
+        }
+      }
+    }
+  }, { passive: true });
 
   window.closeMenuOnBackdrop = function(event){
     // Close menu if clicking on the dark backdrop (not the panel itself)
@@ -319,8 +580,41 @@
       return;
     }
     var d = document.body.dataset;
-    map = L.map('map').setView([parseFloat(d.defaultLat || '0'), parseFloat(d.defaultLon || '0')], parseInt(d.defaultZoom || '2', 10));
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    map = L.map('map', { attributionControl: false }).setView([parseFloat(d.defaultLat || '0'), parseFloat(d.defaultLon || '0')], parseInt(d.defaultZoom || '2', 10));
+    window.map = map;
+    
+    // Define base layers for map
+    var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: ''
+    });
+    
+    // OpenSeaMap overlay - nautical markers and depth contours (worldwide)
+    window.seamarkOverlay = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
+      attribution: '',
+      maxZoom: 18,
+      minZoom: 0,
+      opacity: 1.0,
+      zIndex: 400
+    });
+    
+    // Add OSM as default layer
+    osmLayer.addTo(map);
+    
+    // Add OpenSeaMap overlay as enabled by default
+    window.seamarkOverlay.addTo(map);
+    
+    // Create base layers and overlays objects for layer control
+    var baseLayers = {
+      'OpenStreetMap': osmLayer
+    };
+    
+    var overlays = {
+      'Nautical Markers': window.seamarkOverlay
+    };
+    
+    // Add layer control (we'll manage it via checkbox in the menu instead)
+    // L.control.layers(baseLayers, overlays).addTo(map);
+
   }
 
   function getMoveThreshold(){
@@ -331,54 +625,179 @@
     return n;
   }
 
-  function formatPacketInfo(packets){
-    if (!packets || packets.length === 0) return '';
-    
-    // Get last 3 packets to show recent activity
-    var recentPackets = packets.slice(-3);
-    var lines = [];
-    
-    for (var i = 0; i < recentPackets.length; i++) {
-      var pkt = recentPackets[i];
-      var line = '';
-      
-      // Format timestamp
-      var now = Date.now() / 1000;
-      var age = Math.round(now - pkt.timestamp);
-      var ageStr = '';
-      if (age < 60) ageStr = age + 's';
-      else if (age < 3600) ageStr = Math.floor(age / 60) + 'm';
-      else ageStr = Math.floor(age / 3600) + 'h';
-      
-      // Format packet type
-      var typeStr = pkt.packet_type || 'UNKNOWN';
-      typeStr = typeStr.replace('_APP', '').replace('_', ' ');
-      
-      line = ageStr + ' ago: ' + typeStr;
-      
-      // Add relevant details based on packet type
-      if (pkt.packet_type === 'TELEMETRY_APP' && pkt.battery_level != null) {
-        line += ' (Bat:' + pkt.battery_level + '%)';
-      } else if (pkt.packet_type === 'POSITION_APP' && pkt.lat != null) {
-        line += ' (' + pkt.lat.toFixed(4) + ',' + pkt.lon.toFixed(4) + ')';
-      } else if (pkt.packet_type === 'NODEINFO_APP' && pkt.long_name) {
-        line += ' (' + pkt.long_name + ')';
-      } else if (pkt.packet_type === 'MAP_REPORT_APP' && pkt.modem_preset != null) {
-        line += ' (Preset:' + pkt.modem_preset + ')';
-      }
-      
-      lines.push(line);
+
+
+
+
+
+
+  function buildSignalHistogramSVG(historyPoints) {
+    /**
+     * Build an SVG line chart showing battery voltage, RSSI, and SNR over time.
+     * Only plots the best (highest) RSSI and SNR per second to reduce clutter.
+     * historyPoints: array of {ts, battery, rssi, snr}
+     * Returns SVG string with hover tooltips
+     */
+    if (!historyPoints || historyPoints.length === 0) {
+      return '<div style="padding: 10px; color: #999; text-align: center;">No signal history yet</div>';
     }
     
-    return lines.join('<br>');
+    // Aggregate data by Packet ID - keep best RSSI/SNR per Packet ID
+    var aggregatedData = {};
+    for (var i = 0; i < historyPoints.length; i++) {
+      var p = historyPoints[i];
+      var packetKey = p.packet_id || Math.floor(p.ts); // Use packet_id if present, else fallback to second
+      if (!aggregatedData[packetKey]) {
+        aggregatedData[packetKey] = {
+          ts: p.ts,
+          battery: p.battery,
+          rssi: p.rssi,
+          snr: p.snr,
+          count: 1,
+          packet_id: p.packet_id
+        };
+      } else {
+        // Keep the best (highest) RSSI and SNR values
+        if (p.rssi != null && (aggregatedData[packetKey].rssi == null || p.rssi > aggregatedData[packetKey].rssi)) {
+          aggregatedData[packetKey].rssi = p.rssi;
+          aggregatedData[packetKey].ts = p.ts;
+        }
+        if (p.snr != null && (aggregatedData[packetKey].snr == null || p.snr > aggregatedData[packetKey].snr)) {
+          aggregatedData[packetKey].snr = p.snr;
+          aggregatedData[packetKey].ts = p.ts;
+        }
+        if (p.battery != null) {
+          aggregatedData[packetKey].battery = p.battery;
+        }
+        aggregatedData[packetKey].count++;
+      }
+    }
+    // Convert to sorted array
+    var plotData = Object.keys(aggregatedData).map(function(key) { return aggregatedData[key]; }).sort(function(a, b) { return a.ts - b.ts; });
+    
+    // Responsive sizing: compact, similar to card size
+    // Match actual card dimensions (~280px wide, ~150px tall for content)
+    var containerWidth = window.innerWidth * 0.85;
+    var width = Math.min(containerWidth, 280);
+    var height = 100; // Very compact
+    var padding = 22;
+    var plotWidth = width - padding * 2;
+    var plotHeight = height - padding * 2;
+    
+    // Get time range from actual data (show all available data points)
+    var minTime = Math.min.apply(null, plotData.map(function(p) { return p.ts; }));
+    var maxTime = Math.max.apply(null, plotData.map(function(p) { return p.ts; }));
+    var startTime = minTime;
+    var timeSpan = Math.max(1, maxTime - minTime); // At least 1 second to avoid division by zero
+    
+    // Normalize values to 0-100 scale for plotting
+    // Battery: 0-100 (already percentage)
+    // RSSI: -120 to -50 (map to 0-100, higher = better)
+    // SNR: -20 to 10 (map to 0-100, higher = better)
+    
+    var scaleX = function(ts) {
+      return padding + ((ts - startTime) / timeSpan) * plotWidth;
+    };
+    
+    var scaleY = function(val, min, max) {
+      var normalized = (val - min) / (max - min);
+      normalized = Math.max(0, Math.min(1, normalized));
+      return padding + plotHeight - (normalized * plotHeight);
+    };
+    
+    // Build SVG with explicit CSS to constrain size
+    var svg = '<svg width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" style="border: 1px solid #ddd; font-family: monospace; font-size: 11px; max-width: 100%; height: auto; display: block;">';
+    
+    // Background
+    svg += '<rect width="' + width + '" height="' + height + '" fill="#fafafa"/>';
+    
+    // Grid lines
+    for (var i = 0; i <= 4; i++) {
+      var y = padding + (plotHeight / 4) * i;
+      svg += '<line x1="' + padding + '" y1="' + y + '" x2="' + (width - padding) + '" y2="' + y + '" stroke="#eee" stroke-width="1"/>';
+    }
+    
+    // Plot lines for each metric
+    var batteryPoints = '', rssiPoints = '', snrPoints = '';
+    for (var i = 0; i < plotData.length; i++) {
+      var p = plotData[i];
+      var x = scaleX(p.ts);
+      
+      // Battery (green line)
+      if (p.battery != null) {
+        var batY = scaleY(p.battery, 0, 100);
+        batteryPoints += (i === 0 ? 'M' : 'L') + x + ',' + batY + ' ';
+      }
+      
+      // RSSI (blue line, -120 to -50)
+      if (p.rssi != null) {
+        var rssiY = scaleY(p.rssi, -120, -50);
+        rssiPoints += (i === 0 ? 'M' : 'L') + x + ',' + rssiY + ' ';
+      }
+      
+      // SNR (purple line, -20 to 10)
+      if (p.snr != null) {
+        var snrY = scaleY(p.snr, -20, 10);
+        snrPoints += (i === 0 ? 'M' : 'L') + x + ',' + snrY + ' ';
+      }
+    }
+    
+    // Draw lines
+    if (batteryPoints) svg += '<path d="' + batteryPoints + '" stroke="#4CAF50" stroke-width="2" fill="none"/>';
+    if (rssiPoints) svg += '<path d="' + rssiPoints + '" stroke="#2196F3" stroke-width="2" fill="none"/>';
+    if (snrPoints) svg += '<path d="' + snrPoints + '" stroke="#9C27B0" stroke-width="2" fill="none"/>';
+    
+    // Add hover circles and tooltips for each point
+    for (var i = 0; i < plotData.length; i++) {
+      var p = plotData[i];
+      var x = scaleX(p.ts);
+      var dateStr = new Date(p.ts * 1000).toLocaleString();
+      
+      // Build tooltip with each metric on a new line
+      var tooltipLines = [];
+      if (p.battery != null) tooltipLines.push('Batt: ' + Math.round(p.battery) + '%');
+      if (p.rssi != null) tooltipLines.push('RSSI: ' + p.rssi + 'dBm');
+      if (p.snr != null) tooltipLines.push('SNR: ' + (Math.round(p.snr * 10) / 10) + 'dB');
+      if (p.count > 1) tooltipLines.push('(' + p.count + ' samples)');
+      tooltipLines.push(dateStr);
+      
+      var tooltipText = tooltipLines.join('\n');
+      
+      // Large hover area rectangle (invisible, for better hover detection)
+      svg += '<rect cx="' + x + '" cy="' + (padding + plotHeight / 2) + '" x="' + (x - 8) + '" y="' + (padding - 5) + '" width="16" height="' + (plotHeight + 10) + '" fill="transparent" style="cursor:pointer;" class="histogram-hover" data-tooltip="' + tooltipText.replace(/"/g, '&quot;') + '"/>';
+      
+      // Battery point
+      if (p.battery != null) {
+        var batY = scaleY(p.battery, 0, 100);
+        svg += '<circle cx="' + x + '" cy="' + batY + '" r="3" fill="#4CAF50" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
+      }
+      
+      // RSSI point
+      if (p.rssi != null) {
+        var rssiY = scaleY(p.rssi, -120, -50);
+        svg += '<circle cx="' + x + '" cy="' + rssiY + '" r="3" fill="#2196F3" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
+      }
+      
+      // SNR point
+      if (p.snr != null) {
+        var snrY = scaleY(p.snr, -20, 10);
+        svg += '<circle cx="' + x + '" cy="' + snrY + '" r="3" fill="#9C27B0" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
+      }
+    }
+    
+    // Legend
+    svg += '<text x="' + padding + '" y="' + (height - 5) + '" fill="#4CAF50" font-weight="bold" font-size="12px">● Batt</text>';
+    svg += '<text x="' + (padding + 70) + '" y="' + (height - 5) + '" fill="#2196F3" font-weight="bold" font-size="12px">● RSSI</text>';
+    svg += '<text x="' + (padding + 140) + '" y="' + (height - 5) + '" fill="#9C27B0" font-weight="bold" font-size="12px">● SNR</text>';
+    
+    svg += '</svg>';
+    
+    return svg;
   }
 
-
-
-
-
   function buildNodeCard(node){
-    var clickable = (node.has_fix && node.lat != null && node.lon != null);
+    // Clickable if: has position data, OR is special node with home location
+    var clickable = (node.lat != null && node.lon != null) || (node.is_special && node.origin_lat != null && node.origin_lon != null);
     
     // Display name: Use long name if available, fallback to special_label for special nodes, otherwise show short name with (Unknown)
     var displayName = node.name;
@@ -392,8 +811,23 @@
       }
     }
     
-    // Compact header: name only
-    var header = '<div class="node-name">' + displayName + '</div>';
+    // Compact header: name with signal history button (only for special nodes)
+    var specialSymbol = '';
+    if (node.is_special && node.special_symbol) {
+      specialSymbol = '<span style="margin-right:4px;font-size:1.2em;">' + node.special_symbol + '</span>';
+    } else if (node.is_gateway) {
+      // Gateway nodes get a different symbol: antenna/tower icon
+      specialSymbol = '<span style="margin-right:4px;font-size:1.2em;">📡</span>';
+    }
+    var historyButton = '';
+    if (node.is_special) {
+      historyButton = '<button onclick="showNodeDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" style="background:none;border:none;font-size:1.1em;cursor:pointer;padding:2px 4px;color:#1976D2;opacity:0.7;transition:opacity 0.2s;" title="View signal history">📊</button>';
+    }
+    var header = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+                 specialSymbol +
+                 '<div class="node-name">' + displayName + '</div>' +
+                 historyButton +
+                 '</div>';
 
     // --- Traffic light indicators ---
     var now = Date.now() / 1000;
@@ -401,9 +835,23 @@
     var bat = (node.battery != null) ? node.battery : null;
     var voltage = (node.voltage != null) ? node.voltage : null;
     var batteryColor = 'gray';
-    if (bat !== null && voltage !== null) {
-      if (bat >= 70 && voltage >= 3.7) batteryColor = 'green';
-      else if (bat >= 40 && voltage >= 3.5) batteryColor = 'yellow';
+    // Show battery color if either battery percentage OR voltage is available
+    if (bat !== null) {
+      if (voltage !== null) {
+        // Have both: use combined check
+        if (bat >= 70 && voltage >= 3.7) batteryColor = 'green';
+        else if (bat >= 40 && voltage >= 3.5) batteryColor = 'yellow';
+        else batteryColor = 'red';
+      } else {
+        // Have battery but not voltage: use battery alone
+        if (bat >= 70) batteryColor = 'green';
+        else if (bat >= 40) batteryColor = 'yellow';
+        else batteryColor = 'red';
+      }
+    } else if (voltage !== null) {
+      // Have voltage but not battery percentage: estimate from voltage
+      if (voltage >= 3.7) batteryColor = 'green';
+      else if (voltage >= 3.5) batteryColor = 'yellow';
       else batteryColor = 'red';
     }
     // LPU
@@ -442,21 +890,67 @@
       else distColor = 'red';
     }
 
-    // Build traffic light indicators row in order: LPU, distance, SoL, battery
-    var indicators = '<div style="display:flex;gap:8px;margin:4px 0 0 0;">'
-      + '<span title="Last Position Update" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+    // Build traffic light indicators row in order: LPU, distance, SoL, battery, RSSI, SNR
+    var rssiColor = 'gray';
+    var rssiStr = '?';
+    var rssiValue = null;
+    
+    // For special nodes, show gateway signal metrics; for others show node rx metrics
+    if (node.is_special && node.best_gateway) {
+      rssiValue = node.best_gateway.rssi;
+    } else if (node.rx_rssi != null) {
+      rssiValue = node.rx_rssi;
+    }
+    
+    if (rssiValue != null) {
+      var rssi = rssiValue;
+      rssiStr = rssi + 'dBm';
+      // RSSI scale: -50 (excellent) to -120 (poor)
+      if (rssi > -70) rssiColor = 'green';
+      else if (rssi > -90) rssiColor = 'yellow';
+      else rssiColor = 'red';
+    }
+    
+    // SNR
+    var snrColor = 'gray';
+    var snrStr = '?';
+    var snrValue = null;
+    
+    // For special nodes, show gateway signal metrics; for others show node rx metrics
+    if (node.is_special && node.best_gateway) {
+      snrValue = node.best_gateway.snr;
+    } else if (node.rx_snr != null) {
+      snrValue = node.rx_snr;
+    }
+    
+    if (snrValue != null) {
+      var snr = snrValue;
+      snrStr = Math.round(snr * 10) / 10 + 'dB';
+      // SNR scale: >10 (excellent) to <-5 (poor)
+      if (snr > 5) snrColor = 'green';
+      else if (snr > -5) snrColor = 'yellow';
+      else snrColor = 'red';
+    }
+
+    var indicators = '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:6px 0 0 0;">'
+      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Last Position Update"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (lpuColor==='green'?'#4CAF50':lpuColor==='yellow'?'#FFEB3B':lpuColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">LPU '+lpuStr+'</span></span>'
-      + (node.is_special?('<span title="Distance from Home" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + lpuStr + '</div></div>'
+      + (node.is_special?'<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Distance from Home"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (distColor==='green'?'#4CAF50':distColor==='yellow'?'#FFEB3B':distColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">'+distStr+'</span></span>'):'')
-      + '<span title="Sign of Life" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + distStr + '</div></div>':'<div></div>')
+      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Sign of Life"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (solColor==='green'?'#4CAF50':solColor==='yellow'?'#FFEB3B':solColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">SoL '+solStr+'</span></span>'
-      + '<span title="Battery" style="display:flex;align-items:center;gap:3px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:'
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + solStr + '</div></div>'
+      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Battery Voltage"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (batteryColor==='green'?'#4CAF50':batteryColor==='yellow'?'#FFEB3B':batteryColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;"></span><span style="font-size:0.85em;min-width:36px;">'
-      + (voltage!==null?voltage.toFixed(2)+'V':'?') + '</span></span>'
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + (voltage!==null?voltage.toFixed(2)+'V':'?') + '</div></div>'
+      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal Strength"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
+      + (rssiColor==='green'?'#4CAF50':rssiColor==='yellow'?'#FFEB3B':rssiColor==='red'?'#F44336':'#bbb')
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + rssiStr + '</div></div>'
+      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal-to-Noise Ratio"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
+      + (snrColor==='green'?'#4CAF50':snrColor==='yellow'?'#FFEB3B':snrColor==='red'?'#F44336':'#bbb')
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + snrStr + '</div></div>'
       + '</div>';
 
     var info = indicators;
@@ -468,7 +962,15 @@
       classes += ' moved-alert';
     }
     var clickAttr = '';
-    if (clickable) { clickAttr = ' onclick="centerNode(' + node.lat + ',' + node.lon + ')"'; }
+    if (clickable) { 
+      // For special nodes with no position data, use home location (origin_lat/origin_lon)
+      var clickLat = node.lat !== null && node.lat !== undefined ? node.lat : node.origin_lat;
+      var clickLon = node.lon !== null && node.lon !== undefined ? node.lon : node.origin_lon;
+      // Ensure we have valid numbers
+      if (clickLat !== null && clickLat !== undefined && clickLon !== null && clickLon !== undefined) {
+        clickAttr = ' onclick="centerNode(' + parseFloat(clickLat) + ',' + parseFloat(clickLon) + ')"'; 
+      }
+    }
     return '<div class="' + classes + '"' + clickAttr + '>' + header + '<div class="node-info">' + info + '</div>' + extraInfo + '</div>';
   }
 
@@ -479,61 +981,76 @@
     }
   }, true);
 
-  function fetchSpecialPackets(callback){
-    try {
-      makeApiRequest('GET', 'api/special/packets?limit=10', function(xhr){
-        if (xhr.status === 200){
-          try {
-            var data = JSON.parse(xhr.responseText);
-            specialPackets = data.packets || {};
-            if (callback) callback();
-          } catch(e){ 
-            console.warn('Failed to parse special packets', e); 
-            if (callback) callback(); // Call callback even on error
-          }
-        } else {
-          console.warn('Special packets request failed:', xhr.status);
-          if (callback) callback(); // Call callback even on error
-        }
-      });
-    } catch(e){ 
-      console.error('Failed to fetch special packets', e); 
-      if (callback) callback(); // Call callback even on error
-    }
-  }
+
 
   function updateNodes(){
     try {
       // Add cache-busting parameter to prevent browser caching
       var cacheBuster = '?_=' + Date.now();
       makeApiRequest('GET', 'api/nodes' + cacheBuster, function(xhr){
-        if (xhr.status !== 200){ console.warn('nodes request failed', xhr.status); return; }
-        var data; try { data = JSON.parse(xhr.responseText); } catch(e){ console.warn('bad json', e); return; }
+        if (xhr.status !== 200){ return; }
+        var data; try { data = JSON.parse(xhr.responseText); } catch(e){ return; }
         if (!data || !data.nodes || !data.nodes.length){ 
           document.getElementById('nodes').innerHTML=''; 
           document.getElementById('node-count').textContent='0'; 
           return; 
         }
+        
+        // DEBUG: Log gateway info for special nodes
+        var specialNodesWithGateway = 0;
+        for (var dbg = 0; dbg < data.nodes.length; dbg++) {
+          if (data.nodes[dbg].is_special) {
+            if (data.nodes[dbg].best_gateway) {
+              specialNodesWithGateway++;
+              // Removed debug log
+            } else {
+              // Removed debug log
+            }
+          }
+        }
+        if (specialNodesWithGateway > 0) {
+          // Removed debug log
+        }
             
             // Channel filter removed: skip discoveredChannels logic
             var list = data.nodes.slice(0);
             
-            if (showAllNodesEl && !showAllNodesEl.checked){
+            // Filter based on display mode:
+            // - show_all_nodes: display everything (no filtering)
+            // - show special + gateways: display special and gateway nodes
+            // - show special only: display only special nodes (when show_gateways is false)
+            if (!appFeatures.show_all_nodes) {
               var tmp = [];
-              for(var m=0;m<list.length;m++){
-                if(list[m].is_special) tmp.push(list[m]);
+              for (var m = 0; m < list.length; m++) {
+                // Always include special nodes
+                if (list[m].is_special) {
+                  tmp.push(list[m]);
+                }
+                // Include gateway nodes if show_gateways is enabled
+                else if (list[m].is_gateway && appFeatures.show_gateways) {
+                  tmp.push(list[m]);
+                }
               }
               list = tmp;
             }
+            // When show_all_nodes is true, don't filter further - show all nodes including gateways and regular nodes
             
             
-            // Always sort: special nodes at top (alphabetically), non-special nodes by newest seen
-            var special = [], nonSpecial = [];
+            // Always sort: special nodes at top (alphabetically), then gateway nodes, then non-special by newest seen
+            var special = [], gateway = [], nonSpecial = [];
             for (var i = 0; i < list.length; i++) {
               if (list[i].is_special) special.push(list[i]);
+              else if (list[i].is_gateway) gateway.push(list[i]);
               else nonSpecial.push(list[i]);
             }
             special.sort(function(a, b) {
+              var nameA = (a.name || '').toLowerCase();
+              var nameB = (b.name || '').toLowerCase();
+              if (nameA < nameB) return -1;
+              if (nameA > nameB) return 1;
+              return 0;
+            });
+            gateway.sort(function(a, b) {
               var nameA = (a.name || '').toLowerCase();
               var nameB = (b.name || '').toLowerCase();
               if (nameA < nameB) return -1;
@@ -545,19 +1062,24 @@
               var timeB = b.time_since_seen || 999999;
               return timeA - timeB;
             });
-            list = special.concat(nonSpecial);
+            list = special.concat(gateway).concat(nonSpecial);
             var outHtml = '';
             for(var q=0;q<list.length;q++){
+              console.log('Rendering node card for:', list[q]);
               outHtml += buildNodeCard(list[q]);
             }
             document.getElementById('nodes').innerHTML = outHtml;
             document.getElementById('node-count').textContent = String(list.length);
+            
+            // Attach tooltip event listeners to traffic light dots
+            setTimeout(attachTooltipListeners, 0);
           
           if (map){
             var toMap = []; 
             for(var mIdx=0;mIdx<list.length;mIdx++){ 
               var nod = list[mIdx]; 
-              if(nod.lat!=null && nod.lon!=null){ 
+              // Include nodes with position, or special nodes (even without position)
+              if((nod.lat!=null && nod.lon!=null) || nod.is_special){ 
                 toMap.push(nod); 
               } 
             }
@@ -602,8 +1124,11 @@
               var node = toMap[r]; 
               var key = String(node.id); 
               var color = '#f44336';
-              
-              if (node.is_special) {
+
+              // Green for online/active nodes
+              if (node.status === 'online' || node.status_color === 'green') {
+                color = '#4CAF50';
+              } else if (node.is_special) {
                 // For special nodes, always use gray marker if status is 'gray' or 'red' (very old LPU)
                 if (node.status === 'gray' || node.status === 'red') {
                   color = '#999999';
@@ -631,6 +1156,10 @@
               
               // Build detailed popup - enhanced for special nodes
               var popup = '<b>' + nm2 + '</b>' + sl + staleTxt + noFixTxt + '<br>' + sh2;
+              
+              // Node ID in decimal and hex
+              var nodeIdHex = '!' + node.id.toString(16).padStart(8, '0');
+              popup += '<br>ID: ' + node.id + ' (' + nodeIdHex + ')';
               
               // Battery info with voltage if available
               // For special nodes, prefer improved voltage if available (same as card)
@@ -677,16 +1206,6 @@
                   if (node.moved_far) {
                     popup += ' <span style="color:#e91e63;font-weight:bold;">⚠️ MOVED FAR</span>';
                   }
-                  // Add age of position data
-                  if (node.last_position_update != null) {
-                    var now = Date.now() / 1000;
-                    var posAge = Math.round(now - node.last_position_update);
-                    var posAgeStr = '';
-                    if (posAge < 60) posAgeStr = posAge + 's';
-                    else if (posAge < 3600) posAgeStr = Math.floor(posAge / 60) + 'm';
-                    else posAgeStr = Math.floor(posAge / 3600) + 'h';
-                    popup += ' <span style="color:#888;font-size:0.9em;">(' + posAgeStr + ' ago)</span>';
-                  }
                 }
                 
                 // Time indicators
@@ -711,23 +1230,53 @@
                 // Power metrics if available
               }
               
+              // Best gateway info if available (only for special nodes)
+              if (node.is_special && node.best_gateway) {
+                popup += '<br><span style="color:#4CAF50;font-weight:bold;">📡 Gateway: ' + node.best_gateway.name + '</span>';
+                if (node.best_gateway.rssi != null) {
+                  popup += '<br>Gateway RSSI: ' + node.best_gateway.rssi + ' dBm';
+                }
+                if (node.best_gateway.snr != null) {
+                  popup += '<br>Gateway SNR: ' + node.best_gateway.snr.toFixed(2) + ' dB';
+                }
+              }
+              
               // Add link to liamcottle meshview server
               popup += '<br><a href="https://meshtastic.liamcottle.net/?node_id=' + node.id + '" target="_blank" style="color:#2196F3;">View on Meshtastic Map</a>';
               
-              // Add special packet info to popup
-              if (node.is_special && node.id && specialPackets[node.id]){
-                var pkts = specialPackets[node.id];
-                var formatted = formatPacketInfo(pkts);
-                if (formatted) {
-                  popup += '<br><div style="margin-top:6px;padding-top:6px;border-top:1px solid #ccc;"><strong>Recent Packets:</strong><br><small>' + formatted + '</small></div>';
+              // Handle nodes without position data (show grey circle at home position for special nodes)
+              var hasPosition = (node.lat != null && node.lon != null);
+              var hasOrigin = (node.is_special && node.origin_lat != null && node.origin_lon != null);
+              
+              // Skip nodes that have no position data and no home location
+              if (!hasPosition && !hasOrigin) {
+                // Don't show on map - no position data and no home position defined
+                if (markers[key]) {
+                  map.removeLayer(markers[key]);
+                  delete markers[key];
                 }
+                continue;
+              }
+              
+              var markerLat, markerLon;
+              
+              if (!hasPosition && node.is_special && hasOrigin) {
+                // For special nodes without GPS fix, show grey circle at their home position (origin)
+                markerLat = node.origin_lat;
+                markerLon = node.origin_lon;
+                color = '#CCCCCC';  // Grey for no position
+                var noPositionTxt = ' <em>(No GPS fix yet)</em>';
+                popup = popup.replace(noFixTxt, noPositionTxt);
+              } else {
+                markerLat = node.lat;
+                markerLon = node.lon;
               }
               
               var opts = { radius:8, color:'#222', weight:1, fillColor:color, fillOpacity:0.9 };
               if (!markers[key]){ 
-                markers[key] = L.circleMarker([node.lat, node.lon], opts).addTo(map);
+                markers[key] = L.circleMarker([markerLat, markerLon], opts).addTo(map);
               } else { 
-                markers[key].setLatLng([node.lat, node.lon]).setStyle(opts);
+                markers[key].setLatLng([markerLat, markerLon]).setStyle(opts);
               }
               
               // Bind popup AFTER marker creation/update
@@ -741,6 +1290,12 @@
                 var threshold = getMoveThreshold();
 
                 var hasOrigin = (originLat != null && originLon != null && !isNaN(originLat) && !isNaN(originLon));
+                
+                // Prepare tooltip text for rings
+                var tooltipText = node.name || 'Unknown';
+                if (node.is_special && node.special_label) {
+                  tooltipText = tooltipText + ' (' + node.special_label + ')';
+                }
                 
                 // Draw threshold ring around home position (always visible for special nodes with home)
                 if (hasOrigin) {
@@ -758,12 +1313,16 @@
                     thresholdRings[key] = L.circle([originLat, originLon], threshold, ringOpts).addTo(map);
                     // Make the threshold ring clickable to show same popup
                     thresholdRings[key].bindPopup(popup);
+                    // Add tooltip to threshold ring
+                    thresholdRings[key].bindTooltip(tooltipText, { permanent: false, direction: 'top', offset: [0, -10], className: 'leaflet-tooltip-custom' });
                   } else {
                     thresholdRing.setLatLng([originLat, originLon]);
                     thresholdRing.setRadius(threshold);
                     thresholdRing.setStyle(ringOpts);
                     // Update popup content
                     thresholdRing.bindPopup(popup);
+                    // Update tooltip
+                    thresholdRing.bindTooltip(tooltipText, { permanent: false, direction: 'top', offset: [0, -10], className: 'leaflet-tooltip-custom' });
                   }
                 } else if (thresholdRings[key]) {
                   // Remove threshold ring if no origin
@@ -824,20 +1383,66 @@
                     delete movementLines[key]; 
                   }
                 }
+                
+                // Draw lines to all gateway connections from the backend
+                if (appFeatures.show_gateway_connections && node.is_special && node.lat != null && node.lon != null && node.gateway_connections) {
+                  var connections = node.gateway_connections;
+                  
+                  for (var gc = 0; gc < connections.length; gc++) {
+                    var gwConnection = connections[gc];
+                    var gwId = gwConnection.id;
+                    var gwLat = gwConnection.lat;
+                    var gwLon = gwConnection.lon;
+                    var isBestGateway = node.best_gateway && node.best_gateway.id === gwId;
+                    
+                    if (gwLat != null && gwLon != null) {
+                      var lineKey = 'gw_' + node.id + '_' + gwId;
+                      var lineOpts = {
+                        color: isBestGateway ? '#FF9800' : '#FFB74D',  // Brighter orange for current, dimmer for historical
+                        weight: isBestGateway ? 2 : 1,
+                        opacity: isBestGateway ? 0.7 : 0.4,
+                        dashArray: '3, 5'  // Dotted line
+                      };
+                      var latlngs = [[node.lat, node.lon], [gwLat, gwLon]];
+                      
+                      if (!gatewayLines[lineKey]) {
+                        gatewayLines[lineKey] = L.polyline(latlngs, lineOpts).addTo(map);
+                      } else {
+                        gatewayLines[lineKey].setLatLngs(latlngs);
+                        gatewayLines[lineKey].setStyle(lineOpts);
+                      }
+                      
+                      // Update popup with gateway info
+                      var rssiStr = gwConnection.rssi !== undefined ? ' RSSI:' + gwConnection.rssi : '';
+                      var snrStr = gwConnection.snr !== undefined ? ' SNR:' + gwConnection.snr.toFixed(2) : '';
+                      var popup = 'Signal: ' + gwConnection.name + rssiStr + snrStr;
+                      gatewayLines[lineKey].bindPopup(popup);
+                    }
+                  }
+                } else if (!appFeatures.show_gateway_connections) {
+                  // Remove all gateway lines for this node if feature is disabled
+                  for (var lineKey in gatewayLines) {
+                    if (lineKey.indexOf('gw_' + node.id + '_') === 0) {
+                      map.removeLayer(gatewayLines[lineKey]);
+                      delete gatewayLines[lineKey];
+                    }
+                  }
+                }
               }
             }
             
-            if (trailsEl && trailsEl.checked){
+            if (appFeatures.show_position_trails){
               for(var t=0; t<toMap.length; t++){
                 var sn = toMap[t]; 
                 if(!sn.is_special) continue;
                 (function(node){
-                  var hours = parseInt(hoursEl.value || '24', 10);
+                  var hours = parseInt(appFeatures.trail_history_hours || '24', 10);
                   makeApiRequest('GET', 'api/special/history?node_id=' + node.id + '&hours=' + hours, function(xhr2){
                     if (xhr2.status === 200){
                       try { 
                         var h = JSON.parse(xhr2.responseText); 
                         var pts = h.points || []; 
+                        console.log('Trail API response for node', node.id, h); // Debug log
                         if (trails[node.id]) { 
                           map.removeLayer(trails[node.id]); 
                           delete trails[node.id]; 
@@ -849,10 +1454,14 @@
                             latlngs.push([pnt.lat, pnt.lon]); 
                           } 
                           trails[node.id] = L.polyline(latlngs, {color:'#1976D2', weight:3, opacity:0.7}).addTo(map); 
-                        } 
+                        } else {
+                          console.log('No trail data for node', node.id, pts);
+                        }
                       } catch(e){ 
-                        console.warn('trail parse error', e); 
+                        console.warn('Error parsing trail history for node', node.id, e);
                       }
+                    } else {
+                      console.warn('Trail API request failed for node', node.id, xhr2.status);
                     }
                   });
                 })(sn);
@@ -882,6 +1491,7 @@
           if (xhr.status === 200){ 
             // Connection restored
             window.connectionLost = false;
+              hideConnectionBanner();
             var data2 = JSON.parse(xhr.responseText); 
             var txt = '❌ Disconnected';
             if (data2 && data2.mqtt_status === 'receiving_packets') {
@@ -898,6 +1508,7 @@
           } else if (xhr.status === 0) {
             // Network error - server unreachable
             window.connectionLost = true;
+              showConnectionBanner();
             statusEl.textContent = '❌ Server Unreachable';
           }
         } catch(e) {
@@ -933,25 +1544,30 @@
   };
   
   window.centerNode = function(lat, lon){ 
-    if (map) map.setView([lat, lon], 13); 
+    if (map) map.setView([lat, lon], 13);
+    // On mobile, close sidebar when clicking a node to show the map
+    if (window.innerWidth <= 768) {
+      var sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('visible')) {
+        sidebar.classList.remove('visible');
+        var overlay = document.getElementById('sidebar-overlay');
+        if (overlay) overlay.style.display = 'none';
+      }
+    }
   };
 
 
   // initChannels removed: channel filter no longer used
   initMap(); 
+  
+  loadAppFeatures(); // Load app features from server config
   updateStatus(); // Call immediately to get initial status
   
-  // Wrap initial fetch in try-catch to prevent blocking polling
+  // Initial fetch on page load
   try {
-    fetchSpecialPackets(function(){ 
-      try {
-        updateNodes(); 
-      } catch(e) {
-        console.error('[INIT] Error in updateNodes callback:', e);
-      }
-    }); 
+    updateNodes();
   } catch(e) {
-    console.error('[INIT] Error in fetchSpecialPackets:', e);
+    console.error('[INIT] Error in updateNodes:', e);
   }
   
   var statusRefresh = parseInt(document.body.dataset.statusRefresh || '60000', 10);
@@ -981,6 +1597,7 @@
           // Gray when connection is lost
           progressBar.style.background = '#999';
           progressBar.style.boxShadow = 'none';
+          showConnectionBanner();
         } else if (isRateLimitPaused()) {
           // Red when rate limited
           progressBar.style.background = '#f44336';
@@ -989,6 +1606,7 @@
           // White normally
           progressBar.style.background = 'white';
           progressBar.style.boxShadow = 'none';
+          hideConnectionBanner();
         }
       }
     } catch(e) {
@@ -1041,11 +1659,11 @@
     console.error('Error starting polling:', e);
   }
   
-  // Start node polling immediately (after initial fetch)
+  // Start node polling
   try {
     setInterval(function(){ 
       try {
-        fetchSpecialPackets(function(){ updateNodes(); }); 
+        updateNodes(); 
       } catch(e) {
         console.error('Error in node polling:', e);
       }
@@ -1075,7 +1693,183 @@
   } catch(e) {
     console.error('[INIT] Error setting up progress bar:', e);
   }
+  
+  // Handle iOS Safari zoom issues with fixed position FAB button
+  // iOS Safari can detach fixed elements during zoom - this keeps it visible
+  try {
+    var fab = document.getElementById('menu-fab');
+    if (fab) {
+      // Add will-change and transform to help Safari keep element in viewport during zoom
+      fab.style.willChange = 'transform';
+      fab.style.webkitTransform = 'translate3d(0, 0, 0)';
+      
+      // Re-anchor to viewport after zoom/scroll events
+      var reanchorFAB = function() {
+        if (fab && fab.parentNode) {
+          // Force reflow to re-anchor
+          void fab.offsetWidth;
+        }
+      };
+      
+      // Listen for zoom/scroll/resize
+      window.addEventListener('resize', reanchorFAB);
+      document.addEventListener('scroll', reanchorFAB, { passive: true });
+      window.addEventListener('orientationchange', reanchorFAB);
+      
+      // Also check periodically in case we miss an event
+      setInterval(reanchorFAB, 2000);
+    }
+  } catch(e) {
+    console.error('[UI] Error setting up FAB:', e);
+  }
+  
+  // Handle orientation changes - fix map rendering and sidebar state
+  var handleOrientationChange = function() {
+    // Small delay to allow viewport to settle after orientation change
+    setTimeout(function() {
+      // Invalidate map size if map exists
+      if (map && typeof map.invalidateSize === 'function') {
+        map.invalidateSize();
+      }
+      
+      // On landscape (wider than tall), auto-hide sidebar on mobile
+      var isLandscape = window.innerWidth > window.innerHeight;
+      var isMobile = window.innerWidth <= 768;
+      var sidebar = document.getElementById('sidebar');
+      var overlay = document.getElementById('sidebar-overlay');
+      
+      if (isMobile && isLandscape && sidebar && sidebar.classList.contains('visible')) {
+        // Auto-close sidebar in landscape to maximize map view
+        sidebar.classList.remove('visible');
+        if (overlay) overlay.style.display = 'none';
+      }
+      
+      // Also hide overlay if we're not in mobile mode anymore
+      if (!isMobile && overlay) {
+        overlay.style.display = 'none';
+      }
+      
+      // Force reflow
+      if (sidebar) {
+        void sidebar.offsetWidth;
+      }
+    }, 100);
+  };
+  
+  window.addEventListener('orientationchange', handleOrientationChange);
+  window.addEventListener('resize', function() {
+    // Throttle resize handler
+    clearTimeout(window.resizeTimeout);
+    window.resizeTimeout = setTimeout(function() {
+      if (map && typeof map.invalidateSize === 'function') {
+        map.invalidateSize();
+      }
+    }, 100);
+  });
+  
+  // Attach hover tooltips to histogram points
+  function attachHistogramTooltips(container) {
+    var points = container.querySelectorAll('.histogram-point, .histogram-hover');
+    var tooltip = null;
+    
+    points.forEach(function(point) {
+      point.addEventListener('mouseenter', function(e) {
+        var tooltipText = this.getAttribute('data-tooltip');
+        if (!tooltipText) return;
+        
+        // Remove old tooltip if exists
+        if (tooltip && tooltip.parentNode) {
+          tooltip.parentNode.removeChild(tooltip);
+        }
+        
+        // Create new tooltip with multiline formatting
+        tooltip = document.createElement('div');
+        tooltip.style.cssText = 'position:fixed;background:#333;color:white;padding:8px 10px;border-radius:4px;font-size:0.75em;z-index:10000;pointer-events:none;white-space:pre-line;box-shadow:0 2px 8px rgba(0,0,0,0.3);max-width:180px;line-height:1.4;';
+        tooltip.textContent = tooltipText;
+        document.body.appendChild(tooltip);
+        
+        // Position tooltip near cursor, above the point
+        var rect = this.getBoundingClientRect();
+        tooltip.style.left = Math.max(10, rect.left + rect.width / 2 - tooltip.offsetWidth / 2) + 'px';
+        tooltip.style.top = (rect.top - tooltip.offsetHeight - 8) + 'px';
+      });
+      
+      point.addEventListener('mouseleave', function() {
+        if (tooltip && tooltip.parentNode) {
+          tooltip.parentNode.removeChild(tooltip);
+          tooltip = null;
+        }
+      });
+    });
+  }
+  
+  // Modal functions for node details
+  window.showNodeDetails = function(nodeId, nodeName) {
+    var modal = document.getElementById('nodeDetailsModal');
+    var title = document.getElementById('modalTitle');
+    var container = document.getElementById('histogramContainer');
+    
+    if (!modal) return;
+    
+    title.textContent = 'Signal History: ' + nodeName;
+    container.innerHTML = '<div style="color:#999;">Loading signal history...</div>';
+    modal.style.display = 'flex';
+    
+    // Fetch signal history from API for other nodes
+    var url = '/api/signal/history?node_id=' + nodeId;
+    var fetchOptions = {};
+    if (apiKey) {
+      fetchOptions.headers = {
+        'Authorization': 'Bearer ' + apiKey
+      };
+    }
+    
+    fetch(url, fetchOptions)
+      .then(function(response) {
+        if (response.status === 401) {
+          throw new Error('Unauthorized');
+        }
+        return response.json();
+      })
+      .then(function(data) {
+        if (data.points && data.points.length > 0) {
+          var svg = buildSignalHistogramSVG(data.points);
+          container.innerHTML = svg;
+          attachHistogramTooltips(container);
+        } else {
+          container.innerHTML = '<div style="color:#999;padding:20px;">No signal history available yet.</div>';
+        }
+      })
+      .catch(function(error) {
+        console.error('[MODAL] Error fetching signal history:', error);
+        container.innerHTML = '<div style="color:#d32f2f;padding:20px;">Error loading signal history: ' + error.message + '</div>';
+      });
+  };
+  
+  window.closeNodeDetails = function() {
+    var modal = document.getElementById('nodeDetailsModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  };
+  
+  // Close modal on ESC key
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      window.closeNodeDetails();
+    }
+  });
+  
+  // Close modal on backdrop click
+  document.getElementById('nodeDetailsModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      window.closeNodeDetails();
+    }
+  });
 })();
+
+
+
 
 
 

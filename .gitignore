@@ -55,10 +55,6 @@ Thumbs.db
 *.log
 logs/
 
-# Data files - exclude actual data but keep directory structure
-data/special_nodes.json
-data/special_channels.json
-
 # SSL certificates (if using nginx)
 ssl/
 *.pem
@@ -70,8 +66,9 @@ ssl/
 *.tmp
 
 # Local configuration (sensitive)
-# tracker.config is public (no secrets) - included in repo
-# Only secret.config is ignored
+
+# tracker.config is NOT included in the repo or Docker images; only tracker.config.template is public
+tracker.config
 secret.config
 
 # Project documentation (local/development only - not for public GitHub)
@@ -80,3 +77,16 @@ CHANGELOG.md
 DEPLOYMENT_CHECKLIST.md
 RATE_LIMIT_TESTING.md
 kill_server.sh
+verify_deployment.sh
+
+# Deployment bundles (generated locally, not for version control)
+buoy-tracker-deployment-config_*.tar.gz
+create_deployment_bundle.sh
+
+# Server management scripts (local development only)
+start_server.sh
+.server.pid
+
+# Security files
+SECURITY_ANALYSIS.md
+SECURITY_PATCHES.md

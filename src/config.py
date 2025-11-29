@@ -2,7 +2,10 @@
 import configparser
 import os
 import re
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Find config files (look in project root)
 # Public config: tracker.config (user copy) or tracker.config.template (template)
@@ -106,9 +109,9 @@ try:
 except Exception as e:
     try:
         SPECIAL_MOVEMENT_THRESHOLD_METERS = config.getfloat('special_nodes', 'movement_threshold_meters', fallback=50.0)
-    except Exception as inner_e:
-        print(f"WARNING: Invalid movement_threshold in [special_nodes] section: {e}")
-        print(f"  Using fallback value: 50.0 meters")
+    except Exception:
+        logger.warning(f"Invalid movement_threshold in [special_nodes] section: {e}")
+        logger.warning("Using fallback value: 50.0 meters")
         SPECIAL_MOVEMENT_THRESHOLD_METERS = 50.0
 
 # Web App Configuration
@@ -123,22 +126,14 @@ if len(_center_parts) >= 2:
         DEFAULT_LAT = parse_coordinate(_center_parts[0])
         DEFAULT_LON = parse_coordinate(_center_parts[1])
     except (ValueError, IndexError) as e:
-        print(f"\n*** CONFIGURATION ERROR ***")
-        print(f"Invalid default_center format in [webapp] section:")
-        print(f"  Value provided: {_default_center}")
-        print(f"  Error: {e}")
-        print(f"\nExpected format:")
-        print(f"  Decimal: default_center = 37.5528,-122.1947")
-        print(f"  Degrees-minutes: default_center = N37° 33.16', W122° 11.70'")
-        print(f"*** STOPPING - Fix the config file and restart ***\n")
+        logger.error(f"Invalid default_center format in [webapp] section: {e}")
+        logger.error(f"  Value provided: {_default_center}")
+        logger.error("Expected format: decimal (37.5528,-122.1947) or degrees-minutes (N37° 33.16', W122° 11.70')")
         raise
 else:
-    print(f"\n*** CONFIGURATION ERROR ***")
-    print(f"default_center must contain exactly 2 coordinates (latitude,longitude)")
-    print(f"  Value provided: {_default_center}")
-    print(f"  Expected format: default_center = latitude,longitude")
-    print(f"*** STOPPING - Fix the config file and restart ***\n")
-    raise ValueError(f"Invalid default_center format")
+    logger.error("default_center must contain exactly 2 coordinates (latitude,longitude)")
+    logger.error(f"  Value provided: {_default_center}")
+    raise ValueError("Invalid default_center format")
 
 DEFAULT_ZOOM = config.getint('webapp', 'default_zoom', fallback=10)
 # Status thresholds: configured in hours, converted to seconds for internal use
@@ -152,30 +147,17 @@ _api_polling_interval_seconds = config.getint('webapp', 'api_polling_interval', 
 
 # Validate polling interval is reasonable
 if _api_polling_interval_seconds < 1:
-    print(f"\n*** CONFIGURATION WARNING ***")
-    print(f"api_polling_interval is too low: {_api_polling_interval_seconds}s")
-    print(f"Minimum recommended: 5 seconds")
-    print(f"Setting to 5 seconds instead\n")
+    logger.warning(f"api_polling_interval is too low: {_api_polling_interval_seconds}s (minimum: 5s), using 5s")
     _api_polling_interval_seconds = 5
 elif _api_polling_interval_seconds > 60:
-    print(f"\n*** CONFIGURATION WARNING ***")
-    print(f"api_polling_interval is inefficient: {_api_polling_interval_seconds}s")
-    print(f"Polling intervals > 60 seconds waste the rate limit.")
-    print(f"Recommended: 5-60 seconds. Using 60 seconds instead.\n")
+    logger.warning(f"api_polling_interval is inefficient: {_api_polling_interval_seconds}s (recommended: 5-60s), using 60s")
     _api_polling_interval_seconds = 60
 
 # Convert polling interval (seconds) to milliseconds for client
 API_POLLING_INTERVAL_MS = _api_polling_interval_seconds * 1000
 
-# Auto-calculate API rate limit based on polling interval
-# At 3 concurrent endpoints (status, nodes, special/packets) polling every N seconds:
-# - 1 hour = 3600 seconds
-# - Requests per endpoint = 3600 / N seconds
-# - Total requests = (3600 / N) * 3 endpoints * 1.5 (safety margin)
-# Round up to nearest 10 for clean numbers
-_requests_per_hour = int((3600.0 / _api_polling_interval_seconds) * 3 * 1.5)
-_rounded_limit = ((_requests_per_hour + 9) // 10) * 10  # Round up to nearest 10
-API_RATE_LIMIT = f'{_rounded_limit}/hour'
+# API rate limit will be calculated after SPECIAL_NODES are loaded
+API_RATE_LIMIT = None
 
 # API Authentication - key must be in secret.config (never in public tracker.config)
 # If not set, API endpoints will not require authentication (development mode)
@@ -191,42 +173,59 @@ RECENT_MESSAGE_BUFFER_SIZE = config.getint('debug', 'recent_message_buffer_size'
 # Battery Configuration
 LOW_BATTERY_THRESHOLD = config.getint('battery', 'low_battery_threshold', fallback=50)
 
+# App Features Configuration
+SHOW_ALL_NODES = config.getboolean('app_features', 'show_all_nodes', fallback=False)
+SHOW_GATEWAYS = config.getboolean('app_features', 'show_gateways', fallback=True)
+SHOW_POSITION_TRAILS = config.getboolean('app_features', 'show_position_trails', fallback=True)
+SHOW_GATEWAY_CONNECTIONS = config.getboolean('app_features', 'show_gateway_connections', fallback=True)
+SHOW_NAUTICAL_MARKERS = config.getboolean('app_features', 'show_nautical_markers', fallback=True)
+TRAIL_HISTORY_HOURS = config.getint('app_features', 'trail_history_hours', fallback=24)
+
 # Special Nodes Configuration (parse format: node_id = label,home_lat,home_lon)
 SPECIAL_NODES = {}
 SPECIAL_NODE_SYMBOL = config.get('special_nodes_settings', 'special_symbol', fallback='⭐')  # Symbol for special nodes
 
 if config.has_section('special_nodes'):
+    seen_node_ids = {}  # Track node IDs to detect duplicates
     for key, value in config.items('special_nodes'):
-        # Skip comments and non-node-id keys (like movement_threshold)
-        # Format: "entry1 = node_id,label,home_lat,home_lon", "entry2 = ...", etc.
-        if key.startswith('#') or not key.startswith('entry'):
+        # Skip non-numeric keys (like movement_threshold)
+        if not key.isdigit():
             continue
         try:
-            # Value format: "node_id,label,home_lat,home_lon"
-            parts = [p.strip() for p in value.split(',')]
-            
-            if len(parts) < 1:
-                raise ValueError(f"Empty node definition")
-            
-            node_id = int(parts[0])
-            label = parts[1] if len(parts) > 1 else 'Special Node'
-            
-            # Optional: home position (lat, lon)
+            # Parse three flexible formats:
+            # (1) node_id (value is empty)
+            # (2) node_id = label (value is label)
+            # (3) node_id = label,home_lat,home_lon (value is comma-separated)
+
+            node_id = int(key)
+            label = None
             home_lat = None
             home_lon = None
-            if len(parts) >= 4:
-                try:
-                    home_lat = parse_coordinate(parts[2])
-                    home_lon = parse_coordinate(parts[3])
-                except (ValueError, IndexError) as e:
-                    print(f"WARNING: Invalid coordinates for node {node_id} ({label}): {e}")
-                    print(f"  Format provided: {value}")
-                    print(f"  Expected: 'node_id,label,latitude,longitude'")
-                    print(f"  Latitude/Longitude can be decimal (37.5637125,-122.2189855)")
-                    print(f"  Or degrees-minutes (N37° 33.81',W122° 13.13')")
-                    print(f"  Will use first position as origin instead")
-                    pass  # Invalid coordinates, will use first position as origin
-            
+
+            if value and value.strip():
+                # Has value - could be format 2 or 3
+                # Remove any inline comments
+                value_clean = value.split('#')[0].strip()
+
+                if value_clean:
+                    parts = [p.strip() for p in value_clean.split(',')]
+                    # First part is always the label
+                    label = parts[0] if parts[0] else None
+
+                    # Optional home position (lat, lon) in parts 2 and 3
+                    if len(parts) >= 3:
+                        try:
+                            home_lat = parse_coordinate(parts[1])
+                            home_lon = parse_coordinate(parts[2])
+                        except (ValueError, IndexError) as e:
+                            logger.warning(f"Invalid coordinates for node {node_id} ({label}): {e}. Will use first position as origin.")
+
+            # Check for duplicate node IDs
+            if node_id in seen_node_ids:
+                logger.error(f"DUPLICATE special node ID {node_id} found in '{key}' and '{seen_node_ids[node_id]}' - second entry will be ignored!")
+                continue
+            seen_node_ids[node_id] = key
+
             SPECIAL_NODES[node_id] = {
                 'symbol': SPECIAL_NODE_SYMBOL,  # Use default symbol for all
                 'label': label,
@@ -234,20 +233,29 @@ if config.has_section('special_nodes'):
                 'home_lon': home_lon
             }
         except (ValueError, IndexError) as e:
-            # Skip invalid entries
-            print(f"WARNING: Skipping invalid special_nodes entry: '{key} = {value}'")
-            print(f"  Error: {e}")
-            print(f"  Expected format: 'entry# = node_id,label,latitude,longitude'")
-            pass
+            logger.warning(f"Skipping invalid special_nodes entry '{key} = {value}': {e}. Expected formats: (1) node_id, (2) node_id = label, (3) node_id = label,latitude,longitude")
 
 # List of special node IDs for easy checking
 SPECIAL_NODE_IDS = list(SPECIAL_NODES.keys())
 
+# Now calculate API rate limit based on actual number of special nodes
+# Actual requests per polling interval:
+#   - Base endpoints: api/status, api/nodes, api/special/packets = 3
+#   - Per special node history request (when trails enabled) = N nodes
+#   - Total per interval: 3 + N_special_nodes
+# Formula: (3600 / polling_seconds) * (3 + N_special_nodes) * 2.0 (safety margin)
+# 2.0x multiplier provides safe headroom for traffic spikes
+_polling_seconds = _api_polling_interval_seconds
+_num_special_nodes = len(SPECIAL_NODE_IDS)
+_requests_per_poll = 3 + _num_special_nodes  # 3 base endpoints + N special node history requests
+_requests_per_hour = int((3600.0 / _polling_seconds) * _requests_per_poll * 2.0)
+_rounded_limit = ((_requests_per_hour + 9) // 10) * 10  # Round up to nearest 10
+API_RATE_LIMIT = f'{_rounded_limit}/hour'
+logger.info(f'API rate limit: {API_RATE_LIMIT} (polling: {_polling_seconds}s, {_requests_per_poll} requests/interval with {_num_special_nodes} special nodes)')
+
 # Special nodes advanced settings
-SPECIAL_HISTORY_HOURS = config.getint('special_nodes_settings', 'history_hours', fallback=24)
-# Default persist path under project data/ (use relative path for Docker/portability)
-_default_history_path = 'data/special_history.json'
-SPECIAL_HISTORY_PERSIST_PATH = config.get('special_nodes_settings', 'persist_path', fallback=_default_history_path)
+# Use trail_history_hours for special node history (shared with UI trail display)
+SPECIAL_HISTORY_HOURS = TRAIL_HISTORY_HOURS
 # Consider nodes stale when time since last seen exceeds this threshold (in hours)
 _stale_after_hours = config.getint('special_nodes_settings', 'stale_after_hours', fallback=12)
 STALE_AFTER_SECONDS = _stale_after_hours * 3600
@@ -268,7 +276,7 @@ else:
     # Fallback: Auto-generate from webapp host and port
     # This only works if WEBAPP_HOST is set to a real hostname/IP (not 0.0.0.0)
     # For production, explicitly set tracker_url in config
-    _host = WEBAPP_HOST if WEBAPP_HOST != '0.0.0.0' else 'localhost'
+    _host = WEBAPP_HOST if WEBAPP_HOST != '127.0.0.1' else 'localhost'  # Consider restricting to specific interfaces in production
     ALERT_TRACKER_URL = f'http://{_host}:{WEBAPP_PORT}'
 
 # SMTP settings - try environment variables first for security
@@ -283,3 +291,6 @@ ALERT_SMTP_PASSWORD = os.getenv('ALERT_SMTP_PASSWORD') or config.get('alerts', '
 # Email addresses
 ALERT_EMAIL_FROM = config.get('alerts', 'email_from', fallback='norepy@sequoiayc.org')
 ALERT_EMAIL_TO = config.get('alerts', 'email_to', fallback='admin@example.com')
+
+# Special nodes data persistence
+SPECIAL_HISTORY_PERSIST_PATH = str(Path(__file__).parent.parent / 'data' / 'special_nodes.json')

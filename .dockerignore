@@ -48,3 +48,6 @@ secret.config
 
 # Note: tracker.config and data/ directory are INCLUDED in the container
 # This provides a fully pre-configured deployment with retained node data
+
+# SECURITY_ANALYSIS.md
+# SECURITY_PATCHES.md

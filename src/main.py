@@ -1,11 +1,10 @@
 """Buoy Tracker Application - Flask web interface for Meshtastic node tracking"""
 
-from flask import Flask, jsonify, render_template, url_for, request
+from flask import Flask, jsonify, render_template, request
 from functools import wraps
 import logging
 import threading
 import sys
-import os
 from pathlib import Path
 import hmac
 # Add parent dir to path so relative imports work when run as script
@@ -16,10 +15,9 @@ if __name__ == '__main__':
 else:
     from . import mqtt_handler, config
 import time
-import socket
 from collections import defaultdict
 
-logging.basicConfig(level=getattr(logging, config.LOG_LEVEL), 
+logging.basicConfig(level=getattr(logging, config.LOG_LEVEL),
                    format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -32,13 +30,16 @@ app.config['ENV_SOCKET_REUSE'] = True
 # Initialize simple custom rate limiter - use X-Forwarded-For for reverse proxy clients
 def get_client_ip():
     """Extract client IP from X-Forwarded-For header (reverse proxy) or remote_addr."""
+
     return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
 
 # Custom rate limiter - tracks requests per IP per hour
 class SimpleRateLimiter:
     def __init__(self, requests_per_hour):
         self.requests_per_hour = requests_per_hour
+
         self.request_history = defaultdict(list)  # IP -> list of timestamps
+
         self.lock = threading.Lock()
     
     def is_allowed(self, client_ip):
@@ -70,18 +71,28 @@ class SimpleRateLimiter:
             return max(0, self.requests_per_hour - len(recent))
 
 # Calculate rate limit from config
-_requests_per_hour = int((3600.0 / (config.API_POLLING_INTERVAL_MS // 1000)) * 3 * 1.5)
-_rounded_limit = ((_requests_per_hour + 9) // 10) * 10
-rate_limiter = SimpleRateLimiter(_rounded_limit)
-logger.info(f'Rate limiter initialized: {_rounded_limit} requests/hour')
+# Formula: (3600 / polling_seconds) * (3_base_endpoints + N_special_nodes) * 2.0_safety_multiplier
+# Base endpoints: api/status, api/nodes, api/special/packets (3 requests)
+# Per special node: api/special/history request when trails enabled (N requests)
+# Rate limit is computed from actual special nodes configured in tracker.config
+_polling_seconds = config.API_POLLING_INTERVAL_MS // 1000
+_num_special_nodes = len(config.SPECIAL_NODE_IDS)
+_requests_per_poll = 3 + _num_special_nodes  # 3 base endpoints + N special node history requests
+rate_limiter = SimpleRateLimiter(int(config.API_RATE_LIMIT.split('/')[0]))
+logger.info(f'Rate limiter initialized: {config.API_RATE_LIMIT} (polling: {_polling_seconds}s, {_requests_per_poll} requests/interval, {_num_special_nodes} special nodes)')
 
 def check_rate_limit(f):
     """Decorator to check rate limit before executing endpoint."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        # Exempt localhost from rate limiting
+        is_localhost = request.remote_addr in ['127.0.0.1', 'localhost', '::1']
+        if is_localhost:
+            return f(*args, **kwargs)
+
         client_ip = get_client_ip()
         if not rate_limiter.is_allowed(client_ip):
-            remaining = rate_limiter.get_remaining(client_ip)
+            rate_limiter.get_remaining(client_ip)
             logger.warning(f'Rate limit exceeded for IP {client_ip}')
             return jsonify({
                 'error': 'Rate limit exceeded',
@@ -102,19 +113,20 @@ def require_api_key(f):
     """Decorator to require API key in Authorization header."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not API_KEY:
-            # If no API key configured, allow access (development mode)
+        # Exempt localhost from API key authentication
+        is_localhost = request.remote_addr in ['127.0.0.1', 'localhost', '::1']
+        if is_localhost:
             return f(*args, **kwargs)
-        
         auth_header = request.headers.get('Authorization', '')
+        # If no API key configured, skip auth (development mode)
+        if not API_KEY:
+            return f(*args, **kwargs)
+        # If API key IS configured, require it for non-localhost
         if not auth_header.startswith('Bearer '):
             return jsonify({'error': 'Unauthorized'}), 401
-        
-        provided_key = auth_header[7:]  # Strip "Bearer " prefix
-        # Use constant-time comparison to prevent timing attacks
+        provided_key = auth_header[7:]
         if not hmac.compare_digest(provided_key, API_KEY):
             return jsonify({'error': 'Unauthorized'}), 401
-        
         return f(*args, **kwargs)
     return decorated
 
@@ -127,6 +139,7 @@ def set_cache_headers(response):
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     # Add server timestamp so client can detect cached responses
+
     response.headers['X-Server-Time'] = str(int(time.time() * 1000))  # milliseconds
     # Add CORS headers to allow requests from same origin
     response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
@@ -143,19 +156,27 @@ mqtt_connected = False
 def run_mqtt_in_background():
     """Run MQTT connection in background thread."""
     global mqtt_connected
+    print('[DEBUG] [MAIN] Entered run_mqtt_in_background thread.')
     try:
-        logger.info('Starting MQTT client in background thread')
-        mqtt_handler.connect_mqtt()
+        logger.info('[MQTT] run_mqtt_in_background() called')
+        logger.info('[MQTT] Starting MQTT client in background thread')
+        print('[DEBUG] [MAIN] About to call mqtt_handler.connect_mqtt()')
+        result = mqtt_handler.connect_mqtt()
+        print(f'[DEBUG] [MAIN] mqtt_handler.connect_mqtt() returned: {result}')
+        if result:
+            logger.info('[MQTT] connect_mqtt() returned True, client should be running')
+        else:
+            logger.error('[MQTT] connect_mqtt() returned False, client failed to start')
         mqtt_connected = True
         # Keep thread alive - process any callbacks that need to run
         while True:
             time.sleep(1)
             # Check if client is still alive
             if mqtt_handler.client is None:
-                logger.warning('MQTT client disconnected unexpectedly')
+                logger.warning('[MQTT] MQTT client disconnected unexpectedly')
                 break
     except Exception as e:
-        logger.error(f'MQTT connection error: {e}')
+        logger.error(f'[MQTT] MQTT connection error: {e}')
         mqtt_connected = False
 
 
@@ -163,10 +184,17 @@ def run_mqtt_in_background():
 def start_mqtt_on_startup():
     """Start MQTT when Flask app initializes."""
     global mqtt_thread
+    logger.info('[MQTT] start_mqtt_on_startup() called')
     if mqtt_thread is None or not mqtt_thread.is_alive():
+        logger.info('[MQTT] Starting MQTT background thread')
         mqtt_thread = threading.Thread(target=run_mqtt_in_background, daemon=True)
         mqtt_thread.start()
-        logger.info('MQTT auto-started on app init')
+        logger.info('[MQTT] MQTT auto-started on app init')
+
+
+def init_background_services():
+    """Explicit initializer for background services (MQTT)."""
+    start_mqtt_on_startup()
 
 
 @app.before_request
@@ -177,10 +205,11 @@ def _():
         start_mqtt_on_startup()
 
 
-# Handle CORS preflight requests
+# Handle CORS preflight requests for API endpoints only
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
-@app.route('/<path:path>', methods=['OPTIONS'])
-def handle_options(path):
+@app.route('/api/<path:path>', methods=['OPTIONS'])
+@app.route('/health', methods=['OPTIONS'])
+def handle_options(path=''):
     """Handle CORS preflight OPTIONS requests."""
     return '', 204
 
@@ -204,6 +233,7 @@ def index():
                           status_refresh=config.API_POLLING_INTERVAL_MS,
                           special_symbol=config.SPECIAL_NODE_SYMBOL,
                           special_highlight_color='#FFD700',  # Gold color - hardcoded as not configurable
+
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
                           api_key_required=bool(API_KEY),  # Tell client if auth is needed
@@ -227,14 +257,15 @@ def health_check():
 
 
 @app.route('/api/status', methods=['GET'])
-@check_rate_limit
 @require_api_key
+@check_rate_limit
 def api_status():
     """Compatibility status endpoint used by the simple.html UI."""
     nodes = mqtt_handler.get_nodes()
-    mqtt_status = mqtt_handler.is_connected()
+    mqtt_connected = mqtt_handler.is_connected()
+    mqtt_status = mqtt_handler.get_mqtt_status() if hasattr(mqtt_handler, 'get_mqtt_status') else ('connected_to_server' if mqtt_connected else 'disconnected')
     return jsonify({
-        'mqtt_connected': (mqtt_status in ('connected_to_server', 'receiving_packets')),
+        'mqtt_connected': mqtt_connected,
         'mqtt_status': mqtt_status,
         'nodes_tracked': len(nodes),
         'nodes_with_position': len(nodes),
@@ -242,6 +273,14 @@ def api_status():
             'status_blue_threshold': config.STATUS_BLUE_THRESHOLD,
             'status_orange_threshold': config.STATUS_ORANGE_THRESHOLD,
             'special_movement_threshold': getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50)
+        },
+        'features': {
+            'show_all_nodes': getattr(config, 'SHOW_ALL_NODES', False),
+            'show_gateways': getattr(config, 'SHOW_GATEWAYS', True),
+            'show_position_trails': getattr(config, 'SHOW_POSITION_TRAILS', True),
+            'show_gateway_connections': getattr(config, 'SHOW_GATEWAY_CONNECTIONS', True),
+            'show_nautical_markers': getattr(config, 'SHOW_NAUTICAL_MARKERS', True),
+            'trail_history_hours': getattr(config, 'TRAIL_HISTORY_HOURS', 24)
         }
     })
 
@@ -300,6 +339,24 @@ def special_packets_all():
     except Exception as e:
         logger.exception('Failed to get special node packets')
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/signal/history', methods=['GET'])
+@require_api_key
+@check_rate_limit
+def signal_history():
+    """Get signal history (battery, RSSI, SNR) for a specific node."""
+    from flask import request
+    try:
+        node_id = int(request.args.get('node_id'))
+    except Exception:
+        return jsonify({'error': 'node_id is required'}), 400
+    try:
+        data = mqtt_handler.get_signal_history(node_id)
+        return jsonify({'node_id': node_id, 'points': data, 'count': len(data)})
+    except Exception as e:
+        logger.exception('Failed to get signal history')
+        return jsonify({'error': str(e)}), 500
 # /api/special/packets/<node_id> removed - use /api/special/packets?limit= instead
 # /api/special/voltage_history/<node_id> removed - redundant with /api/special/packets
 
@@ -324,17 +381,53 @@ def debug_rate_limit():
     })
 
 
-if __name__ == '__main__':
-    logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}')
-    app.run(debug=False, host=config.WEBAPP_HOST, port=config.WEBAPP_PORT, threaded=True)
+@app.route('/docs/<filename>', methods=['GET'])
+def serve_docs(filename):
+    """Serve documentation files (LICENSE, ATTRIBUTION.md)."""
+    # Whitelist allowed files for security
+    allowed_files = {'LICENSE', 'ATTRIBUTION.md', 'license', 'attribution.md'}
+    if filename.lower() not in allowed_files:
+        return jsonify({'error': 'Not found'}), 404
 
+    try:
+        # Get the project root directory
+        project_root = Path(__file__).parent.parent
 
-@app.after_request
-def add_no_cache_headers(response):
-    """Disable caching so template/script updates are seen immediately."""
-    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+        # Try exact filename first, then lowercase
+        doc_path = project_root / filename
+        if not doc_path.exists():
+            doc_path = project_root / filename.lower()
+
+        if doc_path.exists() and doc_path.is_file():
+            with open(doc_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            # Return as HTML with pre-formatted text
+            html = f'''<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{filename}</title>
+    <style>
+        body {{ font-family: monospace; white-space: pre-wrap; word-wrap: break-word; margin: 20px; background: #f5f5f5; }}
+        pre {{ background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+    </style>
+</head>
+<body>
+<pre>{content}</pre>
+</body>
+</html>'''
+            return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        logger.warning(f'Failed to serve doc file {filename}: {e}')
+        return jsonify({'error': 'Failed to read file'}), 500
+
+    return jsonify({'error': 'File not found'}), 404
+
 
 # /api/inject-telemetry removed - security risk (test endpoint)
+
+if __name__ == '__main__':
+    logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}')
+    start_mqtt_on_startup()
+    app.run(debug=False, host=config.WEBAPP_HOST, port=config.WEBAPP_PORT, threaded=True)

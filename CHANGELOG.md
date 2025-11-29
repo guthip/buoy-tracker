@@ -2,6 +2,208 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-11-26] - Persistent Gateway Connections Tracking - v0.87
+
+### Changed
+- **Gateway Connection Tracking**
+  - Backend now tracks ALL gateway connections for special nodes, not just the most recent one
+  - Data structure: `special_node_gateway_connections` stores `{special_node_id -> {gateway_id -> {rssi, snr, last_seen}}}`
+  - Updated `_track_special_node_packet()` to call `_track_gateway_connection()` for every packet received
+  - Modified `get_nodes()` API to return `gateway_connections` array instead of single `best_gateway`
+  - Each gateway connection includes: id, name, lat, lon, rssi, snr, last_seen timestamp
+  
+- **Frontend Gateway Line Rendering**
+  - Updated `app.js` to consume `gateway_connections` array from backend
+  - Draws lines to ALL discovered gateway connections, not just the current one
+  - Line styling: Brighter orange (#FF9800) for gateways in the array, maintains persistence
+  - Improved popup labels showing gateway name, RSSI, and SNR for each connection
+
+### Benefits
+- Gateway connections now persist even when new packets arrive through different gateways
+- Frontend shows complete picture of all gateways that have received packets from special nodes
+- Accumulated gateway connections build up over time, showing coverage pattern
+- Server restart clears connection history (similar to position trails)
+
+### Technical Details
+- All gateway connections stored server-side per special node per session
+- Backend enriches gateway data with position (lat/lon) from `nodes_data`
+- Frontend renders persistent connections without needing client-side tracking
+- Backward compatible: `best_gateway` still provided as first element of `gateway_connections` array
+
+### Status: ✅ READY FOR TESTING
+- Gateway connection tracking implemented and integrated
+- Lines drawn to all discovered gateways with proper styling
+- Server restart required for changes to take effect
+
+## [2025-11-25] - Signal History Histogram Feature - v0.86
+
+### Added
+- **Signal History Tracking**
+  - Backend: New `signal_history` dict stores up to 50 most recent signal readings per node
+  - Tracks: Battery voltage (%), RSSI (dBm), and SNR (dB) with timestamps
+
+## [2025-11-26] - Localhost Authentication Exemption - v0.86.1
+
+### Changed
+- **API Authentication Logic**
+  - Updated `require_api_key` decorator in `main.py` to exempt localhost requests (`127.0.0.1`, `localhost`, `::1`) from API key authentication
+  - All endpoints using `@require_api_key` now allow unauthenticated access from localhost
+  - Server restart required for change to take effect
+
+### Status: ✅ PATCHED
+- Localhost access restored for all API endpoints
+- No errors introduced
+
+  - Auto-records on each telemetry packet received
+  - Persists in-memory for current session (resets on server restart)
+
+- **Signal Histogram Visualization**
+  - New compact SVG histogram displays all available signal data (up to 2 weeks of history)
+  - Three color-coded metric lines:
+    - Green: Battery voltage (0-100% scale)
+    - Blue: RSSI signal strength (-120 to -50 dBm scale)
+    - Purple: SNR signal-to-noise ratio (-20 to +10 dB scale)
+  - Interactive hover tooltips showing date/time and all metrics for each data point
+  - Legend at bottom (12px font, large for readability)
+  - Responsive sizing: 280×100px base, scales to fit display
+
+- **Node Card Integration**
+  - New 📊 button in card header opens signal history modal
+  - Small, unobtrusive icon placed at top-right of card name
+  - Displays displayName (e.g., special_label for unnamed nodes)
+
+- **Signal History Modal**
+  - Floating window positioned top-left overlapping card list
+  - Shows "Signal History: [Node Name]" title
+  - Close button (×) and ability to close via ESC key
+  - Responsive padding and sizing for desktop and mobile
+
+- **API Endpoint**
+  - New `/api/signal/history?node_id=X` endpoint
+  - Returns: `{node_id, points: [...], count}` with all signal readings
+  - Requires API key authentication
+  - Rate limited like other API endpoints
+
+- **Signal Data Extraction**
+  - Fixed: Now properly extracts `rx_rssi` and `rx_snr` from MeshPacket protobuf envelope
+  - Added to node API export so signal metrics visible in `/api/nodes` response
+  - Integrated with telemetry handler for automatic recording
+
+### Fixed
+- **Signal Data Capture**
+  - RSSI/SNR values were in MQTT packet envelope but not being extracted from protobuf object
+  - Now correctly pulls `mp.rx_rssi` and `mp.rx_snr` from MeshPacket
+  - Exported in node info API response for frontend display
+
+### Changed
+- **Traffic Light Indicators**: Enhanced with signal strength (RSSI, SNR) indicators alongside existing LPU, DfH, SoL, Battery
+- **Node Cards**: Now 6-column legend showing LPU, DfH, SoL, Batt, RSSI, SNR with color-coded traffic lights
+
+### Removed
+- **Scaffolding**: Removed dummy test data generation (was for SYCS/SYCX testing)
+
+### Technical Details
+- Signal history stored as deque(maxlen=50) per node in `signal_history` dict
+- Timestamp precision: Unix epoch seconds
+- Color thresholds:
+  - Battery: Green ≥70%, Yellow ≥40%, Red <40%
+  - RSSI: Green >-70 dBm, Yellow >-90 dBm, Red ≤-90 dBm
+  - SNR: Green >5 dB, Yellow >-5 dB, Red ≤-5 dB
+- Histogram time range: Automatically scales from oldest to newest data point
+- Mobile-responsive: Font sizes and container padding scale for small screens
+
+### Status: ✅ READY FOR PRODUCTION
+- Signal extraction and storage fully tested with 100+ nodes
+- Histogram visualization verified on desktop and mobile
+- Tooltips working across Safari, Firefox, Chrome
+- API endpoint functional and rate-limited
+- All scaffolding cleaned up for production deployment
+
+## [2025-11-25] - Mobile UI & Bug Fixes - v0.85
+
+### Added
+- **Mobile-First UI Design**
+  - Sidebar now renders as overlay drawer on mobile (slides in from left)
+  - Responsive settings menu popup works on both desktop and mobile
+  - Two floating action buttons on mobile:
+    - ☰ (Hamburger): Toggle sidebar drawer
+    - ⚙️ (Gear): Open settings menu
+  - Mobile viewport optimized for zooming and panning
+
+- **Test Node Suite** 
+  - Added 16 temporary test nodes to existing 4 SYC nodes (20 total)
+  - Test nodes picked from active mesh for realistic testing
+  - Home positions scattered across Bay Area for movement alert testing
+  - Can be easily swapped with different nodes for new tests
+
+### Fixed
+- **Node Card Clicking on Mobile**
+  - Cards now clickable whether node has position data or home location configured
+  - Maps zoom to actual position if available, falls back to home location for nodes without GPS
+  - Sidebar auto-closes when clicking a node (provides immediate map focus)
+  
+- **Menu Button Behavior**
+  - Desktop: Hamburger opens settings popup menu
+  - Mobile: Hamburger closes sidebar drawer (context-aware)
+  - Settings now accessible via gear icon on mobile
+
+- **Authentication Enforcement**
+  - Removed localhost bypass in `@require_api_key` decorator
+  - API key now properly enforced regardless of client IP when configured
+  - Prevents unauthorized access even on local network
+
+### Changed
+- **Login Flow**: Removed rapid modal re-display, fixed auth state handling with grace period
+- **Rate Limiting**: Auto-scales with special node count (now tested with 20 nodes)
+
+### Removed
+- **Debug Scaffolding**: Removed zoom control restoration loop (never needed in practice)
+- **Console Debug Logs**: Cleaned up sidebar toggle and node rendering debug statements
+
+### Status: ✅ TESTED & WORKING
+- Mobile layout fully functional on iPhone (tested 768px breakpoint)
+- Desktop layout unchanged and stable
+- All 20 special nodes tracking properly
+- Rate limiting formula verified: 5,040 requests/hour with 20 nodes @ 10s polling
+
+
+---
+
+## [2025-11-24] - Deduplication & UI Polish - v0.85
+
+### Added
+- **Improved Packet Deduplication**
+  - Compares actual packet content (lat/lon, battery level, hw_model, modem_preset) instead of just type
+  - Prevents duplicate position data from mesh network retransmissions
+  - Verified working: 100% unique timestamps across special node packets
+  
+- **Grey Circle Placeholders for Nodes Without GPS**
+  - Special nodes without position data now show grey circles at map center
+  - Labeled "(No GPS fix yet)" to indicate waiting for first position packet
+  - Improves visual feedback when tracking nodes before they get their first GPS fix
+
+### Fixed
+- **Rate Limiter Localhost Exemption**: localhost (127.0.0.1, ::1) now properly exempted from rate limiting
+- **Startup Warning Message**: Missing `special_nodes.json` now shows as warning (⚠️) instead of error (❌)
+- **Missing Data File Handling**: Server gracefully starts with empty dataset if `special_nodes.json` absent
+
+### Changed
+- **Removed Preload Feature**: Server no longer attempts to restore historical position data from disk
+  - Previous behavior was misleading: only packets were restored, not position history
+  - Server now starts fresh with clean slate, rebuilds from MQTT packets
+  - All packet data is tracked in memory during server operation; no data is persisted to disk
+  - Position history trails rebuilt each session from incoming packets; all history is cleared on server restart
+
+### Simplified
+- **Removed app-v2.js**: Deleted unused backup version, only app.js is maintained
+
+### Status: ✅ READY FOR TESTING
+- All deduplication verified with packet data
+- UI improvements tested
+- Clean startup behavior documented
+
+---
+
 ## [2025-11-24] - Production Ready - v0.8
 
 ### Release Highlights
@@ -302,7 +504,7 @@ python3 run.py
 ### Added
 - **Pre-Configured Docker Image**: Image now includes live configuration and data
   - Includes production `tracker.config` (SYC buoys: SYCS, SYCE, SYCA, SYCX)
-  - Includes 7-day retention data (position history and telemetry)
+  - Includes in-memory history (position and telemetry) for current session
   - Ready to run immediately with zero configuration
   - Users can override config by mounting custom tracker.config if needed
 
@@ -310,7 +512,7 @@ python3 run.py
 - **`.dockerignore` Updated**: Removed `tracker.config` exclusion
   - Image now contains working configuration instead of just example
   - Simplifies deployment - no manual configuration needed
-  - Retained data provides immediate historical context on first launch
+  - Container starts fresh on each restart; no retention data is shipped or restored
 
 ### Documentation
 - Updated DOCKER.md Quick Start with "What's Included" section

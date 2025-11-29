@@ -9,6 +9,7 @@ WORKDIR /app
 # Install dependencies
 COPY requirements.txt ./
 RUN apt-get update \
+    # TODO: Pin package versions for security, e.g. gcc=VERSION build-essential=VERSION curl=VERSION ca-certificates=VERSION \
     && apt-get install -y --no-install-recommends gcc build-essential curl ca-certificates \
     && pip install --no-cache-dir -r requirements.txt \
     && apt-get remove -y gcc build-essential \

@@ -53,13 +53,6 @@ special_node_position_timestamps = {}  # node_id -> set of rxTime values to dedu
 _last_channel_save = 0  # Track when we last saved channel data
 _last_packet_save = 0  # Track when we last saved packet history
 
-# Gateway detection
-node_is_gateway = {}  # node_id -> bool (True if node is a gateway)
-
-# Gateway connections: special_node_id -> {gateway_node_id: {name, lat, lon, rssi, snr, last_seen}}
-# Tracks which gateways received packets from which special nodes
-special_node_gateways = {}
-
 def _is_special_node(node_id):
     """Check if a node_id is in the special nodes list."""
     return node_id in config.SPECIAL_NODES
@@ -172,65 +165,6 @@ def _ensure_history_struct(node_id):
         # unbounded deque; prune by time on append
         special_history[node_id] = deque()
 
-def _record_gateway_connection(special_node_id, gateway_node_id, json_data):
-    """
-    Record that a gateway received a packet from a special node.
-    Tracks ALL gateways that receive from this special node.
-    Updates "best gateway" based on strongest RSSI.
-    Also marks the gateway node itself as a gateway in nodes_data.
-    
-    Args:
-        special_node_id: The special node that sent the packet
-        gateway_node_id: The node that received it (first hop in path)
-        json_data: The packet data with RSSI/SNR info
-    """
-    if special_node_id not in special_node_gateways:
-        special_node_gateways[special_node_id] = {}
-    
-    # Get gateway info from nodes_data
-    gateway_info = nodes_data.get(gateway_node_id, {})
-    
-    # Mark this node as a gateway (it received a packet from a special node)
-    if gateway_node_id not in nodes_data:
-        nodes_data[gateway_node_id] = {}
-    nodes_data[gateway_node_id]["is_gateway"] = True
-    node_is_gateway[gateway_node_id] = True
-    logger.debug(f"Node {gateway_node_id} marked as gateway (received from special node {special_node_id})")
-    
-    # Use field names that match frontend expectations (app.js line 1394-1397)
-    connection_info = {
-        "id": gateway_node_id,
-        "name": gateway_info.get("long_name") or "Unknown",
-        "lat": gateway_info.get("latitude"),
-        "lon": gateway_info.get("longitude"),
-        "rssi": json_data.get("rx_rssi"),
-        "snr": json_data.get("rx_snr"),
-        "last_seen": time.time(),
-    }
-    
-    # Store/update this gateway connection
-    special_node_gateways[special_node_id][gateway_node_id] = connection_info
-    
-    # Track best gateway: the one with strongest RSSI for this special node
-    # rssi is negative, so higher (less negative) = stronger
-    current_best_rssi = nodes_data.get(special_node_id, {}).get("best_gateway_rssi", -200)
-    incoming_rssi = json_data.get("rx_rssi", -200)
-    
-    if incoming_rssi is not None and incoming_rssi > current_best_rssi:
-        # This is the strongest gateway so far
-        nodes_data[special_node_id]["best_gateway"] = {
-            "id": gateway_node_id,
-            "name": connection_info["name"],
-            "lat": connection_info["lat"],
-            "lon": connection_info["lon"],
-            "rssi": incoming_rssi,
-            "snr": connection_info["snr"],
-        }
-        nodes_data[special_node_id]["best_gateway_rssi"] = incoming_rssi
-        logger.debug(f"Best gateway updated for {special_node_id}: {gateway_node_id} ({connection_info['name']}) RSSI={incoming_rssi}dBm")
-    else:
-        logger.debug(f"Gateway connection: {special_node_id} → {gateway_node_id} ({connection_info['name']}) RSSI={incoming_rssi} (not best)")
-
 def _prune_history(node_id, now_ts=None):
     """Prune old position history entries for a special node."""
     if node_id not in special_history:
@@ -330,15 +264,8 @@ def _load_special_nodes_data():
                             if telemetry:
                                 power_metrics = telemetry.get('power_metrics', {})
                                 voltage = power_metrics.get('ch3_voltage') or power_metrics.get('ch1_voltage')
-                            if voltage and isinstance(voltage, (int, float)):
-                                # Use realistic lithium cell range (2.8V-4.25V)
-                                if voltage >= 4.25:
-                                    battery = 100
-                                elif voltage <= 2.8:
-                                    battery = 0
-                                else:
-                                    battery = int(((voltage - 2.8) / (4.25 - 2.8)) * 100)
-                                    battery = max(0, min(100, battery))
+                            if voltage and 3.0 < voltage < 4.2:
+                                battery = int(((voltage - 3.0) / 1.2) * 100)
                                 nodes_data[node_id]["battery"] = battery
                     
                     # Load ALL packets (no limit)
@@ -633,12 +560,6 @@ def on_nodeinfo(json_data):
                 nodes_data[node_id]["hw_model"] = "Unknown"
             nodes_data[node_id]["last_seen"] = time.time()
             
-            # Store signal quality metrics if available
-            if "rx_rssi" in json_data:
-                nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
-            if "rx_snr" in json_data:
-                nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
-            
             logger.info(f'Updated nodeinfo for {node_id}: {nodes_data[node_id]["long_name"]}')
             
             # Save node data if it's a special node
@@ -737,12 +658,6 @@ def on_position(json_data):
             nodes_data[node_id]["last_seen"] = time.time()
             nodes_data[node_id]["last_position_update"] = time.time()  # Track position updates separately
             
-            # Store signal quality metrics if available
-            if "rx_rssi" in json_data:
-                nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
-            if "rx_snr" in json_data:
-                nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
-            
             # Record history for special nodes (deduplicate by rxTime to avoid retransmitted packets)
             if node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
                 # Extract rxTime from the packet to deduplicate retransmissions
@@ -755,25 +670,10 @@ def on_position(json_data):
                 # Only add to history if we haven't seen this rxTime before
                 if rx_time is not None and rx_time not in special_node_position_timestamps[node_id]:
                     _ensure_history_struct(node_id)
-                    entry = {
-                        "ts": time.time(),
-                        "lat": lat,
-                        "lon": lon,
-                        "alt": alt,
-                        "battery": nodes_data[node_id].get("battery"),
-                        "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr")
-                    }
+                    entry = {"ts": time.time(), "lat": lat, "lon": lon, "alt": alt}
                     special_history[node_id].append(entry)
                     special_node_position_timestamps[node_id].add(rx_time)
                     _prune_history(node_id, now_ts=entry['ts'])
-                    
-                    # Record gateway connection: track which node received this packet from special node
-                    # The MeshPacket's 'to' field or routing info tells us the receiver
-                    to_id = json_data.get("to")
-                    if to_id and to_id in nodes_data:
-                        _record_gateway_connection(node_id, to_id, json_data)
-                    
                     _save_special_nodes_data()
                     logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
                 elif rx_time is not None:
@@ -781,23 +681,9 @@ def on_position(json_data):
                 else:
                     # No rxTime available, add anyway (shouldn't happen but be safe)
                     _ensure_history_struct(node_id)
-                    entry = {
-                        "ts": time.time(),
-                        "lat": lat,
-                        "lon": lon,
-                        "alt": alt,
-                        "battery": nodes_data[node_id].get("battery"),
-                        "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr")
-                    }
+                    entry = {"ts": time.time(), "lat": lat, "lon": lon, "alt": alt}
                     special_history[node_id].append(entry)
                     _prune_history(node_id, now_ts=entry['ts'])
-                    
-                    # Record gateway connection
-                    to_id = json_data.get("to")
-                    if to_id and to_id in nodes_data:
-                        _record_gateway_connection(node_id, to_id, json_data)
-                    
                     _save_special_nodes_data()
             
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
@@ -846,8 +732,7 @@ def on_telemetry(json_data):
             try:
                 if isinstance(payload, dict):
                     # Payload uses snake_case from protobuf (preserving_proto_field_name=True)
-                    device_metrics = payload.get("device_metrics", {})
-                    battery = device_metrics.get("battery_level")
+                    battery = payload.get("device_metrics", {}).get("battery_level")
                     
                     # Try ADMIN_APP format: deviceState.power.battery (non-standard, just in case)
                     if battery is None:
@@ -866,47 +751,35 @@ def on_telemetry(json_data):
                         # If no powerMetrics, check admin power format voltage
                         if voltage is None:
                             admin_voltage = payload.get("deviceState", {}).get("power", {}).get("voltage")
-                            if admin_voltage and isinstance(admin_voltage, (int, float)):
+                            if admin_voltage:
                                 voltage = admin_voltage / 1000.0  # Admin format uses mV
                         
                         # Fall back to device_metrics voltage
                         if voltage is None:
+                            device_metrics = payload.get("device_metrics", {})
                             voltage = device_metrics.get("voltage")
                         
-                        # Estimate battery percentage from voltage (Lithium cells: ~2.8V=0%, ~4.3V=100%)
-                        # Meshtastic uses LiPo/Li-ion cells which have flatter discharge curves
+                        # Estimate battery percentage from voltage (LiPo: 4.2V=100%, 3.0V=0%)
                         if voltage is not None and isinstance(voltage, (int, float)):
-                            if voltage >= 4.25:
+                            if voltage >= 4.2:
                                 battery = 100
-                            elif voltage <= 2.8:
+                            elif voltage <= 3.0:
                                 battery = 0
                             else:
-                                # Linear approximation: map 2.8V-4.25V to 0-100%
-                                # Using more realistic range for lithium cells
-                                battery = int(((voltage - 2.8) / (4.25 - 2.8)) * 100)
-                                battery = max(0, min(100, battery))  # Clamp to 0-100
+                                # Linear approximation between 3.0V and 4.2V
+                                battery = int(((voltage - 3.0) / 1.2) * 100)
                 
                 # coerce to int if it's numeric string
                 if isinstance(battery, str) and battery.isdigit():
                     battery = int(battery)
                 if isinstance(battery, (float, int)):
-                    battery = int(battery)
-                    # Clamp to reasonable 0-100 range
-                    battery = max(0, min(100, battery))
-                    nodes_data[node_id]["battery"] = battery
+                    nodes_data[node_id]["battery"] = int(battery)
                 else:
-                    # leave as unknown
+                    # leave as-is or unknown
                     nodes_data[node_id]["battery"] = None
-            except Exception as e:
-                logger.debug(f"Error extracting battery for {node_id}: {e}")
+            except Exception:
                 nodes_data[node_id]["battery"] = None
             logger.info(f'Updated telemetry for {node_id}: battery={nodes_data[node_id].get("battery")}%')
-            
-            # Store signal quality metrics if available
-            if "rx_rssi" in json_data:
-                nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
-            if "rx_snr" in json_data:
-                nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
             
             # Check for battery alert if this is a special node
             if _is_special_node(node_id):
@@ -1141,12 +1014,6 @@ def _on_mqtt_message(client_obj, userdata, msg):
             json_packet['to'] = mp.to
         if 'channel' not in json_packet:
             json_packet['channel'] = mp.channel
-        
-        # Extract signal quality metrics from MeshPacket
-        if hasattr(mp, 'rx_rssi') and mp.rx_rssi != 0:
-            json_packet['rx_rssi'] = mp.rx_rssi
-        if hasattr(mp, 'rx_snr') and mp.rx_snr != 0:
-            json_packet['rx_snr'] = mp.rx_snr
         
         # Store in recent messages buffer
         add_recent(json_packet)
@@ -1490,23 +1357,6 @@ def get_nodes():
             battery_level < getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
         )
         
-        # Add signal quality metrics if available
-        node_info["rx_rssi"] = data.get("rx_rssi")
-        node_info["rx_snr"] = data.get("rx_snr")
-        
-        # Add gateway connections if this is a special node (for drawing lines on map)
-        if is_special and node_id in special_node_gateways:
-            node_info["gateway_connections"] = list(special_node_gateways[node_id].values())
-        else:
-            node_info["gateway_connections"] = []
-        
-        # Add best gateway info if this is a special node
-        if is_special and "best_gateway" in data:
-            node_info["best_gateway"] = data["best_gateway"]
-        
-        # Add gateway flag if node is detected as a gateway
-        node_info["is_gateway"] = node_is_gateway.get(node_id, False)
-        
         # Add last packet time for special nodes (any packet, even encrypted/routing)
         if is_special and node_id in special_node_last_packet:
             node_info["last_packet_time"] = special_node_last_packet[node_id]
@@ -1549,7 +1399,6 @@ def get_nodes():
                     "age_min": None,
                     "moved_far": False,
                     "distance_from_origin_m": None,
-                    "is_gateway": node_is_gateway.get(sid, False),
                 }
                 # Add last packet time if we've seen ANY packets
                 if sid in special_node_last_packet:
@@ -1576,21 +1425,6 @@ def get_all_special_history(hours: int = None):
     for nid in getattr(config, 'SPECIAL_NODE_IDS', []):
         out[nid] = get_special_history(nid, hours)
     return out
-
-
-def get_gateway_connections(special_node_id: int = None):
-    """
-    Return gateway connections for special nodes.
-    
-    If special_node_id is provided, return gateways connected to that node.
-    Otherwise, return all gateway connections as dict special_node_id -> {gateway_node_id: connection_info}.
-    
-    Connection info includes gateway name, location, RSSI, SNR for drawing lines on map.
-    """
-    if special_node_id is not None:
-        return special_node_gateways.get(special_node_id, {})
-    
-    return special_node_gateways
 
 
 def get_special_node_packets(node_id=None, limit=50):

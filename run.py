@@ -28,33 +28,38 @@ try:
     sys.stdout.flush()
     sys.stderr.flush()
     
-    from src.main import app
+    from src.main import app, init_background_services
     from src import config
     from werkzeug.serving import make_server
-    
+
     print(f'[STARTUP] Modules imported successfully', flush=True)
     print(f'[STARTUP] Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}', flush=True)
     sys.stdout.flush()
     sys.stderr.flush()
-    
+
     print(f'[STARTUP] Creating server...', flush=True)
-    
+
+    # Start background services (MQTT thread)
+    print('[DEBUG] [RUN.PY] Calling init_background_services() to start MQTT thread...', flush=True)
+    init_background_services()
+    print('[DEBUG] [RUN.PY] Returned from init_background_services()', flush=True)
+
     server = make_server(
         config.WEBAPP_HOST,
         config.WEBAPP_PORT,
         app,
         threaded=True
     )
-    
+
     # Enable SO_REUSEADDR to allow immediate restart
     server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-    
+
     print(f'[STARTUP] Server created and socket configured', flush=True)
     print(f'[STARTUP] Starting serve_forever()...', flush=True)
     sys.stdout.flush()
     sys.stderr.flush()
-    
+
     server.serve_forever()
     
 except KeyboardInterrupt:

@@ -5,20 +5,19 @@ services:
     container_name: buoy-tracker
     restart: unless-stopped
     ports:
-      - "5102:5102"
+      - 5102:5102
     volumes:
       # Configuration volumes (read-only)
       - ./tracker.config:/app/tracker.config:ro
       
-      # Data persistence volumes
-      - ./data:/app/data
       - ./logs:/app/logs
       
-      # Documentation volume (optional - serve docs from host)
-      - ./docs:/app/docs:ro
       
       # Uncomment to add optional secret.config if you have one:
       # - ./secret.config:/app/secret.config:ro
+      
+        # Data persistence volumes
+        # - ./data:/app/data
     environment:
       - MQTT_USERNAME
       - MQTT_PASSWORD
@@ -26,7 +25,7 @@ services:
       - ALERT_SMTP_USERNAME
       - ALERT_SMTP_PASSWORD
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5102/api/status"]
+      test: [CMD, curl, -f, http://localhost:5102/api/status]
       interval: 30s
       timeout: 5s
       retries: 3
