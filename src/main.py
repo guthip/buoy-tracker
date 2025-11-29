@@ -278,7 +278,6 @@ def api_status():
             'show_all_nodes': getattr(config, 'SHOW_ALL_NODES', False),
             'show_gateways': getattr(config, 'SHOW_GATEWAYS', True),
             'show_position_trails': getattr(config, 'SHOW_POSITION_TRAILS', True),
-            'show_gateway_connections': getattr(config, 'SHOW_GATEWAY_CONNECTIONS', True),
             'show_nautical_markers': getattr(config, 'SHOW_NAUTICAL_MARKERS', True),
             'trail_history_hours': getattr(config, 'TRAIL_HISTORY_HOURS', 24)
         }

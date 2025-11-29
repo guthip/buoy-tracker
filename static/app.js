@@ -37,7 +37,6 @@
           show_all_nodes: features.show_all_nodes || false,
           show_gateways: features.show_gateways || true,
           show_position_trails: features.show_position_trails || true,
-          show_gateway_connections: features.show_gateway_connections || true,
           show_nautical_markers: features.show_nautical_markers || true,
           trail_history_hours: features.trail_history_hours || 168,
           low_battery_threshold: cfg.low_battery_threshold || 25,
@@ -51,9 +50,6 @@
         }
         if (document.getElementById('showPositionTrailsInput')) {
           document.getElementById('showPositionTrailsInput').checked = controls.show_position_trails;
-        }
-        if (document.getElementById('showGatewayConnectionsInput')) {
-          document.getElementById('showGatewayConnectionsInput').checked = controls.show_gateway_connections;
         }
         if (document.getElementById('showNauticalMarkersInput')) {
           document.getElementById('showNauticalMarkersInput').checked = controls.show_nautical_markers;
@@ -79,10 +75,6 @@
         };
         document.getElementById('showPositionTrailsInput').onchange = function(e) {
           appFeatures.show_position_trails = e.target.checked;
-          updateNodes();
-        };
-        document.getElementById('showGatewayConnectionsInput').onchange = function(e) {
-          appFeatures.show_gateway_connections = e.target.checked;
           updateNodes();
         };
         document.getElementById('showNauticalMarkersInput').onchange = function(e) {
@@ -450,7 +442,6 @@
     show_all_nodes: true,
     show_gateways: true,
     show_position_trails: true,
-    show_gateway_connections: true,
     show_nautical_markers: true,
     trail_history_hours: 168
   };
@@ -1385,7 +1376,7 @@
                 }
                 
                 // Draw lines to all gateway connections from the backend
-                if (appFeatures.show_gateway_connections && node.is_special && node.lat != null && node.lon != null && node.gateway_connections) {
+                if (appFeatures.show_gateways && node.is_special && node.lat != null && node.lon != null && node.gateway_connections) {
                   var connections = node.gateway_connections;
                   
                   for (var gc = 0; gc < connections.length; gc++) {
@@ -1419,7 +1410,7 @@
                       gatewayLines[lineKey].bindPopup(popup);
                     }
                   }
-                } else if (!appFeatures.show_gateway_connections) {
+                } else if (!appFeatures.show_gateways) {
                   // Remove all gateway lines for this node if feature is disabled
                   for (var lineKey in gatewayLines) {
                     if (lineKey.indexOf('gw_' + node.id + '_') === 0) {
