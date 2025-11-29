@@ -580,6 +580,19 @@ def on_nodeinfo(json_data):
             if role:
                 nodes_data[node_id]["role"] = role
             
+            # For special nodes: initialize position from home if not yet set
+            if _is_special_node(node_id):
+                if "latitude" not in nodes_data[node_id] or nodes_data[node_id].get("latitude") is None:
+                    special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
+                    home_lat = special_node_config.get('home_lat')
+                    home_lon = special_node_config.get('home_lon')
+                    if home_lat is not None and home_lon is not None:
+                        nodes_data[node_id]["latitude"] = home_lat
+                        nodes_data[node_id]["longitude"] = home_lon
+                        nodes_data[node_id]["origin_lat"] = home_lat
+                        nodes_data[node_id]["origin_lon"] = home_lon
+                        logger.debug(f'Initialized {node_id} position from home: {home_lat:.4f}, {home_lon:.4f}')
+            
             # Store channel name from topic
             nodes_data[node_id]["channel_name"] = channel_name
             
