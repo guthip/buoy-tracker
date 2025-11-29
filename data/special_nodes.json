@@ -3,16 +3,19 @@
     "info": {
       "channel_name": "MediumFast",
       "telemetry": {
-        "time": 1764392449,
-        "power_metrics": {
-          "ch3_voltage": 4.024,
-          "ch3_current": 0.5
+        "time": 1764394181,
+        "device_metrics": {
+          "battery_level": 101,
+          "voltage": 4.278,
+          "channel_utilization": 18.905,
+          "air_util_tx": 0.031638887,
+          "uptime_seconds": 542809
         }
       },
-      "last_seen": 1764393886.150383,
-      "battery": 84,
-      "rx_rssi": -102,
-      "rx_snr": -10.75,
+      "last_seen": 1764394191.152554,
+      "battery": 100,
+      "rx_rssi": -111,
+      "rx_snr": -8.5,
       "channel": 31,
       "origin_lat": 37.5635,
       "origin_lon": -122.21883333333334,
@@ -21,7 +24,7 @@
       "latitude": 37.5634518,
       "longitude": -122.2190078,
       "altitude": 0,
-      "last_position_update": 1764393886.150383,
+      "last_position_update": 1764393888.033352,
       "role": "CLIENT_MUTE",
       "long_name": "Sequoia YC Mark S  c00d",
       "short_name": "Sequoia",
@@ -177,6 +180,186 @@
         "battery": 84,
         "rssi": -102,
         "snr": -10.75
+      },
+      {
+        "ts": 1764393886.7152572,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -94,
+        "snr": -6.5
+      },
+      {
+        "ts": 1764393886.716059,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -100,
+        "snr": -7.0
+      },
+      {
+        "ts": 1764393886.716513,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -93,
+        "snr": 4.5
+      },
+      {
+        "ts": 1764393886.7169259,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -100,
+        "snr": -8.25
+      },
+      {
+        "ts": 1764393886.717303,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -94,
+        "snr": 4.75
+      },
+      {
+        "ts": 1764393886.7176929,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -113,
+        "snr": -5.0
+      },
+      {
+        "ts": 1764393886.718069,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -102,
+        "snr": -4.5
+      },
+      {
+        "ts": 1764393886.718548,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -107,
+        "snr": 2.75
+      },
+      {
+        "ts": 1764393886.919023,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -91,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764393886.919778,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -110,
+        "snr": -13.0
+      },
+      {
+        "ts": 1764393886.92137,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -96,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764393886.922131,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -99,
+        "snr": -5.25
+      },
+      {
+        "ts": 1764393886.928545,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -87,
+        "snr": -6.75
+      },
+      {
+        "ts": 1764393886.938671,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -114,
+        "snr": -3.0
+      },
+      {
+        "ts": 1764393886.9874601,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -132,
+        "snr": -12.0
+      },
+      {
+        "ts": 1764393886.997448,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -114,
+        "snr": -10.5
+      },
+      {
+        "ts": 1764393887.069206,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -106,
+        "snr": 0.75
+      },
+      {
+        "ts": 1764393887.073002,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -101,
+        "snr": 4.5
+      },
+      {
+        "ts": 1764393887.213281,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -99,
+        "snr": -1.25
+      },
+      {
+        "ts": 1764393888.033355,
+        "lat": 37.5634518,
+        "lon": -122.2190078,
+        "alt": 0,
+        "battery": 84,
+        "rssi": -94,
+        "snr": 4.25
       }
     ],
     "packets": [
@@ -443,6 +626,45 @@
         "lat": 37.5634518,
         "lon": -122.2190078,
         "altitude": null
+      },
+      {
+        "timestamp": 1764394184.397582,
+        "packet_type": "TELEMETRY_APP",
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "battery_level": 101,
+        "voltage": 4.278,
+        "channel_utilization": 18.905,
+        "air_util_tx": 0.031638887,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1764394187.041412,
+        "packet_type": "TELEMETRY_APP",
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "battery_level": 101,
+        "voltage": 4.278,
+        "channel_utilization": 18.905,
+        "air_util_tx": 0.031638887,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1764394191.15249,
+        "packet_type": "TELEMETRY_APP",
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "battery_level": 101,
+        "voltage": 4.278,
+        "channel_utilization": 18.905,
+        "air_util_tx": 0.031638887,
+        "power_voltage": null,
+        "power_current": null
       }
     ]
   },
