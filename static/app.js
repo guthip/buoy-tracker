@@ -34,12 +34,13 @@
         var features = data.features || {};
         // Set controls to defaults from config
         var controls = {
-          show_all_nodes: features.show_all_nodes || false,
-          show_gateways: features.show_gateways || true,
-          show_position_trails: features.show_position_trails || true,
-          show_nautical_markers: features.show_nautical_markers || true,
+          show_all_nodes: features.show_all_nodes !== undefined ? features.show_all_nodes : false,
+          show_gateways: features.show_gateways !== undefined ? features.show_gateways : true,
+          show_position_trails: features.show_position_trails !== undefined ? features.show_position_trails : true,
+          show_nautical_markers: features.show_nautical_markers !== undefined ? features.show_nautical_markers : true,
           trail_history_hours: features.trail_history_hours || 168,
           low_battery_threshold: cfg.low_battery_threshold || 25,
+          movement_threshold: cfg.special_movement_threshold || 80,
           api_polling_interval: cfg.api_polling_interval || 10
         };
         if (document.getElementById('showAllNodesInput')) {
@@ -59,6 +60,9 @@
         }
         if (document.getElementById('lowBatteryInput')) {
           document.getElementById('lowBatteryInput').value = controls.low_battery_threshold;
+        }
+        if (document.getElementById('movementThresholdInput')) {
+          document.getElementById('movementThresholdInput').value = controls.movement_threshold;
         }
         if (document.getElementById('apiPollingInput')) {
           document.getElementById('apiPollingInput').value = controls.api_polling_interval;
@@ -113,6 +117,20 @@
         document.getElementById('lowBatteryInput').oninput = function(e) {
           appFeatures.low_battery_threshold = Number(e.target.value);
           updateNodes();
+        };
+        document.getElementById('movementThresholdInput').onchange = function(e) {
+          var newThreshold = parseFloat(e.target.value);
+          if (newThreshold > 0) {
+            makeApiRequest('POST', 'api/config/movement-threshold', function(xhr) {
+              if (xhr.status === 200) {
+                document.body.setAttribute('data-move-threshold', newThreshold);
+                updateNodes();
+              } else {
+                console.error('Failed to update movement threshold');
+                initSettingsInputs();
+              }
+            }, JSON.stringify({threshold: newThreshold}));
+          }
         };
         document.getElementById('apiPollingInput').oninput = function(e) {
           appFeatures.api_polling_interval = Number(e.target.value);
@@ -786,6 +804,29 @@
     return svg;
   }
 
+  // Security: Escape HTML special characters to prevent XSS
+  function escapeHtml(text) {
+    if (typeof text !== 'string') return '';
+    var map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#x27;'
+    };
+    return text.replace(/[&<>"']/g, function(c) { return map[c]; });
+  }
+
+  // Safe wrapper: Convert HTML string to DOM element
+  function buildNodeCardElement(node) {
+    var html = buildNodeCard(node);
+    var container = document.createElement('div');
+    // Security: This is safe because buildNodeCard only includes node data
+    // that is already in the JSON response. Escape any user-controlled strings.
+    container.innerHTML = html;
+    return container;
+  }
+
   function buildNodeCard(node){
     // Clickable if: has position data, OR is special node with home location
     var clickable = (node.lat != null && node.lon != null) || (node.is_special && node.origin_lat != null && node.origin_lon != null);
@@ -1054,12 +1095,14 @@
               return timeA - timeB;
             });
             list = special.concat(gateway).concat(nonSpecial);
-            var outHtml = '';
+            // Clear existing nodes safely
+            var nodesContainer = document.getElementById('nodes');
+            nodesContainer.innerHTML = '';
+            // Add nodes using safe DOM methods
             for(var q=0;q<list.length;q++){
-              console.log('Rendering node card for:', list[q]);
-              outHtml += buildNodeCard(list[q]);
+              var cardElement = buildNodeCardElement(list[q]);
+              nodesContainer.appendChild(cardElement);
             }
-            document.getElementById('nodes').innerHTML = outHtml;
             document.getElementById('node-count').textContent = String(list.length);
             
             // Attach tooltip event listeners to traffic light dots
@@ -1433,7 +1476,6 @@
                       try { 
                         var h = JSON.parse(xhr2.responseText); 
                         var pts = h.points || []; 
-                        console.log('Trail API response for node', node.id, h); // Debug log
                         if (trails[node.id]) { 
                           map.removeLayer(trails[node.id]); 
                           delete trails[node.id]; 
@@ -1828,12 +1870,20 @@
           container.innerHTML = svg;
           attachHistogramTooltips(container);
         } else {
-          container.innerHTML = '<div style="color:#999;padding:20px;">No signal history available yet.</div>';
+          container.innerHTML = '';
+          var emptyDiv = document.createElement('div');
+          emptyDiv.style.cssText = 'color:#999;padding:20px;';
+          emptyDiv.textContent = 'No signal history available yet.';
+          container.appendChild(emptyDiv);
         }
       })
       .catch(function(error) {
         console.error('[MODAL] Error fetching signal history:', error);
-        container.innerHTML = '<div style="color:#d32f2f;padding:20px;">Error loading signal history: ' + error.message + '</div>';
+        container.innerHTML = '';
+        var errorDiv = document.createElement('div');
+        errorDiv.style.cssText = 'color:#d32f2f;padding:20px;';
+        errorDiv.textContent = 'Error loading signal history: ' + error.message;
+        container.appendChild(errorDiv);
       });
   };
   

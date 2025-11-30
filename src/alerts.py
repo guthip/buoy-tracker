@@ -5,16 +5,42 @@ import smtplib
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import Dict, List, Union, Any
 
 from . import config
 
 logger = logging.getLogger(__name__)
 
 # Track when we last sent alerts to avoid spamming
+# Pruned periodically to prevent memory leak
 last_alert_sent = {}  # node_id -> timestamp
 
 
-def send_movement_alert(node_id, node_data, distance_m):
+def _cleanup_alert_history() -> None:
+    """Remove stale alert records for nodes that no longer exist or are too old."""
+    import time
+    try:
+        now = time.time()
+        # Remove alerts older than 3x the cooldown period (shouldn't accumulate beyond this)
+        max_age = config.ALERT_COOLDOWN * 3
+        cutoff_time = now - max_age
+        
+        # Remove dead node IDs and overly old entries
+        to_remove = [
+            node_id for node_id, timestamp in last_alert_sent.items()
+            if node_id not in config.SPECIAL_NODE_IDS or timestamp < cutoff_time
+        ]
+        
+        for node_id in to_remove:
+            del last_alert_sent[node_id]
+        
+        if to_remove:
+            logger.debug(f'Cleaned up {len(to_remove)} stale alert records')
+    except Exception as e:
+        logger.warning(f'Error cleaning up alert history: {e}')
+
+
+def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: float) -> None:
     """
     Send email alert when a special node moves beyond threshold.
 
@@ -23,6 +49,9 @@ def send_movement_alert(node_id, node_data, distance_m):
         node_data: Dictionary with node information
         distance_m: Distance from origin in meters
     """
+    # Periodically clean up old alert records
+    _cleanup_alert_history()
+    
     # Check if we should send alert (avoid spam)
     import time
 
@@ -74,7 +103,7 @@ def send_movement_alert(node_id, node_data, distance_m):
         logger.error(f"Failed to send movement alert: {e}", exc_info=True)
 
 
-def send_battery_alert(node_id, node_data, battery_level):
+def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: int) -> None:
     """
     Send email alert when a special node has low battery.
 
@@ -133,7 +162,7 @@ def send_battery_alert(node_id, node_data, battery_level):
         logger.error(f"Failed to send battery alert: {e}", exc_info=True)
 
 
-def _send_email(to_addresses, subject, body):
+def _send_email(to_addresses: Union[str, List[str]], subject: str, body: str) -> None:
     """
     Send email using SMTP.
 

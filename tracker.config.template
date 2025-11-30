@@ -4,7 +4,7 @@
 
 [app]
 title = SYC buoy tracker
-version = 0.71
+version = 0.9
 
 [mqtt]
 # MQTT broker settings
@@ -71,7 +71,46 @@ recent_message_buffer_size = 200
 # Battery level below this percentage triggers low battery indicator
 low_battery_threshold = 50
 
-[special_nodes_settings]
+[app_features]
+# User interface feature controls (admin-controlled settings)
+# These settings control what features are visible and configurable by end users
+
+# show_controls_menu: true/false
+#   - When true: Users see "Legend" and "Controls" tabs in the settings menu
+#   - When false: Users only see "Legend" tab; the "Controls" tab is hidden
+#   ⚠️ IMPORTANT: This is admin-controlled only - cannot be changed by end users
+#   
+#   When disabled (false), end users cannot modify:
+#     - Show/hide all nodes
+#     - Show/hide gateways and connections
+#     - Show/hide position trails
+#     - Show/hide nautical markers
+#     - Trail history hours
+#     - Low battery threshold
+#     - Movement threshold
+#     - API polling interval
+#   
+#   Use this to lock down the UI for public deployments where you want
+#   consistent settings across all users accessing the tracker.
+show_controls_menu = true
+
+# show_all_nodes: true/false (if show_controls_menu = true, users can override this)
+show_all_nodes = false
+
+# show_gateways: true/false (if show_controls_menu = true, users can override this)
+show_gateways = false
+
+# show_position_trails: true/false (if show_controls_menu = true, users can override this)
+show_position_trails = true
+
+# show_gateway_connections: true/false
+show_gateway_connections = true
+
+# show_nautical_markers: true/false (if show_controls_menu = true, users can override this)
+show_nautical_markers = true
+
+# trail_history_hours: number of hours to display position history (if show_controls_menu = true, users can override this)
+trail_history_hours = 168
 # Special nodes configuration
 history_hours = 168
 persist_path = data/special_history.json

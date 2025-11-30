@@ -4,6 +4,7 @@ import os
 import re
 import logging
 from pathlib import Path
+from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ CONFIG_SECRETS_FILE = Path(__file__).parent.parent / 'secret.config'
 if not CONFIG_FILE.exists():
     CONFIG_FILE = CONFIG_TEMPLATE_FILE
 
-def parse_coordinate(coord_str):
+def parse_coordinate(coord_str: str) -> float:
     """
     Parse coordinate in either decimal or degrees-minutes format.
     
@@ -174,11 +175,23 @@ RECENT_MESSAGE_BUFFER_SIZE = config.getint('debug', 'recent_message_buffer_size'
 LOW_BATTERY_THRESHOLD = config.getint('battery', 'low_battery_threshold', fallback=50)
 
 # App Features Configuration
+# Controls which features are visible and configurable by end users
 SHOW_ALL_NODES = config.getboolean('app_features', 'show_all_nodes', fallback=False)
 SHOW_GATEWAYS = config.getboolean('app_features', 'show_gateways', fallback=True)
 SHOW_POSITION_TRAILS = config.getboolean('app_features', 'show_position_trails', fallback=True)
 SHOW_GATEWAY_CONNECTIONS = config.getboolean('app_features', 'show_gateway_connections', fallback=True)
 SHOW_NAUTICAL_MARKERS = config.getboolean('app_features', 'show_nautical_markers', fallback=True)
+# SHOW_CONTROLS_MENU: Admin-controlled setting to show/hide the Configuration panel
+#   - true: Users see both "Legend" and "Controls" tabs in the settings menu (default)
+#   - false: Users only see "Legend" tab; "Controls" tab is hidden (locks configuration)
+# This is a read-only setting controlled by the administrator via tracker.config.
+# End users cannot override this setting. When false, prevents user modification of:
+#   - Node display filters (all nodes, gateways, etc.)
+#   - Position trail settings
+#   - Battery/movement thresholds
+#   - API polling interval
+# Use this to enforce consistent configuration across all users in public deployments.
+SHOW_CONTROLS_MENU = config.getboolean('app_features', 'show_controls_menu', fallback=True)
 TRAIL_HISTORY_HOURS = config.getint('app_features', 'trail_history_hours', fallback=24)
 
 # Special Nodes Configuration (parse format: node_id = label,home_lat,home_lon)
@@ -294,3 +307,18 @@ ALERT_EMAIL_TO = config.get('alerts', 'email_to', fallback='admin@example.com')
 
 # Special nodes data persistence
 SPECIAL_HISTORY_PERSIST_PATH = str(Path(__file__).parent.parent / 'data' / 'special_nodes.json')
+
+# Security Configuration
+# Environment: 'development' (localhost allowed) or 'production' (strict security)
+ENV = os.getenv('FLASK_ENV', config.get('security', 'environment', fallback='development'))
+
+# Trusted reverse proxy IPs - only these can be trusted for X-Forwarded-For header
+# For example: ['10.0.0.50'] for nginx, ['10.0.0.50', '10.0.0.51'] for load balancer
+# Empty list = no reverse proxy trusted (direct connection only)
+TRUSTED_PROXIES = [ip.strip() for ip in os.getenv('TRUSTED_PROXIES', 
+    config.get('security', 'trusted_proxies', fallback='')).split(',') if ip.strip()]
+
+# CORS allowed origins - list of domains allowed to make cross-origin requests
+# Example: ['https://tracker.example.com', 'https://app.example.com']
+ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('ALLOWED_ORIGINS',
+    config.get('security', 'allowed_origins', fallback='*')).split(',') if origin.strip()]

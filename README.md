@@ -30,14 +30,25 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
   - Hover tooltips with detailed readings and timestamps
   - Full history (up to 2 weeks) of signal data
   - Compact floating window overlaying the map
+- **Gateway Tracking**: Automatically discovers and tracks mesh gateways
+  - Shows all gateways that relay packets from your monitored nodes
+  - Displays signal strength and status for each gateway connection
+  - Identifies relay patterns and network coverage
+- **Dynamic Controls**: Real-time adjustment of tracker settings
+  - **Movement Threshold**: Change alert distance (10-500m) without restarting
+  - **Trail History**: Toggle position trail display and history length
+  - **Low Battery Threshold**: Customize battery alert level
+  - **API Polling Interval**: Adjust refresh rate
+  - Settings persist for current session
 - **Special Node Tracking**: Track specific nodes with home positions and movement alerts
-  - Green dashed rings show movement threshold (50m default)
+  - Green dashed rings show movement threshold (configurable)
   - Red solid rings when nodes move beyond threshold
   - Light red card background alerts when nodes move outside expected range
   - Gray markers at home position until first GPS fix
   - Packet activity display with timestamps
 - **Data Handling & Retention**: All packet history, node info, and position trails are stored in memory for the current session. When the server restarts, history is reset and rebuilt from incoming MQTT packets.
   - **Position Deduplication**: Retransmitted packets automatically filtered to show only unique positions
+  - **Zero-Position Filtering**: Invalid 0,0 positions automatically skipped (prevents false entries)
   - **Signal History**: Up to 50 recent readings per node (battery, RSSI, SNR) stored in-memory
   - **Dynamic Config Updates**: Origin coordinates recalculated on config reload/restart
   - **Debug Tools**: View recent raw MQTT messages
@@ -240,7 +251,61 @@ status_orange_threshold = 12
 api_polling_interval = 10
 ```
 
-### Rate Limiting
+### User Interface Controls (Admin-Controlled)
+
+Lock down the user interface to prevent end users from modifying settings. This is useful for public deployments where you want consistent configuration across all users:
+
+```ini
+[app_features]
+# show_controls_menu: true/false
+#   When true (default): Users see both "Legend" and "Controls" tabs in the settings menu
+#   When false: Users only see "Legend" tab; the "Controls" tab is hidden
+#
+# IMPORTANT: This is admin-controlled only - end users cannot override this setting
+#
+# When disabled (false), end users cannot modify:
+#   - Show/hide all nodes
+#   - Show/hide gateways and connections
+#   - Show/hide position trails
+#   - Show/hide nautical markers
+#   - Trail history hours
+#   - Low battery threshold
+#   - Movement threshold
+#   - API polling interval
+#
+# Use this to enforce consistent configuration across all users
+show_controls_menu = true
+
+# Other UI features (users can modify if show_controls_menu = true)
+show_all_nodes = false
+show_gateways = false
+show_position_trails = true
+show_nautical_markers = true
+trail_history_hours = 168
+```
+
+**Example: Lock Down Configuration for Public Display**
+
+If you're running Buoy Tracker on a public display or shared access deployment:
+
+```ini
+[app_features]
+show_controls_menu = false          # Hide controls from all users
+show_all_nodes = false              # Only show special nodes
+show_gateways = false               # Don't show gateways
+show_position_trails = true         # Show position trails
+show_nautical_markers = true        # Show chart markers
+trail_history_hours = 24            # Show 24 hours of history
+```
+
+With this configuration:
+- ✅ Users see the map with your preconfigured settings
+- ❌ Users cannot access the "Controls" tab to modify anything
+- ❌ Settings are read-only - controlled by administrator only
+
+**To re-enable controls:** Set `show_controls_menu = true` in `tracker.config` and reload the configuration.
+
+
 
 API rate limits are **automatically calculated** based on polling interval and number of special nodes:
 - **Formula**: `(3600 / polling_seconds) * (3_base_endpoints + N_special_nodes) * 2.0_safety_margin`, rounded up to nearest 10

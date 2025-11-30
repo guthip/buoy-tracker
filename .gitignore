@@ -87,6 +87,8 @@ create_deployment_bundle.sh
 start_server.sh
 .server.pid
 
-# Security files
+# Security files (internal, not for public release)
+# SECURITY_ANALYSIS.md - Theoretical vulnerability analysis and remediation guidance
+# SECURITY_FIXES.md - v0.9 specific fixes applied
 SECURITY_ANALYSIS.md
-SECURITY_PATCHES.md
+SECURITY_FIXES.md

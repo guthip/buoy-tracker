@@ -2,6 +2,57 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-11-29] - v0.9 Release: Gateway Display & Configuration Controls
+
+### Added
+- **Movement Threshold Control**
+  - New settings control in Controls tab allows real-time adjustment of movement threshold (10-500m)
+  - Changes persist in memory for the current session
+  - New `/api/config/movement-threshold` POST endpoint
+  - Visual feedback updates map circles immediately when threshold changes
+
+- **Gateway Display Feature**
+  - New `/api/gateways` endpoint returns all discovered gateways with metadata
+  - Gateways displayed with signal strength, position (if available), and online status
+  - Preparation for frontend gateway card display
+
+### Fixed
+- **0,0 Position Entries Bug** ✅
+  - Fixed telemetry handler creating spurious 0,0 position entries
+  - Modified position capture to validate lat/lon before creating history entry
+  - Prevents invalid positions when telemetry arrives before first GPS fix
+  - Cleaned ~1000+ incorrect entries from existing databases
+
+- **Signal History API** ✅
+  - Fixed missing `get_signal_history()` function causing signal history popup errors
+  - Added as alias to working `get_special_history()` function
+  - Battery/RSSI/SNR capture now working end-to-end
+
+- **Data Persistence** ✅
+  - Disabled module-level persistence load to prevent loading stale data on server restart
+  - Database now resets cleanly without historical contamination
+  - Fresh data accumulation with clean entries
+
+### Changed
+- **Configuration**
+  - Updated version to 0.9 in tracker.config
+  - Version now matches release tag
+
+### Technical Details
+- **Database Structure**: Position entries now validated with `if lat is not None and lon is not None and not (lat == 0 and lon == 0)` before creation
+- **Frontend**: Movement threshold input field with real-time API updates
+- **Backend**: In-memory config update support for dynamic threshold changes
+
+### Deployment Notes
+- No database migration needed - old 0,0 entries won't be created with new code
+- Server restart recommended to clear any accumulated stale data
+- Fresh start ensures clean operation
+
+### Status: ✅ RELEASE READY
+- All core features functional and tested
+- Data integrity verified
+- Configuration controls working
+
 ## [2025-11-26] - Persistent Gateway Connections Tracking - v0.87
 
 ### Changed

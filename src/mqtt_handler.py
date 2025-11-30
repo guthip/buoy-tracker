@@ -922,25 +922,28 @@ def on_telemetry(json_data):
                 nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
             
             # For special nodes: add telemetry to history with battery, RSSI, SNR and last known position
+            # Only add to history if we have a valid position (not 0,0)
             if _is_special_node(node_id):
-                _ensure_history_struct(node_id)
-                # Get last known position (may be empty if no position received yet)
-                lat = nodes_data[node_id].get("lat", 0)
-                lon = nodes_data[node_id].get("lon", 0)
-                alt = nodes_data[node_id].get("alt", 0)
+                lat = nodes_data[node_id].get("lat")
+                lon = nodes_data[node_id].get("lon")
                 
-                entry = {
-                    "ts": time.time(),
-                    "lat": lat,
-                    "lon": lon,
-                    "alt": alt,
-                    "battery": nodes_data[node_id].get("battery"),
-                    "rssi": json_data.get("rx_rssi"),
-                    "snr": json_data.get("rx_snr")
-                }
-                special_history[node_id].append(entry)
-                _prune_history(node_id, now_ts=entry['ts'])
-                logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}%, rssi={entry["rssi"]}, snr={entry["snr"]}')
+                # Only create history entry if we have a valid position
+                if lat is not None and lon is not None and not (lat == 0 and lon == 0):
+                    _ensure_history_struct(node_id)
+                    alt = nodes_data[node_id].get("alt", 0)
+                    
+                    entry = {
+                        "ts": time.time(),
+                        "lat": lat,
+                        "lon": lon,
+                        "alt": alt,
+                        "battery": nodes_data[node_id].get("battery"),
+                        "rssi": json_data.get("rx_rssi"),
+                        "snr": json_data.get("rx_snr")
+                    }
+                    special_history[node_id].append(entry)
+                    _prune_history(node_id, now_ts=entry['ts'])
+                    logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}%, rssi={entry["rssi"]}, snr={entry["snr"]}')
             
             # Check for battery alert if this is a special node
             if _is_special_node(node_id):
@@ -1620,6 +1623,43 @@ def get_special_history(node_id: int, hours: int = None):
 def get_signal_history(node_id: int, hours: int = None):
     """Alias for get_special_history() - returns battery, RSSI, SNR history for a node."""
     return get_special_history(node_id, hours)
+
+def get_all_gateways():
+    """
+    Return all known gateways with their metadata.
+    
+    Returns list of gateway objects with:
+    - id: gateway node ID
+    - name: long name
+    - latitude/longitude: position if available (null if no position)
+    - is_online: whether recently heard from
+    - signal_strength: from last heard packet (if available)
+    - receiving_from: list of special node IDs that use this gateway
+    """
+    gateways = {}
+    
+    # Iterate all nodes that are marked as gateways
+    for node_id, node_info in nodes_data.items():
+        if node_info.get("is_gateway"):
+            gateways[node_id] = {
+                "id": node_id,
+                "name": node_info.get("long_name", "Unknown Gateway"),
+                "latitude": node_info.get("latitude"),
+                "longitude": node_info.get("longitude"),
+                "is_online": bool(node_info.get("last_seen")),
+                "last_seen_ts": node_info.get("last_seen"),
+                "signal_strength": node_info.get("rx_rssi"),
+                "snr": node_info.get("rx_snr"),
+                "receiving_from": [],
+            }
+    
+    # Track which special nodes use which gateways
+    for special_node_id, connections in special_node_gateways.items():
+        for gateway_id in connections.keys():
+            if gateway_id in gateways:
+                gateways[gateway_id]["receiving_from"].append(special_node_id)
+    
+    return list(gateways.values())
 
 def get_all_special_history(hours: int = None):
     """Return history for all special nodes as dict node_id -> list of points."""

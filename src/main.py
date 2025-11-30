@@ -1,12 +1,13 @@
 """Buoy Tracker Application - Flask web interface for Meshtastic node tracking"""
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, Response
 from functools import wraps
 import logging
 import threading
 import sys
 from pathlib import Path
 import hmac
+from typing import Callable, Dict, Any, Tuple, Optional
 # Add parent dir to path so relative imports work when run as script
 if __name__ == '__main__':
     sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -27,25 +28,43 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 # Configure socket reuse for faster restarts
 app.config['ENV_SOCKET_REUSE'] = True
 
-# Initialize simple custom rate limiter - use X-Forwarded-For for reverse proxy clients
-def get_client_ip():
-    """Extract client IP from X-Forwarded-For header (reverse proxy) or remote_addr."""
+# ============================================================================
+# Constants
+# ============================================================================
+SECONDS_PER_HOUR = 3600
+MILLISECONDS_PER_SECOND = 1000
+SPECIAL_HIGHLIGHT_COLOR = '#FFD700'  # Gold for special nodes on map
+LOCALHOST_ADDRESSES = ['127.0.0.1', 'localhost', '::1']
 
-    return request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+# Initialize simple custom rate limiter - use X-Forwarded-For for reverse proxy clients
+def get_client_ip() -> str:
+    """Extract client IP, trusting only configured reverse proxies."""
+    # Only parse X-Forwarded-For if request comes from trusted proxy
+    try:
+        if config.TRUSTED_PROXIES and request.remote_addr in config.TRUSTED_PROXIES:
+            xff = request.headers.get('X-Forwarded-For', '')
+            if xff:
+                # Parse the leftmost IP (original client)
+                first_ip = xff.split(',')[0].strip()
+                if first_ip:  # Validate non-empty
+                    return first_ip
+    except Exception as e:
+        logger.warning(f'Error parsing X-Forwarded-For header: {e}')
+    return request.remote_addr
 
 # Custom rate limiter - tracks requests per IP per hour
 class SimpleRateLimiter:
-    def __init__(self, requests_per_hour):
+    def __init__(self, requests_per_hour: int) -> None:
         self.requests_per_hour = requests_per_hour
 
         self.request_history = defaultdict(list)  # IP -> list of timestamps
 
         self.lock = threading.Lock()
     
-    def is_allowed(self, client_ip):
+    def is_allowed(self, client_ip: str) -> bool:
         """Check if request is allowed for this IP."""
         now = time.time()
-        hour_ago = now - 3600
+        hour_ago = now - SECONDS_PER_HOUR
         
         with self.lock:
             # Clean old requests (older than 1 hour)
@@ -61,10 +80,10 @@ class SimpleRateLimiter:
             else:
                 return False
     
-    def get_remaining(self, client_ip):
+    def get_remaining(self, client_ip: str) -> int:
         """Get remaining requests for this IP this hour."""
         now = time.time()
-        hour_ago = now - 3600
+        hour_ago = now - SECONDS_PER_HOUR
         
         with self.lock:
             recent = [ts for ts in self.request_history[client_ip] if ts > hour_ago]
@@ -81,14 +100,16 @@ _requests_per_poll = 3 + _num_special_nodes  # 3 base endpoints + N special node
 rate_limiter = SimpleRateLimiter(int(config.API_RATE_LIMIT.split('/')[0]))
 logger.info(f'Rate limiter initialized: {config.API_RATE_LIMIT} (polling: {_polling_seconds}s, {_requests_per_poll} requests/interval, {_num_special_nodes} special nodes)')
 
-def check_rate_limit(f):
+def check_rate_limit(f: Callable) -> Callable:
     """Decorator to check rate limit before executing endpoint."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Exempt localhost from rate limiting
-        is_localhost = request.remote_addr in ['127.0.0.1', 'localhost', '::1']
-        if is_localhost:
-            return f(*args, **kwargs)
+        # For development: Allow localhost exemption
+        # For production: Always enforce rate limiting
+        if config.ENV == 'development':
+            is_localhost = request.remote_addr in LOCALHOST_ADDRESSES
+            if is_localhost:
+                return f(*args, **kwargs)
 
         client_ip = get_client_ip()
         if not rate_limiter.is_allowed(client_ip):
@@ -109,65 +130,96 @@ if API_KEY:
 else:
     logger.warning('API key not configured in secret.config - API endpoints will not be protected')
 
-def require_api_key(f):
+def require_api_key(f: Callable) -> Callable:
     """Decorator to require API key in Authorization header."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        # Exempt localhost from API key authentication
-        is_localhost = request.remote_addr in ['127.0.0.1', 'localhost', '::1']
-        if is_localhost:
-            return f(*args, **kwargs)
+        # For development: Allow localhost exemption
+        # For production: Always require API key
+        if config.ENV == 'development':
+            is_localhost = request.remote_addr in LOCALHOST_ADDRESSES
+            if is_localhost:
+                return f(*args, **kwargs)
+        
         auth_header = request.headers.get('Authorization', '')
         # If no API key configured, skip auth (development mode)
         if not API_KEY:
             return f(*args, **kwargs)
-        # If API key IS configured, require it for non-localhost
+        # If API key IS configured, require it
         if not auth_header.startswith('Bearer '):
+            logger.warning(f'API request without authorization from {request.remote_addr}')
             return jsonify({'error': 'Unauthorized'}), 401
         provided_key = auth_header[7:]
         if not hmac.compare_digest(provided_key, API_KEY):
+            logger.warning(f'API request with invalid key from {request.remote_addr}')
             return jsonify({'error': 'Unauthorized'}), 401
         return f(*args, **kwargs)
     return decorated
 
 # Add cache control for static files (JS, CSS, etc)
 @app.after_request
-def set_cache_headers(response):
-    """Set cache headers to prevent stale content and add CORS headers."""
+def set_cache_headers(response: Response) -> Response:
+    """Set cache headers, security headers, and validated CORS headers."""
     # Force no-cache on all responses to prevent stale data
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     # Add server timestamp so client can detect cached responses
-
-    response.headers['X-Server-Time'] = str(int(time.time() * 1000))  # milliseconds
-    # Add CORS headers to allow requests from same origin
-    response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin', '*')
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers['X-Server-Time'] = str(int(time.time() * MILLISECONDS_PER_SECOND))  # milliseconds
+    
+    # CORS: Only allow configured origins
+    origin = request.headers.get('Origin', '')
+    if origin:
+        if '*' in config.ALLOWED_ORIGINS:
+            # Wildcard: allow all origins
+            response.headers['Access-Control-Allow-Origin'] = origin
+        elif origin in config.ALLOWED_ORIGINS:
+            # Explicit whitelist: only allow configured origins
+            response.headers['Access-Control-Allow-Origin'] = origin
+            response.headers['Access-Control-Allow-Credentials'] = 'true'
+    
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    
+    # Security headers: Prevent clickjacking, MIME sniffing, XSS
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # Content Security Policy: Restrict script sources
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com; "
+        "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net unpkg.com; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self'; "
+        "font-src 'self' cdn.jsdelivr.net; "
+        "frame-ancestors 'none';"
+    )
+    
+    # HTTPS enforcement (if using HTTPS reverse proxy)
+    if request.scheme == 'https':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    
     return response
 
 # Flag to track if MQTT is running
 mqtt_thread = None
-mqtt_connected = False
 
 
-def run_mqtt_in_background():
+def run_mqtt_in_background() -> None:
     """Run MQTT connection in background thread."""
-    global mqtt_connected
-    print('[DEBUG] [MAIN] Entered run_mqtt_in_background thread.')
+    logger.debug('[MAIN] Entered run_mqtt_in_background thread.')
     try:
         logger.info('[MQTT] run_mqtt_in_background() called')
         logger.info('[MQTT] Starting MQTT client in background thread')
-        print('[DEBUG] [MAIN] About to call mqtt_handler.connect_mqtt()')
+        logger.debug('[MAIN] About to call mqtt_handler.connect_mqtt()')
         result = mqtt_handler.connect_mqtt()
-        print(f'[DEBUG] [MAIN] mqtt_handler.connect_mqtt() returned: {result}')
+        logger.debug(f'[MAIN] mqtt_handler.connect_mqtt() returned: {result}')
         if result:
             logger.info('[MQTT] connect_mqtt() returned True, client should be running')
         else:
             logger.error('[MQTT] connect_mqtt() returned False, client failed to start')
-        mqtt_connected = True
         # Keep thread alive - process any callbacks that need to run
         while True:
             time.sleep(1)
@@ -177,28 +229,32 @@ def run_mqtt_in_background():
                 break
     except Exception as e:
         logger.error(f'[MQTT] MQTT connection error: {e}')
-        mqtt_connected = False
 
 
 # Auto-start MQTT on app init
-def start_mqtt_on_startup():
+def start_mqtt_on_startup() -> None:
     """Start MQTT when Flask app initializes."""
     global mqtt_thread
     logger.info('[MQTT] start_mqtt_on_startup() called')
-    if mqtt_thread is None or not mqtt_thread.is_alive():
+    # Reset dead threads so we can restart them
+    if mqtt_thread is not None and not mqtt_thread.is_alive():
+        logger.warning('[MQTT] Previous MQTT thread is dead, restarting...')
+        mqtt_thread = None
+    
+    if mqtt_thread is None:
         logger.info('[MQTT] Starting MQTT background thread')
         mqtt_thread = threading.Thread(target=run_mqtt_in_background, daemon=True)
         mqtt_thread.start()
         logger.info('[MQTT] MQTT auto-started on app init')
 
 
-def init_background_services():
+def init_background_services() -> None:
     """Explicit initializer for background services (MQTT)."""
     start_mqtt_on_startup()
 
 
 @app.before_request
-def _():
+def _() -> None:
     """Ensure MQTT is started on first request."""
     global mqtt_thread
     if mqtt_thread is None or not mqtt_thread.is_alive():
@@ -209,17 +265,17 @@ def _():
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
 @app.route('/api/<path:path>', methods=['OPTIONS'])
 @app.route('/health', methods=['OPTIONS'])
-def handle_options(path=''):
+def handle_options(path: str = '') -> Tuple[str, int]:
     """Handle CORS preflight OPTIONS requests."""
     return '', 204
 
 
 @app.route('/', methods=['GET'])
-def index():
+def index() -> Response:
     """Serve the main map page."""
     from flask import make_response
     # Determine if this is localhost access
-    is_localhost = request.remote_addr in ['127.0.0.1', 'localhost', '::1']
+    is_localhost = request.remote_addr in LOCALHOST_ADDRESSES
     # API key is only sent to client if on localhost (remote users enter it in modal)
     client_api_key = config.API_KEY if is_localhost else ''
     
@@ -232,13 +288,16 @@ def index():
                           node_refresh=config.API_POLLING_INTERVAL_MS,
                           status_refresh=config.API_POLLING_INTERVAL_MS,
                           special_symbol=config.SPECIAL_NODE_SYMBOL,
-                          special_highlight_color='#FFD700',  # Gold color - hardcoded as not configurable
+                          special_highlight_color=SPECIAL_HIGHLIGHT_COLOR,
 
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
                           api_key_required=bool(API_KEY),  # Tell client if auth is needed
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
+                          # show_controls_menu: Admin-controlled flag to show/hide Configuration tab
+                          # When false, prevents end users from modifying UI settings (locked configuration)
+                          show_controls_menu=getattr(config, 'SHOW_CONTROLS_MENU', True),
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -248,22 +307,21 @@ def index():
 
 
 @app.route('/health', methods=['GET'])
-def health_check():
+def health_check() -> Dict[str, str]:
     return jsonify({'status': 'ok'})
 
 
 # /api/mqtt/connect removed - MQTT managed by background thread
-# /api/mqtt/disconnect and /api/mqtt/status removed
 
 
 @app.route('/api/status', methods=['GET'])
 @require_api_key
 @check_rate_limit
-def api_status():
+def api_status() -> Response:
     """Compatibility status endpoint used by the simple.html UI."""
     nodes = mqtt_handler.get_nodes()
-    mqtt_connected = mqtt_handler.is_connected()
-    mqtt_status = mqtt_handler.get_mqtt_status() if hasattr(mqtt_handler, 'get_mqtt_status') else ('connected_to_server' if mqtt_connected else 'disconnected')
+    mqtt_status = mqtt_handler.is_connected()  # Returns: 'receiving_packets', 'connected_to_server', 'connecting', or 'disconnected'
+    mqtt_connected = mqtt_status in ('receiving_packets', 'connected_to_server')  # True if we have any connection
     return jsonify({
         'mqtt_connected': mqtt_connected,
         'mqtt_status': mqtt_status,
@@ -272,7 +330,9 @@ def api_status():
         'config': {
             'status_blue_threshold': config.STATUS_BLUE_THRESHOLD,
             'status_orange_threshold': config.STATUS_ORANGE_THRESHOLD,
-            'special_movement_threshold': getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50)
+            'special_movement_threshold': getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50),
+            'low_battery_threshold': getattr(config, 'LOW_BATTERY_THRESHOLD', 50),
+            'api_polling_interval': getattr(config, 'API_POLLING_INTERVAL_MS', 10000) // 1000  # Convert ms to seconds
         },
         'features': {
             'show_all_nodes': getattr(config, 'SHOW_ALL_NODES', False),
@@ -287,7 +347,7 @@ def api_status():
 @app.route('/api/recent_messages', methods=['GET'])
 @require_api_key
 @check_rate_limit
-def recent_messages():
+def recent_messages() -> Response:
     try:
         msgs = mqtt_handler.get_recent(limit=100)
         return jsonify({'recent': msgs, 'count': len(msgs)})
@@ -299,20 +359,25 @@ def recent_messages():
 @app.route('/api/nodes', methods=['GET'])
 @require_api_key
 @check_rate_limit
-def get_nodes():
+def get_nodes() -> Response:
     """Return all tracked nodes with their current status."""
-    nodes = mqtt_handler.get_nodes()
-    return jsonify({'nodes': nodes, 'count': len(nodes)})
+    try:
+        nodes = mqtt_handler.get_nodes()
+        return jsonify({'nodes': nodes, 'count': len(nodes)})
+    except Exception as e:
+        logger.exception('Failed to get nodes')
+        return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/special/history', methods=['GET'])
+@app.route('/api/special_history', methods=['GET'])
 @require_api_key
 @check_rate_limit
-def special_history():
+def get_special_history() -> Response:
     from flask import request
     try:
         node_id = int(request.args.get('node_id'))
-    except Exception:
+    except (TypeError, ValueError):
+        logger.warning('special_history: Missing or invalid node_id parameter')
         return jsonify({'error': 'node_id is required'}), 400
     try:
         hours = request.args.get('hours', type=int) or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
@@ -322,13 +387,12 @@ def special_history():
         logger.exception('Failed to get special history')
         return jsonify({'error': str(e)}), 500
 
-# /api/special/all_history removed - unused endpoint
 
 
 @app.route('/api/special/packets', methods=['GET'])
 @require_api_key
 @check_rate_limit
-def special_packets_all():
+def special_packets_all() -> Response:
     """Get recent packets for all special nodes."""
     from flask import request
     try:
@@ -340,15 +404,16 @@ def special_packets_all():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/signal/history', methods=['GET'])
+@app.route('/api/signal_history', methods=['GET'])
 @require_api_key
 @check_rate_limit
-def signal_history():
+def get_signal_history() -> Response:
     """Get signal history (battery, RSSI, SNR) for a specific node."""
     from flask import request
     try:
         node_id = int(request.args.get('node_id'))
-    except Exception:
+    except (TypeError, ValueError):
+        logger.warning('signal_history: Missing or invalid node_id parameter')
         return jsonify({'error': 'node_id is required'}), 400
     try:
         data = mqtt_handler.get_signal_history(node_id)
@@ -356,32 +421,39 @@ def signal_history():
     except Exception as e:
         logger.exception('Failed to get signal history')
         return jsonify({'error': str(e)}), 500
-# /api/special/packets/<node_id> removed - use /api/special/packets?limit= instead
-# /api/special/voltage_history/<node_id> removed - redundant with /api/special/packets
 
-# /api/config/reload removed - security risk
-# /api/restart removed - security risk (remote DoS)
-# Alert test endpoints removed - debug only
-
-
-@app.route('/api/debug/rate-limit', methods=['GET'])
+@app.route('/api/gateways', methods=['GET'])
+@require_api_key
 @check_rate_limit
-def debug_rate_limit():
-    """Debug endpoint to check rate limiter status - rate-limited but not auth-protected for testing."""
-    client_ip = get_client_ip()
-    remaining = rate_limiter.get_remaining(client_ip)
-    limit = rate_limiter.requests_per_hour
-    return jsonify({
-        'client_ip': client_ip,
-        'rate_limit_per_hour': limit,
-        'requests_remaining_this_hour': remaining,
-        'polling_interval_seconds': config.API_POLLING_INTERVAL_MS // 1000,
-        'note': 'This endpoint is rate-limited and used for testing'
-    })
+def get_gateways() -> Response:
+    """Get all known gateways with their metadata (name, signal strength, position if available)."""
+    try:
+        gateways = mqtt_handler.get_all_gateways()
+        return jsonify({'gateways': gateways, 'count': len(gateways)})
+    except Exception as e:
+        logger.exception('Failed to get gateways')
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/config/movement-threshold', methods=['POST'])
+@require_api_key
+def update_movement_threshold() -> Response:
+    """Update the special nodes movement threshold in memory."""
+    try:
+        data = request.get_json()
+        threshold = float(data.get('threshold', 80))
+        if threshold <= 0:
+            return jsonify({'error': 'threshold must be positive'}), 400
+        # Update in memory
+        config.SPECIAL_MOVEMENT_THRESHOLD_METERS = threshold
+        logger.info(f'Movement threshold updated to {threshold} meters')
+        return jsonify({'success': True, 'threshold': threshold})
+    except Exception as e:
+        logger.exception('Failed to update movement threshold')
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/docs/<filename>', methods=['GET'])
-def serve_docs(filename):
+def serve_docs(filename: str) -> Tuple[str, int, Dict[str, str]]:
     """Serve documentation files (LICENSE, ATTRIBUTION.md)."""
     # Whitelist allowed files for security
     allowed_files = {'LICENSE', 'ATTRIBUTION.md', 'license', 'attribution.md'}
@@ -423,8 +495,6 @@ def serve_docs(filename):
 
     return jsonify({'error': 'File not found'}), 404
 
-
-# /api/inject-telemetry removed - security risk (test endpoint)
 
 if __name__ == '__main__':
     logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}')

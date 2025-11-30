@@ -253,7 +253,7 @@
             <h2 id="menu-title">⚙️ Settings & Controls</h2>
             <div id="menu-tabs" style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #ddd;">
                 <button class="tab-btn tab-legend active" id="legendTabBtn" onclick="showMenuTab('legend')">Legend</button>
-                <button class="tab-btn tab-controls" id="controlsTabBtn" onclick="showMenuTab('controls')">Controls</button>
+                {% if show_controls_menu %}<!-- Controls tab: Only shown if show_controls_menu = true in tracker.config (admin-controlled) --><button class="tab-btn tab-controls" id="controlsTabBtn" onclick="showMenuTab('controls')">Controls</button>{% endif %}
                     <!-- Removed stray CSS for tab buttons -->
             </div>
             <div id="tab-legend" style="display:block;">
@@ -283,6 +283,7 @@
                     <label><input type="checkbox" id="showNauticalMarkersInput"> Show Nautical Markers</label>
                     <label>Trail History (hours): <input type="number" id="trailHistoryInput" min="1" max="168" value="168" style="width:60px;"></label>
                     <label>Low Battery Threshold (%): <input type="number" id="lowBatteryInput" min="5" max="50" value="25" style="width:60px;"></label>
+                    <label>Movement Threshold (m): <input type="number" id="movementThresholdInput" min="10" max="500" value="80" style="width:60px;"></label>
                     <label>API Polling Interval (sec): <input type="number" id="apiPollingInput" min="5" max="60" value="10" style="width:60px;"></label>
                 </div>
             </div>
