@@ -781,11 +781,12 @@ def on_position(json_data):
                     special_node_position_timestamps[node_id].add(rx_time)
                     _prune_history(node_id, now_ts=entry['ts'])
                     
-                    # Record gateway connection: track which node received this packet from special node
-                    # The MeshPacket's 'to' field or routing info tells us the receiver
-                    to_id = json_data.get("to")
-                    if to_id and to_id in nodes_data:
-                        _record_gateway_connection(node_id, to_id, json_data)
+                    # Record gateway connection: use the node ID from MQTT topic (the gateway that received the packet)
+                    # NOT the 'to' field which is the destination
+                    mqtt_topic = json_data.get("mqtt_topic")
+                    gateway_node_id = _extract_gateway_node_id_from_topic(mqtt_topic) if mqtt_topic else None
+                    if gateway_node_id and gateway_node_id in nodes_data:
+                        _record_gateway_connection(node_id, gateway_node_id, json_data)
                     
                     _save_special_nodes_data()
                     logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
@@ -807,9 +808,10 @@ def on_position(json_data):
                     _prune_history(node_id, now_ts=entry['ts'])
                     
                     # Record gateway connection
-                    to_id = json_data.get("to")
-                    if to_id and to_id in nodes_data:
-                        _record_gateway_connection(node_id, to_id, json_data)
+                    mqtt_topic = json_data.get("mqtt_topic")
+                    gateway_node_id = _extract_gateway_node_id_from_topic(mqtt_topic) if mqtt_topic else None
+                    if gateway_node_id and gateway_node_id in nodes_data:
+                        _record_gateway_connection(node_id, gateway_node_id, json_data)
                     
                     _save_special_nodes_data()
             
@@ -1100,6 +1102,26 @@ def _extract_channel_from_mqtt_topic(topic: str) -> str:
     return "Unknown"
 
 
+def _extract_gateway_node_id_from_topic(topic: str) -> int:
+    """
+    Extract the gateway node ID from MQTT topic path.
+    Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
+    The node ID after the '!' is the gateway that the message came through.
+    Returns the node ID (int) or None if not found.
+    """
+    try:
+        parts = topic.split('/')
+        for part in parts:
+            if part.startswith('!'):
+                # Extract hex node ID (e.g., "!4049c6f4" -> 0x4049c6f4)
+                hex_id = part[1:]  # Remove the '!'
+                node_id = int(hex_id, 16)
+                return node_id
+    except Exception as e:
+        logger.debug(f"Error extracting gateway node ID from topic {topic}: {e}")
+    return None
+
+
 def _decrypt_message_packet(mp, key_bytes):
     """
     Decrypt an encrypted Meshtastic message packet.
@@ -1193,8 +1215,9 @@ def _on_mqtt_message(client_obj, userdata, msg):
         # Convert to JSON for callbacks (preserving meshtastic_mqtt_json format)
         json_packet = _protobuf_to_json(mp)
         
-        # Add channel name and from/to info
+        # Add channel name, topic, and from/to info
         json_packet['channel_name'] = channel_name
+        json_packet['mqtt_topic'] = msg.topic  # Store the MQTT topic for gateway extraction
         if 'from' not in json_packet:
             json_packet['from'] = mp.from_
         if 'to' not in json_packet:
