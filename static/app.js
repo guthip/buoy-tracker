@@ -1580,7 +1580,7 @@
 
   window.showRecent = function(){
     try { 
-      makeApiRequest('GET', 'api/recent_messages', function(xhr){ 
+      makeApiRequest('GET', 'api/recent/messages', function(xhr){ 
         if (xhr.status !== 200){ 
           alert('Failed to fetch recent messages'); 
           return; 
@@ -1873,7 +1873,7 @@
     modal.style.display = 'flex';
     
     // Fetch signal history from API for other nodes
-    var url = '/api/signal_history?node_id=' + nodeId;
+    var url = '/api/signal/history?node_id=' + nodeId;
     var fetchOptions = {};
     if (apiKey) {
       fetchOptions.headers = {

@@ -344,7 +344,7 @@ def api_status() -> Response:
     })
 
 
-@app.route('/api/recent_messages', methods=['GET'])
+@app.route('/api/recent/messages', methods=['GET'])
 @require_api_key
 @check_rate_limit
 def recent_messages() -> Response:
@@ -369,7 +369,7 @@ def get_nodes() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/special_history', methods=['GET'])
+@app.route('/api/special/history', methods=['GET'])
 @require_api_key
 @check_rate_limit
 def get_special_history() -> Response:
@@ -404,7 +404,7 @@ def special_packets_all() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/signal_history', methods=['GET'])
+@app.route('/api/signal/history', methods=['GET'])
 @require_api_key
 @check_rate_limit
 def get_signal_history() -> Response:

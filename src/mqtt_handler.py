@@ -288,7 +288,15 @@ def _load_special_nodes_data():
                         dq = deque()
                         for e in node_data['position_history']:
                             if all(x in e for x in ('ts', 'lat', 'lon')):
-                                dq.append({'ts': float(e['ts']), 'lat': float(e['lat']), 'lon': float(e['lon']), 'alt': e.get('alt')})
+                                dq.append({
+                                    'ts': float(e['ts']),
+                                    'lat': float(e['lat']),
+                                    'lon': float(e['lon']),
+                                    'alt': e.get('alt'),
+                                    'battery': e.get('battery'),
+                                    'rssi': e.get('rssi'),
+                                    'snr': e.get('snr')
+                                })
                         special_history[node_id] = dq
                         total_history += len(dq)
                     
