@@ -932,18 +932,41 @@ def on_telemetry(json_data):
                     _ensure_history_struct(node_id)
                     alt = nodes_data[node_id].get("alt", 0)
                     
-                    entry = {
-                        "ts": time.time(),
-                        "lat": lat,
-                        "lon": lon,
-                        "alt": alt,
-                        "battery": nodes_data[node_id].get("battery"),
-                        "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr")
-                    }
-                    special_history[node_id].append(entry)
-                    _prune_history(node_id, now_ts=entry['ts'])
-                    logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}%, rssi={entry["rssi"]}, snr={entry["snr"]}')
+                    current_ts = time.time()
+                    rssi = json_data.get("rx_rssi")
+                    snr = json_data.get("rx_snr")
+                    
+                    # Check if we already have an entry for this timestamp (within 2 seconds)
+                    # If so, keep only the best (highest) RSSI and SNR values
+                    dq = special_history[node_id]
+                    found_recent = None
+                    if len(dq) > 0:
+                        most_recent = dq[-1]
+                        if abs(most_recent['ts'] - current_ts) < 2:  # Within 2 seconds
+                            found_recent = most_recent
+                    
+                    if found_recent:
+                        # Update with best values (highest RSSI and SNR)
+                        if rssi is not None and (found_recent.get('rssi') is None or rssi > found_recent['rssi']):
+                            found_recent['rssi'] = rssi
+                        if snr is not None and (found_recent.get('snr') is None or snr > found_recent['snr']):
+                            found_recent['snr'] = snr
+                        logger.debug(f'Updated telemetry history for {node_id}: battery={found_recent["battery"]}%, rssi={found_recent["rssi"]}, snr={found_recent["snr"]}')
+                    else:
+                        # Create new entry
+                        entry = {
+                            "ts": current_ts,
+                            "lat": lat,
+                            "lon": lon,
+                            "alt": alt,
+                            "battery": nodes_data[node_id].get("battery"),
+                            "rssi": rssi,
+                            "snr": snr
+                        }
+                        special_history[node_id].append(entry)
+                        logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}%, rssi={entry["rssi"]}, snr={entry["snr"]}')
+                    
+                    _prune_history(node_id, now_ts=current_ts)
             
             # Check for battery alert if this is a special node
             if _is_special_node(node_id):

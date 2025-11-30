@@ -75,6 +75,15 @@
         };
         document.getElementById('showGatewaysInput').onchange = function(e) {
           appFeatures.show_gateways = e.target.checked;
+          // Update legend visibility
+          var legendRSSI = document.getElementById('legendRSSI');
+          var legendSNR = document.getElementById('legendSNR');
+          var trafficLightLegend = document.getElementById('trafficLightLegend');
+          if (legendRSSI) legendRSSI.style.display = e.target.checked ? 'block' : 'none';
+          if (legendSNR) legendSNR.style.display = e.target.checked ? 'block' : 'none';
+          if (trafficLightLegend) {
+            trafficLightLegend.style.gridTemplateColumns = e.target.checked ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
+          }
           updateNodes();
         };
         document.getElementById('showPositionTrailsInput').onchange = function(e) {
@@ -471,6 +480,15 @@
       .then(data => {
         if (data.features) {
           appFeatures = data.features;
+          // Update legend visibility based on show_gateways
+          var legendRSSI = document.getElementById('legendRSSI');
+          var legendSNR = document.getElementById('legendSNR');
+          var trafficLightLegend = document.getElementById('trafficLightLegend');
+          if (legendRSSI) legendRSSI.style.display = appFeatures.show_gateways ? 'block' : 'none';
+          if (legendSNR) legendSNR.style.display = appFeatures.show_gateways ? 'block' : 'none';
+          if (trafficLightLegend) {
+            trafficLightLegend.style.gridTemplateColumns = appFeatures.show_gateways ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
+          }
           // Display options are now config-driven; no toggles to update
           // Trigger update to apply feature flags
           updateNodes();
@@ -964,7 +982,8 @@
       else snrColor = 'red';
     }
 
-    var indicators = '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:6px 0 0 0;">'
+    // Build indicators row conditionally based on show_gateways setting
+    var indicatorGrid = '<div style="display:grid;grid-template-columns:repeat(' + (appFeatures.show_gateways ? 6 : 4) + ',1fr);gap:8px;margin:6px 0 0 0;">'
       + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Last Position Update"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (lpuColor==='green'?'#4CAF50':lpuColor==='yellow'?'#FFEB3B':lpuColor==='red'?'#F44336':'#bbb')
       + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + lpuStr + '</div></div>'
@@ -976,14 +995,19 @@
       + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + solStr + '</div></div>'
       + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Battery Voltage"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (batteryColor==='green'?'#4CAF50':batteryColor==='yellow'?'#FFEB3B':batteryColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + (voltage!==null?voltage.toFixed(2)+'V':'?') + '</div></div>'
-      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal Strength"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-      + (rssiColor==='green'?'#4CAF50':rssiColor==='yellow'?'#FFEB3B':rssiColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + rssiStr + '</div></div>'
-      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal-to-Noise Ratio"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-      + (snrColor==='green'?'#4CAF50':snrColor==='yellow'?'#FFEB3B':snrColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + snrStr + '</div></div>'
-      + '</div>';
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + (voltage!==null?voltage.toFixed(2)+'V':'?') + '</div></div>';
+    
+    // Only add RSSI and SNR indicators if show_gateways is enabled
+    if (appFeatures.show_gateways) {
+      indicatorGrid += '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal Strength"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
+        + (rssiColor==='green'?'#4CAF50':rssiColor==='yellow'?'#FFEB3B':rssiColor==='red'?'#F44336':'#bbb')
+        + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + rssiStr + '</div></div>'
+        + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal-to-Noise Ratio"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
+        + (snrColor==='green'?'#4CAF50':snrColor==='yellow'?'#FFEB3B':snrColor==='red'?'#F44336':'#bbb')
+        + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + snrStr + '</div></div>';
+    }
+    
+    var indicators = indicatorGrid + '</div>';
 
     var info = indicators;
     var extraInfo = '';
@@ -1849,7 +1873,7 @@
     modal.style.display = 'flex';
     
     // Fetch signal history from API for other nodes
-    var url = '/api/signal/history?node_id=' + nodeId;
+    var url = '/api/signal_history?node_id=' + nodeId;
     var fetchOptions = {};
     if (apiKey) {
       fetchOptions.headers = {

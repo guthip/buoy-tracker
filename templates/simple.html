@@ -311,7 +311,7 @@
         
         <!-- Traffic Light Legend -->
         <div style="padding: 8px 10px; background: #f0f0f0; border-bottom: 1px solid #ddd; font-size: 0.75em; color: #555;">
-            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;">
+            <div id="trafficLightLegend" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;">
                 <div style="position: relative; text-align: center;">
                     <div class="traffic-light-dot" data-tooltip="Last Position Update" style="font-weight: bold; cursor: help;">LPU</div>
                 </div>
@@ -324,10 +324,10 @@
                 <div style="position: relative; text-align: center;">
                     <div class="traffic-light-dot" data-tooltip="Battery Voltage" style="font-weight: bold; cursor: help;">Batt</div>
                 </div>
-                <div style="position: relative; text-align: center;">
+                <div id="legendRSSI" style="position: relative; text-align: center;">
                     <div class="traffic-light-dot" data-tooltip="Signal Strength" style="font-weight: bold; cursor: help;">RSSI</div>
                 </div>
-                <div style="position: relative; text-align: center;">
+                <div id="legendSNR" style="position: relative; text-align: center;">
                     <div class="traffic-light-dot" data-tooltip="Signal-to-Noise Ratio" style="font-weight: bold; cursor: help;">SNR</div>
                 </div>
             </div>
