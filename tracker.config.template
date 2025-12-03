@@ -1,28 +1,27 @@
 # Buoy Tracker Configuration Template
 # Copy this file to tracker.config and customize for your environment
-# For secrets (MQTT credentials, email passwords), use secret.config (see secret.config.example)
+# For secrets (MQTT credentials, email passwords), use secret.config
 
 [app]
-title = SYC buoy tracker
+title = Buoy Tracker
 version = 0.92
 
 [mqtt]
 # MQTT broker settings
+# Root MQTT topic structure (include trailing slash)
+# System automatically subscribes to root_topic/# to capture packets from ALL channels and modem presets.
+# Nodes can switch channels without any configuration changes needed.
+
+# MQTT public brokers:
+#   bayme.sh - San Francisco Bay Area
+#   mqtt.meshtastic.org - Global
 broker = mqtt.bayme.sh
 port = 1883
-# Root MQTT topic structure (include trailing slash)
-# System uses paho-mqtt to subscribe to multiple channel-specific topics.
-# Modem preset for each node is automatically detected from MAP_REPORT packets.
 root_topic = msh/US/bayarea/2/e/
-# Comma-separated list of LoRa modem presets to monitor
-# Based on Meshtastic Config.LoRaConfig.ModemPreset enum
-# Available: LongFast, LongSlow, VeryLongSlow, MediumSlow, MediumFast, ShortSlow, ShortFast, LongModerate, ShortTurbo
-mqtt_channels = MediumSlow,MediumFast
-# SECURITY: Store credentials in secret.config or use environment variables
-# MQTT_USERNAME and MQTT_PASSWORD environment variables override config
 username = meshdev
 password = large4cats
 encryption_key = AQ==
+
 
 [webapp]
 # Web interface settings
@@ -56,13 +55,15 @@ status_orange_threshold = 12
 # Rate limit formula: (3600 / polling_interval_seconds) * (3 + N_special_nodes) * 2.0
 # Examples (with 4 special nodes and 2.0x safety multiplier):
 #   5 seconds  = 7,200/hour rate limit
-#   10 seconds = 3,600/hour rate limit
+#   10 seconds = 3,600/hour rate limit (default)
 #   30 seconds = 1,200/hour rate limit
 #   60 seconds = 600/hour rate limit
-api_polling_interval = 60
+api_polling_interval = 10
 
 [debug]
 # Debug and logging settings
+# log_level options: DEBUG (very verbose), INFO (normal), WARNING (quiet), ERROR (errors only)
+# PRODUCTION DEPLOYMENT: Set to WARNING or ERROR for minimal output
 log_level = INFO
 recent_message_buffer_size = 200
 
@@ -72,48 +73,27 @@ recent_message_buffer_size = 200
 low_battery_threshold = 50
 
 [app_features]
-# User interface feature controls (admin-controlled settings)
-# These settings control what features are visible and configurable by end users
-
-# show_controls_menu: true/false
-#   - When true: Users see "Legend" and "Controls" tabs in the settings menu
-#   - When false: Users only see "Legend" tab; the "Controls" tab is hidden
-#   ⚠️ IMPORTANT: This is admin-controlled only - cannot be changed by end users
-#   
-#   When disabled (false), end users cannot modify:
-#     - Show/hide all nodes
-#     - Show/hide gateways and connections
-#     - Show/hide position trails
-#     - Show/hide nautical markers
-#     - Trail history hours
-#     - Low battery threshold
-#     - Movement threshold
-#     - API polling interval
-#   
-#   Use this to lock down the UI for public deployments where you want
-#   consistent settings across all users accessing the tracker.
+# Web interface display options (set to true/false)
+# PRODUCTION DEPLOYMENT TIPS:
+#   - Set show_controls_menu = false to lock down UI and prevent users from modifying settings
+#   - Lock specific features (show_all_nodes, trails, etc.) based on your deployment needs
+#   - Frozen settings = consistent user experience across all browsers
 show_controls_menu = true
-
-# show_all_nodes: true/false (if show_controls_menu = true, users can override this)
 show_all_nodes = false
-
-# show_gateways: true/false (if show_controls_menu = true, users can override this)
-show_gateways = false
-
-# show_position_trails: true/false (if show_controls_menu = true, users can override this)
+show_gateways = true
 show_position_trails = true
-
-# show_gateway_connections: true/false
 show_gateway_connections = true
-
-# show_nautical_markers: true/false (if show_controls_menu = true, users can override this)
 show_nautical_markers = true
-
-# trail_history_hours: number of hours to display position history (if show_controls_menu = true, users can override this)
+# Trail history display (in hours)
 trail_history_hours = 168
+# Persistence settings (PRODUCTION DEFAULT: false for stateless operation)
+# Set to true to enable disk persistence of special node data (development/debugging only)
+# When enabled, special node history persists across server restarts
+# When disabled (default), all history is cleared on server restart - recommended for production
+enable_persistence = true
+
+[special_nodes_settings]
 # Special nodes configuration
-history_hours = 168
-persist_path = data/special_history.json
 stale_after_hours = 12
 # Symbol displayed for special nodes on map
 special_symbol = ⭐
@@ -121,18 +101,21 @@ special_symbol = ⭐
 [special_nodes]
 # Highlight specific nodes with custom symbols and home positions
 # Movement threshold: distance in meters beyond which alerts trigger
-movement_threshold = 80
-# Format: entry1 = node_id,label,home_lat,home_lon
-# Home position is used for movement alerts - alerts trigger when node moves beyond movement_threshold from home
+movement_threshold = 100
+# Format options:
+#   (1) node_id
+#   (2) node_id = label
+#   (3) node_id = label,home_lat,home_lon
+# Home location and label are optional - if provided, they will be shown before receiving packets
 # Coordinates support two formats:
 #   - Decimal degrees: 37.5637125,-122.2189855
 #   - Degrees-minutes: N37° 33.81', W122° 13.13'
-# Example with decimal: entry1 = 3681533965,SYCS,37.7749,-122.4194
-# Example with degrees-minutes: entry1 = 3681533965,SYCS,N37° 33.81',W122° 13.13'
-entry1 = 3681533965,SYCS,N37° 33.81',W122° 13.13'
-entry2 = 492590216,SYCE,N37° 34.81',W122° 13.07'
-entry3 = 2512106321,SYCA,N37° 31.94',W122° 10.31'
-entry4 = 2009991947,SYCX,N37° 34.23',W122° 12.13'
+# Examples:
+#   Format 1 (auto-discover): 3681533965
+#   Format 2 (with label): 3681533965 = SYCS
+#   Format 3 (with label and location): 3681533965 = SYCS,N37° 33.81',W122° 13.13'
+# Add your special nodes here
+# Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13'
 
 [alerts]
 # Email alert settings for movement notifications
@@ -141,24 +124,23 @@ enabled = false
 # Minimum time between alerts for same node (in hours) - prevents spam
 alert_cooldown = 1
 # URL to tracker (optional - auto-generated from webapp host/port if not set)
-tracker_url = http://localhost:5102
+# tracker_url = http://example.com:5102
 
 # Email settings
 # Sender address - typically noreply@yourdomain.org
-email_from = norepy@sequoiayc.org
-# Recipient address is stored in secret.config (sensitive data)
+email_from = noreply@example.com
+# Recipient address is stored in secret.config (sensitive data, not tracked by git)
 
-# SMTP configuration - defaults to localhost:25 (sendmail/postfix)
-# For local sendmail/postfix, no auth credentials needed - just leave blank
-# To use external provider (Gmail, SendGrid, AWS SES), override these:
-#   Gmail: smtp.gmail.com:587 (requires app password)
+# SMTP configuration
+# For local sendmail/postfix (Linux production): smtp_host = localhost, smtp_port = 25
+# For external providers: Gmail, SendGrid, AWS SES, etc.
+#   Gmail: smtp.gmail.com:587 (app password required)
 #   SendGrid: smtp.sendgrid.net:587
 #   AWS SES: email-smtp.REGION.amazonaws.com:587
 smtp_host = localhost
 smtp_port = 25
-# STARTTLS (port 587 for external) or SSL (port 465)
 smtp_ssl = false
-# Leave blank for sendmail/postfix on localhost, or set for external providers
+# Credentials stored in secret.config (sensitive data, not tracked by git)
+# Can also use environment variables: ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD
 # smtp_username = 
 # smtp_password = 
-# Note: For external providers, use environment variables: ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD
