@@ -367,22 +367,6 @@ All notable changes to the Buoy Tracker project are documented here.
 
 ---
 
-## [2025-11-24] - Production Ready - v0.8
-
-### Release Highlights
-- **Custom Rate Limiter**: Fully tested and verified working (1072-request stress test)
-- **Connection Loss Detection**: Server timestamps detect stale cached data
-- **CORS Support**: Cross-origin requests enabled for integrations
-- **Production Quality**: All debug code removed, documentation complete
-- **Security**: API key + rate limiting + timestamp validation
-
-### Status: ✅ PRODUCTION READY
-- Deployed to Docker Hub
-- Multi-platform support (x86_64, ARM64)
-- Comprehensive test coverage verification
-
----
-
 ## [2025-11-24] - Custom Rate Limiter & Connection Detection - v0.76
 
 ### Added
