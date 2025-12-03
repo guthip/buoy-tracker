@@ -8,16 +8,37 @@ from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Find config files (look in project root)
+# Find config files (look in config directory, fallback to project root)
 # Public config: tracker.config (user copy) or tracker.config.template (template)
 # Secrets config: secret.config (user copy, optional)
-CONFIG_FILE = Path(__file__).parent.parent / 'tracker.config'
-CONFIG_TEMPLATE_FILE = Path(__file__).parent.parent / 'tracker.config.template'
-CONFIG_SECRETS_FILE = Path(__file__).parent.parent / 'secret.config'
+# First try /app/config (production volume mount), then project root (development)
+CONFIG_DIR = Path(__file__).parent.parent / 'config'
+PROJECT_ROOT = Path(__file__).parent.parent
 
-# Use tracker.config if exists, otherwise fall back to tracker.config.template
-if not CONFIG_FILE.exists():
-    CONFIG_FILE = CONFIG_TEMPLATE_FILE
+# Production: look in /app/config first (volume-mounted)
+# Development: fall back to project root
+for base_dir in [CONFIG_DIR, PROJECT_ROOT]:
+    potential_config = base_dir / 'tracker.config'
+    if potential_config.exists():
+        CONFIG_FILE = potential_config
+        break
+else:
+    # If no tracker.config found, use template (either location)
+    if CONFIG_DIR.exists():
+        CONFIG_FILE = CONFIG_DIR / 'tracker.config.template'
+    else:
+        CONFIG_FILE = PROJECT_ROOT / 'tracker.config.template'
+
+CONFIG_TEMPLATE_FILE = CONFIG_DIR / 'tracker.config.template' if CONFIG_DIR.exists() else PROJECT_ROOT / 'tracker.config.template'
+
+# Secrets config: look in /app/config first, then project root
+for base_dir in [CONFIG_DIR, PROJECT_ROOT]:
+    potential_secrets = base_dir / 'secret.config'
+    if potential_secrets.exists():
+        CONFIG_SECRETS_FILE = potential_secrets
+        break
+else:
+    CONFIG_SECRETS_FILE = CONFIG_DIR / 'secret.config' if CONFIG_DIR.exists() else PROJECT_ROOT / 'secret.config'
 
 def parse_coordinate(coord_str: str) -> float:
     """
@@ -306,7 +327,9 @@ ALERT_EMAIL_FROM = config.get('alerts', 'email_from', fallback='norepy@sequoiayc
 ALERT_EMAIL_TO = config.get('alerts', 'email_to', fallback='admin@example.com')
 
 # Special nodes data persistence
-SPECIAL_HISTORY_PERSIST_PATH = str(Path(__file__).parent.parent / 'data' / 'special_nodes.json')
+ENABLE_PERSISTENCE = config.getboolean('app_features', 'enable_persistence', fallback=True)
+DATA_DIR = Path(__file__).parent.parent / 'data'
+SPECIAL_HISTORY_PERSIST_PATH = str(DATA_DIR / 'special_nodes.json')
 
 # Security Configuration
 # Environment: 'development' (localhost allowed) or 'production' (strict security)

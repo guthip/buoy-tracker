@@ -38,16 +38,23 @@ htmlcov/
 # Examples and documentation (optional - keep these if needed)
 examples/
 
-# Docker override files
-docker-compose.override.yml
+# Server management and deployment scripts (local development only)
+start_server.sh
+start_clean_server.sh
+observer_server.sh
+kill_server.sh
+create_deployment_bundle.sh
+verify_deployment.sh
+.server.pid
 
-# Secret configuration (do not include in image)
-# tracker.config is public - can be included
-# Only secret.config is excluded
+# Configuration files (must be created from templates during deployment)
+# Both tracker.config and secret.config should NOT be in the image
+tracker.config
 secret.config
 
-# Note: tracker.config and data/ directory are INCLUDED in the container
-# This provides a fully pre-configured deployment with retained node data
+# Templates are included in the image for reference - users copy them to create actual config files
+# tracker.config.template - included (reference template mirroring actual structure)
+# secret.config.template - included (template showing required secrets)
 
 # SECURITY_ANALYSIS.md
 # SECURITY_PATCHES.md

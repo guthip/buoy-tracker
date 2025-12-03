@@ -23,10 +23,10 @@ This project uses GitHub Actions to automatically build and push Docker images t
 Once secrets are configured:
 
 - **On Tag Push**: `git tag v0.72 && git push origin v0.72`
-  - Builds and pushes: `guthip/buoy-tracker:v0.72` and `guthip/buoy-tracker:latest`
+  - Builds and pushes: `dokwerker8891/buoy-tracker:v0.72` and `dokwerker8891/buoy-tracker:latest`
 
 - **On Main Branch Push**: Any push to main branch
-  - Builds and pushes: `guthip/buoy-tracker:latest`
+  - Builds and pushes: `dokwerker8891/buoy-tracker:latest`
 
 ### 4. Monitor Builds
 
@@ -46,15 +46,15 @@ Images are built for multiple architectures:
 Pull and run the latest image:
 
 ```bash
-docker pull guthip/buoy-tracker:latest
+docker pull dokwerker8891/buoy-tracker:latest
 docker run -p 5102:5102 \
   -v $(pwd)/secret.config:/app/secret.config:ro \
   -v tracker_data:/app/data \
-  guthip/buoy-tracker:latest
+  dokwerker8891/buoy-tracker:latest
 ```
 
 Or use a specific version:
 
 ```bash
-docker pull guthip/buoy-tracker:v0.72
+docker pull dokwerker8891/buoy-tracker:v0.72
 ```

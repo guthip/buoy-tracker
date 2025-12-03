@@ -25,7 +25,7 @@ RUN groupadd --system app && useradd --system --gid app --create-home --home-dir
 
 USER app
 
-VOLUME ["/app/data", "/app/logs"]
+VOLUME ["/app/config", "/app/data", "/app/logs"]
 EXPOSE 5102
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \

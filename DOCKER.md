@@ -1,6 +1,6 @@
 # Buoy Tracker — Docker Deployment Guide
 
-Complete instructions for deploying Buoy Tracker v0.69 with Docker.
+Complete instructions for deploying Buoy Tracker v0.92 with Docker.
 
 ## Platform Support
 
@@ -13,7 +13,7 @@ Docker automatically selects the correct architecture for your platform.
 
 ## Quick Start
 
-**Buoy Tracker v0.69** - Real-time Meshtastic mesh network node tracking with data persistence
+**Buoy Tracker v0.92** - Real-time Meshtastic mesh network node tracking with data persistence
 
 **Using docker-compose (Recommended)**
 
@@ -52,13 +52,13 @@ docker compose logs -f
 ./logs/                # Application logs
 ```
 
-**To update to a new version:**
+# To update to a new version:
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-All history is cleared on server restart; no data directory is used.
+Data in `./data/` directory is automatically preserved.
 
 ## Running Options
 
@@ -155,7 +155,7 @@ Separate volumes for different concerns makes deployment and upgrades seamless:
 ### Complete Volume Setup
 ```bash
 git clone https://github.com/guthip/buoy-tracker.git && cd buoy-tracker
-docker build -t buoy-tracker:latest .
+docker build -t dokwerker8891/buoy-tracker:latest .
 
 # Create required files and directories
 mkdir -p data logs
@@ -251,36 +251,23 @@ Data in `./data/` is automatically preserved across upgrades.
 
 ## Historical Data
 
-**Important**: All runtime data (node positions, packet history) is stored in memory and cleared on server restart.
+**Important**: Real-time tracking data (current node positions, active connections) is stored in memory. Configuration and node metadata are persisted in `./data/` directory.
 
-### Transferring Data Between Deployments
+### Data Persistence
 
-If you're migrating to a new deployment:
+The following data persists across restarts:
+- `logs/` - Application logs directory
+- Configuration files (`tracker.config`, `secret.config`)
 
-**Note**: The server starts fresh on each restart. All history is rebuilt from incoming MQTT packets; no data is persisted. The server rebuilds real-time tracking data from incoming MQTT packets.
+The application automatically rebuilds tracking data from MQTT packets on each startup. No historical data files need to be transferred between deployments.
 
-To migrate to a new deployment:
+## Fresh Deployment
 
-1. **From source deployment**, get the data files (if you want to preserve recent packet data):
-   ```bash
-   - data/special_nodes.json (optional - recent packets)
-   ```
-
-2. **To new deployment**, place them in the data directory:
-   ```bash
-   # Copy files to new deployment's data/ directory (optional)
-   cp special_nodes.json ./data/
-   
-   # Restart the service
-   docker compose restart
-   ```
-
-3. **On startup**, the application will:
-   - Start with empty historical data (fresh history begins from packet arrival time)
-   - Restore any packet data from `special_nodes.json` if present
-   - Begin tracking nodes as MQTT messages arrive
-
-If you don't have existing data files, the application will create them automatically when the first MQTT packets arrive.
+Simply start the container with your configuration files, and the application will:
+1. Connect to your MQTT broker
+2. Begin receiving packets from mesh nodes
+3. Automatically create required data files (logs, etc.)
+4. Start rebuilding position history and gateway connections from live MQTT traffic
 
 ## Troubleshooting
 
@@ -320,9 +307,9 @@ docker inspect buoy-tracker | grep -A 10 Mounts
 ## Email Distribution Template
 
 ```
-Subject: Buoy Tracker v0.69 - Docker Container
+Subject: Buoy Tracker v0.92 - Docker Container
 
-Buoy Tracker v0.69 Docker image for real-time Meshtastic node tracking.
+Buoy Tracker v0.92 Docker image for real-time Meshtastic node tracking.
 
 Quick Start:
 1. mkdir buoy-tracker && cd buoy-tracker
@@ -362,8 +349,10 @@ docker compose down          # Stop
 
 ## Security & Authorization
 
-All API endpoints require authorization using an API key. The API key must be set in `secret.config` and provided by clients in the `Authorization: Bearer <API_KEY>` header for all requests.
+All API endpoints require authorization using an API key (if configured). The API key must be set in `secret.config` and provided by clients in the `Authorization: Bearer <API_KEY>` header for all requests.
 
 - The API key is securely stored in `secret.config` (not tracked by git).
-- Unauthorized requests will receive a 401 response.
+- If `API_KEY` is not configured, authorization is not required.
+- Unauthorized requests to protected endpoints will receive a 401 response.
+- Localhost (127.0.0.1) automatically receives the API key if configured.
 - For more details, see the security section in `CHANGELOG.md`.

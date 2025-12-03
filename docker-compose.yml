@@ -7,17 +7,19 @@ services:
     ports:
       - 5102:5102
     volumes:
-      # Configuration volumes (read-only)
-      - ./tracker.config:/app/tracker.config:ro
+      # Configuration volume - easily editable on host
+      - ./config:/app/config
       
+      # Data persistence volume - history.json and buoy tracking data
+      - ./data:/app/data
+      
+      # Logs volume
       - ./logs:/app/logs
       
-      
-      # Uncomment to add optional secret.config if you have one:
-      # - ./secret.config:/app/secret.config:ro
-      
-        # Data persistence volumes
-        # - ./data:/app/data
+      # Optional: Mount specific config files if you created them locally
+      # (these are created from templates during first deployment)
+      # - ./config/tracker.config:/app/config/tracker.config:ro
+      # - ./config/secret.config:/app/config/secret.config:ro
     environment:
       - MQTT_USERNAME
       - MQTT_PASSWORD

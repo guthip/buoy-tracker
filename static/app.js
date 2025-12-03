@@ -270,11 +270,19 @@
   
   var map = null;
   var markers = {};
+  var gatewayMarkers = {}; // markers for gateways receiving special node packets
   var trails = {};
   var movementCircles = {}; // origin-anchored movement alert circles per node
   var thresholdRings = {}; // threshold rings around home positions for special nodes
   var movementLines = {}; // red lines from origin to current position when moved
   var gatewayLines = {}; // lines from special nodes to their best gateway receivers
+  var currentNodesData = []; // All nodes from latest API fetch - used for gateway popup building
+  
+  // Ensure global scope access for debugging
+  window.gatewayLines = gatewayLines;
+  window.gatewayMarkers = gatewayMarkers;
+  window.markers = markers;
+  window.map = null; // Will be set when map initializes
   var gatewayConnections = {}; // persistent historical gateway connections per node: {nodeId: Set of gateway IDs}
   var movedAlertShown = {}; // track one-time alerts per node id
   
@@ -608,11 +616,12 @@
     }
     var d = document.body.dataset;
     map = L.map('map', { attributionControl: false }).setView([parseFloat(d.defaultLat || '0'), parseFloat(d.defaultLon || '0')], parseInt(d.defaultZoom || '2', 10));
-    window.map = map;
+    window.map = map;  // Expose to console for debugging
     
     // Define base layers for map
     var osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: ''
+      attribution: '',
+      opacity: 0.5
     });
     
     // OpenSeaMap overlay - nautical markers and depth contours (worldwide)
@@ -849,15 +858,15 @@
     // Clickable if: has position data, OR is special node with home location
     var clickable = (node.lat != null && node.lon != null) || (node.is_special && node.origin_lat != null && node.origin_lon != null);
     
-    // Display name: Use long name if available, fallback to special_label for special nodes, otherwise show short name with (Unknown)
+    // Display name: Use long name if available, fallback to special_label for special nodes, otherwise show node ID
     var displayName = node.name;
     if (!displayName || displayName === 'Unknown') {
       if (node.is_special && node.special_label) {
+        // For special nodes, use the configured label from tracker.config
         displayName = node.special_label;
-      } else if (node.short && node.short !== '?') {
-        displayName = node.short + ' (Unknown)';
       } else {
-        displayName = 'Unknown';
+        // For all other nodes without a name, show the node ID in decimal
+        displayName = String(node.id);
       }
     }
     
@@ -872,6 +881,9 @@
     var historyButton = '';
     if (node.is_special) {
       historyButton = '<button onclick="showNodeDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" style="background:none;border:none;font-size:1.1em;cursor:pointer;padding:2px 4px;color:#1976D2;opacity:0.7;transition:opacity 0.2s;" title="View signal history">📊</button>';
+    } else if (node.is_gateway) {
+      // Gateway nodes get a "View details" button to show which special nodes they receive from
+      historyButton = '<button onclick="showGatewayDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" style="background:none;border:none;font-size:1.1em;cursor:pointer;padding:2px 4px;color:#4CAF50;opacity:0.7;transition:opacity 0.2s;" title="View gateway details">ℹ️</button>';
     }
     var header = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
                  specialSymbol +
@@ -1052,6 +1064,9 @@
           return; 
         }
         
+        // Store all nodes for access in popup building
+        currentNodesData = data.nodes;
+        
         // DEBUG: Log gateway info for special nodes
         var specialNodesWithGateway = 0;
         for (var dbg = 0; dbg < data.nodes.length; dbg++) {
@@ -1178,27 +1193,49 @@
               } 
             }
             
+            // Collect all gateway IDs that are being rendered as part of gateway_connections
+            // so we don't render them again as regular nodes when show_all_nodes is enabled
+            var renderedGatewayIds = {};
+            for (var i = 0; i < toMap.length; i++) {
+              var checkNode = toMap[i];
+              if (checkNode.is_special && checkNode.gateway_connections && appFeatures.show_gateways) {
+                for (var gc_check = 0; gc_check < checkNode.gateway_connections.length; gc_check++) {
+                  renderedGatewayIds[checkNode.gateway_connections[gc_check].id] = true;
+                }
+              }
+            }
+            
             for(var r=0; r<toMap.length; r++){
               var node = toMap[r]; 
               var key = String(node.id); 
               var color = '#f44336';
+              
+              // Skip rendering gateways that are already shown as gateway_connections (to avoid double-rendering)
+              // Only skip if show_all_nodes is enabled (when show_all_nodes is OFF, we only show special+gateways anyway)
+              if (appFeatures.show_all_nodes && node.is_gateway && renderedGatewayIds[node.id]) {
+                continue;
+              }
 
-              // Green for online/active nodes
-              if (node.status === 'online' || node.status_color === 'green') {
-                color = '#4CAF50';
-              } else if (node.is_special) {
-                // For special nodes, always use gray marker if status is 'gray' or 'red' (very old LPU)
+              // Priority: (1) Special nodes (yellow) > (2) Gateways (green) > (3) Other nodes (blue)
+              if (node.is_special) {
+                // Special nodes: yellow when online, gray when offline
                 if (node.status === 'gray' || node.status === 'red') {
-                  color = '#999999';
+                  color = '#999999';  // Gray for offline special nodes
                 } else if (node.stale) {
                   color = '#888888';
                 } else {
-                  color = '#FFD700';
+                  color = '#FFD700';  // Yellow for online special nodes
                 }
+              } else if (node.is_gateway) {
+                // Gateways: always green
+                color = '#4CAF50';
+              } else if (node.status === 'blue') {
+                // Regular nodes: blue
+                color = '#2196F3';
               } else if (node.status === 'red') {
                 color = '#f44336';
-              } else if (node.status === 'blue') {
-                color = '#2196F3';
+              } else if (node.status === 'online' || node.status_color === 'green') {
+                color = '#4CAF50';
               } else if (node.status === 'orange') {
                 color = '#FF9800';
               }
@@ -1246,6 +1283,43 @@
               // Role
               if (node.role && node.role !== 'Unknown') {
                 popup += '<br>Role: ' + node.role.replace('CLIENT_', '');
+              }
+              
+              // Gateway: Show which special nodes it's receiving from
+              if (node.is_gateway) {
+                // Search all special nodes to find which ones list this gateway in their connections
+                var specialNodesReceivingViaThis = [];
+                var allSpecialNodes = currentNodesData || [];
+                for (var snIdx = 0; snIdx < allSpecialNodes.length; snIdx++) {
+                  var specialNode = allSpecialNodes[snIdx];
+                  if (specialNode.is_special && specialNode.gateway_connections) {
+                    for (var gwIdx = 0; gwIdx < specialNode.gateway_connections.length; gwIdx++) {
+                      var gw = specialNode.gateway_connections[gwIdx];
+                      if (gw.id === node.id) {
+                        specialNodesReceivingViaThis.push({
+                          name: specialNode.name,
+                          rssi: gw.rssi,
+                          snr: gw.snr,
+                          hops_traveled: (gw.hop_start !== undefined && gw.hop_limit !== undefined) ? (gw.hop_start - gw.hop_limit) : null,
+                          is_best: specialNode.best_gateway && specialNode.best_gateway.id === node.id
+                        });
+                        break;
+                      }
+                    }
+                  }
+                }
+                
+                if (specialNodesReceivingViaThis.length > 0) {
+                  popup += '<br><hr style="margin:3px 0;"><span style="font-weight:bold;">📶 Receiving from:</span>';
+                  for (var snrIdx = 0; snrIdx < specialNodesReceivingViaThis.length; snrIdx++) {
+                    var snConnection = specialNodesReceivingViaThis[snrIdx];
+                    var bestMarker = snConnection.is_best ? ' ⭐' : '';
+                    var hopInfo = snConnection.hops_traveled !== null ? ' (' + snConnection.hops_traveled + 'h)' : '';
+                    var rssiStr = snConnection.rssi !== undefined ? ' ' + snConnection.rssi + 'dBm' : '';
+                    var snrStr = snConnection.snr !== undefined ? ' SNR:' + snConnection.snr.toFixed(1) : '';
+                    popup += '<br>├─ ' + snConnection.name + hopInfo + rssiStr + snrStr + bestMarker;
+                  }
+                }
               }
               
               // Position coordinates
@@ -1301,6 +1375,7 @@
               
               // Add link to liamcottle meshview server
               popup += '<br><a href="https://meshtastic.liamcottle.net/?node_id=' + node.id + '" target="_blank" style="color:#2196F3;">View on Meshtastic Map</a>';
+
               
               // Handle nodes without position data (show grey circle at home position for special nodes)
               var hasPosition = (node.lat != null && node.lon != null);
@@ -1442,12 +1517,44 @@
                   }
                 }
                 
-                // Draw lines to all gateway connections from the backend
+                // Draw lines to top 4 gateway connections from the backend
                 if (appFeatures.show_gateways && node.is_special && node.lat != null && node.lon != null && node.gateway_connections) {
                   var connections = node.gateway_connections;
                   
-                  for (var gc = 0; gc < connections.length; gc++) {
-                    var gwConnection = connections[gc];
+                  // Filter to only gateways that:
+                  // 1. HAVE position data (lat/lon available)
+                  // 2. MEET reliability threshold (score >= 50 = Tier 1 & 2 only)
+                  var connectionsWithPosition = connections.filter(function(gw) {
+                    var hasPosition = gw.lat != null && gw.lon != null && !isNaN(gw.lat) && !isNaN(gw.lon);
+                    var reliabilityScore = gw.reliability_score !== undefined ? gw.reliability_score : 0;
+                    return hasPosition && reliabilityScore >= 50;  // Only Tier 1 (70+) and Tier 2 (50-69)
+                  });
+                  
+                  // Sort connections by RSSI (signal strength) - strongest first
+                  var sortedConnections = connectionsWithPosition.slice().sort(function(a, b) {
+                    var rssiA = a.rssi !== undefined ? a.rssi : -999;
+                    var rssiB = b.rssi !== undefined ? b.rssi : -999;
+                    return rssiB - rssiA; // Descending order (higher RSSI is better)
+                  });
+                  
+                  // Only keep top 4 gateways WITH POSITION DATA and high reliability
+                  var topConnections = sortedConnections.slice(0, 4);
+                  var topGatewayIds = topConnections.map(function(gw) { return gw.id; });
+                  
+                  // Remove lines for gateways NOT in top 4 (but keep them in gateway_connections for future position data)
+                  for (var lineKey in gatewayLines) {
+                    if (lineKey.indexOf('gw_' + node.id + '_') === 0) {
+                      var gwIdFromKey = lineKey.substring(('gw_' + node.id + '_').length);
+                      if (topGatewayIds.indexOf(parseInt(gwIdFromKey, 10)) === -1) {
+                        map.removeLayer(gatewayLines[lineKey]);
+                        delete gatewayLines[lineKey];
+                      }
+                    }
+                  }
+                  
+                  // Draw/update lines for top 4 gateways WITH POSITION DATA
+                  for (var gc = 0; gc < topConnections.length; gc++) {
+                    var gwConnection = topConnections[gc];
                     var gwId = gwConnection.id;
                     var gwLat = gwConnection.lat;
                     var gwLon = gwConnection.lon;
@@ -1456,15 +1563,23 @@
                     if (gwLat != null && gwLon != null) {
                       var lineKey = 'gw_' + node.id + '_' + gwId;
                       var lineOpts = {
-                        color: isBestGateway ? '#FF9800' : '#FFB74D',  // Brighter orange for current, dimmer for historical
-                        weight: isBestGateway ? 2 : 1,
-                        opacity: isBestGateway ? 0.7 : 0.4,
-                        dashArray: '3, 5'  // Dotted line
+                        color: isBestGateway ? '#FF6F00' : '#FF9800',  // Darker orange for best, brighter for others
+                        weight: isBestGateway ? 3 : 2,  // Thicker lines for visibility
+                        opacity: isBestGateway ? 0.9 : 0.7,  // Higher opacity
+                        dashArray: '3, 5',  // Dotted line
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                        interactive: true,
+                        bubblingMouseEvents: false  // Prevent event bubbling
                       };
                       var latlngs = [[node.lat, node.lon], [gwLat, gwLon]];
                       
                       if (!gatewayLines[lineKey]) {
-                        gatewayLines[lineKey] = L.polyline(latlngs, lineOpts).addTo(map);
+                        try {
+                          gatewayLines[lineKey] = L.polyline(latlngs, lineOpts).addTo(map);
+                        } catch(e) {
+                          console.error(`ERROR creating gateway line: ${e}`);
+                        }
                       } else {
                         gatewayLines[lineKey].setLatLngs(latlngs);
                         gatewayLines[lineKey].setStyle(lineOpts);
@@ -1475,14 +1590,85 @@
                       var snrStr = gwConnection.snr !== undefined ? ' SNR:' + gwConnection.snr.toFixed(2) : '';
                       var popup = 'Signal: ' + gwConnection.name + rssiStr + snrStr;
                       gatewayLines[lineKey].bindPopup(popup);
+                      
+                      // Add hover effects to make the line easier to click
+                      gatewayLines[lineKey].on('mouseover', function() {
+                        this.setStyle({
+                          weight: (isBestGateway ? 5 : 4),  // Thicker on hover
+                          opacity: 1.0  // Full opacity on hover
+                        });
+                      });
+                      gatewayLines[lineKey].on('mouseout', function() {
+                        this.setStyle({
+                          weight: isBestGateway ? 3 : 2,  // Back to original
+                          opacity: isBestGateway ? 0.9 : 0.7
+                        });
+                      });
+                      
+                      // Calculate circle size based on reliability score (50-100 maps to radius 5-9)
+                      var reliabilityScore = gwConnection.reliability_score !== undefined ? gwConnection.reliability_score : 50;
+                      var circleRadius = 5 + ((reliabilityScore - 50) / 50) * 4;  // 5-9 px range
+                      var confidenceTag = gwConnection.confidence_level === 'direct' ? '✅ DIRECT' : '⚠️ PARTIAL';
+                      
+                      // Create or update gateway marker on map
+                      var gwMarkerKey = 'gw_' + node.id + '_' + gwId;  // Include special node ID to distinguish markers from different nodes
+                      var gwMarkerPopup = '<strong>📡 ' + gwConnection.name + '</strong><br>' +
+                                         'ID: ' + gwId + '<br>' +
+                                         'Confidence: ' + confidenceTag + '<br>' +
+                                         'Reliability Score: ' + reliabilityScore + '/100<br>' +
+                                         'Detections: ' + (gwConnection.detection_count || 'N/A') + '<br>' +
+                                         'RSSI: ' + (gwConnection.rssi || 'N/A') + ' dBm<br>' +
+                                         'SNR: ' + (gwConnection.snr !== undefined ? gwConnection.snr.toFixed(2) : 'N/A') + ' dB';
+                      
+                      // Determine fill color based on confidence level
+                      var fillColor = gwConnection.confidence_level === 'direct' ? '#2196F3' : '#4CAF50';  // Blue for direct, green for partial
+                      
+                      if (!gatewayMarkers[gwMarkerKey]) {
+                        // Create new gateway marker with size based on reliability
+                        gatewayMarkers[gwMarkerKey] = L.circleMarker([gwLat, gwLon], {
+                          radius: circleRadius,
+                          fillColor: fillColor,
+                          color: fillColor === '#2196F3' ? '#0D47A1' : '#2E7D32',  // Darker border
+                          weight: 2,
+                          opacity: 0.8,
+                          fillOpacity: 0.7
+                        }).addTo(map).bindPopup(gwMarkerPopup);
+                      } else {
+                        gatewayMarkers[gwMarkerKey].setLatLng([gwLat, gwLon]);
+                        gatewayMarkers[gwMarkerKey].setPopupContent(gwMarkerPopup);
+                        gatewayMarkers[gwMarkerKey].setRadius(circleRadius);
+                        gatewayMarkers[gwMarkerKey].setStyle({
+                          fillColor: fillColor,
+                          color: fillColor === '#2196F3' ? '#0D47A1' : '#2E7D32'
+                        });
+                      }
+                    }
+                  }
+                  
+                  // Clean up gateway markers that are no longer in top connections FOR THIS NODE ONLY
+                  for (var markerKey in gatewayMarkers) {
+                    if (markerKey.indexOf('gw_' + node.id + '_') === 0) {
+                      var gwIdFromMarker = markerKey.substring(('gw_' + node.id + '_').length);
+                      // Remove if this gateway ID is NOT in top gateways for this node
+                      if (topGatewayIds.indexOf(parseInt(gwIdFromMarker, 10)) === -1) {
+                        map.removeLayer(gatewayMarkers[markerKey]);
+                        delete gatewayMarkers[markerKey];
+                      }
                     }
                   }
                 } else if (!appFeatures.show_gateways) {
-                  // Remove all gateway lines for this node if feature is disabled
+                  // Remove all gateway lines and markers for this node if feature is disabled
                   for (var lineKey in gatewayLines) {
                     if (lineKey.indexOf('gw_' + node.id + '_') === 0) {
                       map.removeLayer(gatewayLines[lineKey]);
                       delete gatewayLines[lineKey];
+                    }
+                  }
+                  // Also clean up gateway markers
+                  for (var markerKey in gatewayMarkers) {
+                    if (markerKey.indexOf('gw_') === 0) {
+                      map.removeLayer(gatewayMarkers[markerKey]);
+                      delete gatewayMarkers[markerKey];
                     }
                   }
                 }
@@ -1553,6 +1739,8 @@
             var txt = '❌ Disconnected';
             if (data2 && data2.mqtt_status === 'receiving_packets') {
               txt = '✅ Receiving packets';
+            } else if (data2 && data2.mqtt_status === 'stale_data') {
+              txt = '⚠️ No recent packets (stale data)';
             } else if (data2 && data2.mqtt_status === 'connected_to_server') {
               txt = '🔗 Connected to server';
             } else if (data2 && data2.mqtt_status === 'connecting') {
@@ -1861,6 +2049,132 @@
   }
   
   // Modal functions for node details
+  window.showGatewayDetails = function(gatewayId, gatewayName) {
+    // Display gateway details including which special nodes receive through it
+    console.log('showGatewayDetails called with:', gatewayId, gatewayName);
+    console.log('currentNodesData:', currentNodesData);
+    
+    // Find the gateway node in currentNodesData
+    var gatewayNode = null;
+    if (currentNodesData && currentNodesData.length > 0) {
+      console.log('Searching', currentNodesData.length, 'nodes for gateway ID:', gatewayId);
+      for (var i = 0; i < currentNodesData.length; i++) {
+        if (currentNodesData[i].id === gatewayId) {
+          gatewayNode = currentNodesData[i];
+          console.log('Found gateway node:', gatewayNode);
+          break;
+        }
+      }
+    } else {
+      console.error('currentNodesData is empty or undefined:', currentNodesData);
+    }
+    
+    if (!gatewayNode) {
+      console.error('Gateway node not found in currentNodesData');
+      alert('Gateway not found (ID: ' + gatewayId + ')');
+      return;
+    }
+    
+    // Build the gateway details content
+    var details = '';
+    
+    // Gateway identification
+    details += '<strong>Gateway ID:</strong> ' + gatewayId + ' (0x' + gatewayId.toString(16).toUpperCase() + ')<br>';
+    if (gatewayNode.name) {
+      details += '<strong>Name:</strong> ' + gatewayNode.name + '<br>';
+    }
+    
+    // Position if available
+    if (gatewayNode.lat !== undefined && gatewayNode.lat !== null && gatewayNode.lon !== undefined && gatewayNode.lon !== null) {
+      details += '<strong>Position:</strong> ' + gatewayNode.lat.toFixed(4) + ', ' + gatewayNode.lon.toFixed(4) + '<br>';
+    }
+    
+    // Gateway hardware info if available
+    if (gatewayNode.hardware_model) {
+      details += '<strong>Hardware:</strong> ' + gatewayNode.hardware_model + '<br>';
+    }
+    if (gatewayNode.role) {
+      details += '<strong>Role:</strong> ' + gatewayNode.role + '<br>';
+    }
+    if (gatewayNode.is_online !== undefined) {
+      details += '<strong>Status:</strong> ' + (gatewayNode.is_online ? '<span style="color:green;">🟢 Online</span>' : '<span style="color:red;">🔴 Offline</span>') + '<br>';
+    }
+    
+    // Receiving from section
+    details += '<br><strong style="color:#2196F3;">📶 Receiving from:</strong><br>';
+    
+    var receivingConnections = [];
+    var allSpecialNodes = currentNodesData || [];
+    
+    // Find all special nodes that receive through this gateway
+    for (var snIdx = 0; snIdx < allSpecialNodes.length; snIdx++) {
+      var specialNode = allSpecialNodes[snIdx];
+      if (specialNode.is_special && specialNode.gateway_connections) {
+        for (var gwIdx = 0; gwIdx < specialNode.gateway_connections.length; gwIdx++) {
+          var gw = specialNode.gateway_connections[gwIdx];
+          if (gw.id === gatewayId) {
+            receivingConnections.push({
+              nodeName: specialNode.name || ('Node ' + specialNode.id),
+              nodeId: specialNode.id,
+              rssi: gw.rssi,
+              snr: gw.snr,
+              hopsTraveled: gw.hop_start - gw.hop_limit,
+              hopStart: gw.hop_start,
+              hopLimit: gw.hop_limit,
+              reliability: gw.reliability_score,
+              confidence: gw.confidence
+            });
+          }
+        }
+      }
+    }
+    
+    if (receivingConnections.length === 0) {
+      details += '<span style="opacity:0.7;">No active connections</span><br>';
+    } else {
+      // Sort by RSSI (best signal first)
+      receivingConnections.sort(function(a, b) {
+        return (b.rssi || -150) - (a.rssi || -150);
+      });
+      
+      for (var i = 0; i < receivingConnections.length; i++) {
+        var conn = receivingConnections[i];
+        var marker = i === 0 ? ' ⭐' : '';
+        var hopStr = ' (' + conn.hopsTraveled + ' hop' + (conn.hopsTraveled !== 1 ? 's' : '') + ')';
+        var rssiStr = conn.rssi ? ' RSSI: ' + conn.rssi + ' dBm' : '';
+        var snrStr = (conn.snr !== undefined && conn.snr !== null) ? ' SNR: ' + conn.snr.toFixed(1) + ' dB' : '';
+        
+        details += '├─ <strong>' + conn.nodeName + '</strong>' + marker + '<br>';
+        details += '│  ' + hopStr;
+        if (rssiStr) details += ', ' + rssiStr;
+        if (snrStr) details += ', ' + snrStr;
+        details += '<br>';
+      }
+    }
+    
+    // Display in modal if available
+    var modal = document.getElementById('nodeDetailsModal');
+    var title = document.getElementById('modalTitle');
+    var container = document.getElementById('histogramContainer');
+    
+    console.log('Modal elements found:', { 
+      modal: !!modal, 
+      title: !!title, 
+      container: !!container 
+    });
+    
+    if (modal && title && container) {
+      title.textContent = '📡 ' + gatewayName + ' (Gateway)';
+      container.innerHTML = '<div style="padding:12px;font-size:13px;line-height:1.6;">' + details + '</div>';
+      modal.style.display = 'flex';
+      console.log('Gateway modal displayed successfully');
+    } else {
+      console.warn('Modal elements missing, using fallback alert');
+      // Fallback to alert
+      alert('Gateway: ' + gatewayName + '\n\n' + details.replace(/<[^>]*>/g, '\n'));
+    }
+  };
+
   window.showNodeDetails = function(nodeId, nodeName) {
     var modal = document.getElementById('nodeDetailsModal');
     var title = document.getElementById('modalTitle');

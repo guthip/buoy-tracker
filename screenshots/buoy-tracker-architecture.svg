@@ -1,0 +1,213 @@
+<svg viewBox="0 0 1200 900" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <linearGradient id="bayGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.2" />
+            <stop offset="100%" style="stop-color:#1e40af;stop-opacity:0.3" />
+        </linearGradient>
+        
+        <linearGradient id="meshGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#a78bfa;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+        </linearGradient>
+        
+        <linearGradient id="dataGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#fb923c;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#ea580c;stop-opacity:1" />
+        </linearGradient>
+        
+        <linearGradient id="alertGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#f87171;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#dc2626;stop-opacity:1" />
+        </linearGradient>
+
+        <marker id="arrowOrange" markerWidth="5" markerHeight="5" refX="4.5" refY="1.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,3 L4.5,1.5 z" fill="#ea580c" />
+        </marker>
+        
+        <marker id="arrowRed" markerWidth="5" markerHeight="5" refX="4.5" refY="1.5" orient="auto" markerUnits="strokeWidth">
+            <path d="M0,0 L0,3 L4.5,1.5 z" fill="#dc2626" />
+        </marker>
+
+        <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.15"/>
+        </filter>
+    </defs>
+
+    <!-- Marine Environment Background -->
+    <rect x="50" y="50" width="450" height="350" rx="20" fill="url(#bayGradient)" stroke="#1e40af" stroke-width="3" filter="url(#shadow)"/>
+    <text x="275" y="85" font-size="20" font-weight="bold" fill="#1e40af" text-anchor="middle" font-family="system-ui, sans-serif">Marine Environment</text>
+    
+    <!-- Buoy 1 with realistic design -->
+    <g>
+        <ellipse cx="150" cy="165" rx="30" ry="8" fill="#fbbf24"/>
+        <rect x="120" y="165" width="60" height="50" fill="#f59e0b"/>
+        <rect x="123" y="165" width="54" height="50" fill="#fbbf24"/>
+        <ellipse cx="150" cy="215" rx="30" ry="8" fill="#d97706"/>
+        <rect x="135" y="185" width="30" height="20" fill="#1e3a8a" stroke="#ddd" stroke-width="1"/>
+        <line x1="135" y1="195" x2="165" y2="195" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="150" y1="185" x2="150" y2="205" stroke="#ddd" stroke-width="0.5"/>
+        <rect x="148" y="155" width="4" height="15" fill="#e5e7eb"/>
+        <circle cx="150" cy="153" r="3" fill="#9ca3af"/>
+        <text x="150" y="240" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle" font-family="system-ui, sans-serif">Buoy 1</text>
+        <rect x="115" y="245" width="70" height="25" rx="4" fill="#1e40af"/>
+        <text x="150" y="261" font-size="10" fill="white" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">Meshtastic</text>
+    </g>
+    
+    <!-- Buoy 2 with realistic design -->
+    <g>
+        <ellipse cx="280" cy="235" rx="30" ry="8" fill="#fbbf24"/>
+        <rect x="250" y="235" width="60" height="50" fill="#f59e0b"/>
+        <rect x="253" y="235" width="54" height="50" fill="#fbbf24"/>
+        <ellipse cx="280" cy="285" rx="30" ry="8" fill="#d97706"/>
+        <rect x="265" y="255" width="30" height="20" fill="#1e3a8a" stroke="#ddd" stroke-width="1"/>
+        <line x1="265" y1="265" x2="295" y2="265" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="280" y1="255" x2="280" y2="275" stroke="#ddd" stroke-width="0.5"/>
+        <rect x="278" y="225" width="4" height="15" fill="#e5e7eb"/>
+        <circle cx="280" cy="223" r="3" fill="#9ca3af"/>
+        <text x="280" y="310" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle" font-family="system-ui, sans-serif">Buoy 2</text>
+        <rect x="245" y="315" width="70" height="25" rx="4" fill="#1e40af"/>
+        <text x="280" y="331" font-size="10" fill="white" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">Meshtastic</text>
+    </g>
+    
+    <!-- Buoy N with realistic design -->
+    <g>
+        <ellipse cx="400" cy="185" rx="30" ry="8" fill="#fbbf24"/>
+        <rect x="370" y="185" width="60" height="50" fill="#f59e0b"/>
+        <rect x="373" y="185" width="54" height="50" fill="#fbbf24"/>
+        <ellipse cx="400" cy="235" rx="30" ry="8" fill="#d97706"/>
+        <rect x="385" y="205" width="30" height="20" fill="#1e3a8a" stroke="#ddd" stroke-width="1"/>
+        <line x1="385" y1="215" x2="415" y2="215" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="400" y1="205" x2="400" y2="225" stroke="#ddd" stroke-width="0.5"/>
+        <rect x="398" y="175" width="4" height="15" fill="#e5e7eb"/>
+        <circle cx="400" cy="173" r="3" fill="#9ca3af"/>
+        <text x="400" y="260" font-size="12" font-weight="bold" fill="#1e40af" text-anchor="middle" font-family="system-ui, sans-serif">Buoy N</text>
+        <rect x="365" y="265" width="70" height="25" rx="4" fill="#1e40af"/>
+        <text x="400" y="281" font-size="10" fill="white" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">Meshtastic</text>
+    </g>
+
+    <!-- GPS broadcast labels -->
+    <text x="150" y="305" font-size="11" fill="#1e40af" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">GPS</text>
+    <text x="280" y="360" font-size="11" fill="#1e40af" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">GPS</text>
+    <text x="400" y="315" font-size="11" fill="#1e40af" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">GPS</text>
+
+    <!-- Lightning symbol for Meshtastic mesh -->
+    <g>
+        <text x="600" y="155" font-size="60" text-anchor="middle">⚡</text>
+        <text x="600" y="190" font-size="13" fill="#7c3aed" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">Meshtastic Mesh</text>
+    </g>
+
+    <!-- Mesh Gateway 1 -->
+    <g>
+        <rect x="680" y="100" width="140" height="100" rx="12" fill="url(#meshGradient)" filter="url(#shadow)"/>
+        <text x="750" y="135" font-size="36" text-anchor="middle">📡</text>
+        <text x="750" y="175" font-size="14" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">Gateway 1</text>
+    </g>
+
+    <!-- Mesh Gateway 2 -->
+    <g>
+        <rect x="850" y="100" width="140" height="100" rx="12" fill="url(#meshGradient)" filter="url(#shadow)"/>
+        <text x="920" y="135" font-size="36" text-anchor="middle">📡</text>
+        <text x="920" y="175" font-size="14" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">Gateway 2</text>
+    </g>
+
+    <!-- Mesh Gateway 3 -->
+    <g>
+        <rect x="1020" y="100" width="140" height="100" rx="12" fill="url(#meshGradient)" filter="url(#shadow)"/>
+        <text x="1090" y="135" font-size="36" text-anchor="middle">📡</text>
+        <text x="1090" y="175" font-size="14" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">Gateway 3</text>
+    </g>
+
+    <!-- MQTT Broker -->
+    <g>
+        <rect x="680" y="250" width="140" height="100" rx="12" fill="url(#dataGradient)" filter="url(#shadow)"/>
+        <text x="750" y="285" font-size="36" text-anchor="middle">🔄</text>
+        <text x="750" y="315" font-size="14" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">MQTT Broker</text>
+        <text x="750" y="332" font-size="11" fill="#fed7aa" text-anchor="middle" font-family="system-ui, sans-serif">(Public)</text>
+    </g>
+
+    <!-- Arrows from gateways to MQTT -->
+    <path d="M 750 200 L 750 250" stroke="#ea580c" stroke-width="4" fill="none" marker-end="url(#arrowOrange)"/>
+    <path d="M 920 200 Q 835 225 820 300" stroke="#ea580c" stroke-width="4" fill="none" marker-end="url(#arrowOrange)"/>
+    <path d="M 1090 200 Q 960 220 820 290" stroke="#ea580c" stroke-width="4" fill="none" marker-end="url(#arrowOrange)"/>
+
+    <!-- Backend Application -->
+    <g>
+        <rect x="680" y="380" width="180" height="120" rx="12" fill="#10b981" filter="url(#shadow)"/>
+        <text x="770" y="420" font-size="40" text-anchor="middle">⚙️</text>
+        <text x="770" y="455" font-size="15" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">Buoy Tracker</text>
+        <text x="770" y="473" font-size="12" fill="#d1fae5" text-anchor="middle" font-family="system-ui, sans-serif">Backend</text>
+        <text x="770" y="490" font-size="11" fill="#d1fae5" text-anchor="middle" font-family="system-ui, sans-serif">(Python/Flask)</text>
+    </g>
+
+    <!-- Arrow from MQTT to Backend -->
+    <path d="M 750 350 L 770 380" stroke="#ea580c" stroke-width="4" fill="none" marker-end="url(#arrowOrange)"/>
+
+    <!-- Web Dashboard -->
+    <g>
+        <rect x="950" y="380" width="180" height="120" rx="12" fill="#0ea5e9" filter="url(#shadow)"/>
+        <text x="1040" y="420" font-size="40" text-anchor="middle">🗺️</text>
+        <text x="1040" y="455" font-size="15" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">Web Dashboard</text>
+        <text x="1040" y="473" font-size="12" fill="#bae6fd" text-anchor="middle" font-family="system-ui, sans-serif">(Leaflet Map)</text>
+        <text x="1040" y="490" font-size="11" fill="#bae6fd" text-anchor="middle" font-family="system-ui, sans-serif">Real-time Tracking</text>
+    </g>
+
+    <!-- Arrow from Backend to Dashboard -->
+    <path d="M 860 440 L 950 440" stroke="#10b981" stroke-width="4" fill="none" marker-end="url(#arrowOrange)"/>
+
+    <!-- Alert System -->
+    <g>
+        <rect x="950" y="540" width="180" height="80" rx="12" fill="url(#alertGradient)" filter="url(#shadow)"/>
+        <text x="1040" y="570" font-size="32" text-anchor="middle">📧</text>
+        <text x="1040" y="600" font-size="14" font-weight="bold" fill="white" text-anchor="middle" font-family="system-ui, sans-serif">Alert System</text>
+        <text x="1040" y="615" font-size="11" fill="#fecaca" text-anchor="middle" font-family="system-ui, sans-serif">(Drift Detection)</text>
+    </g>
+
+    <!-- Arrow from Backend to Alert System -->
+    <path d="M 860 480 Q 905 480 905 580 L 950 580" stroke="#dc2626" stroke-width="4" fill="none" marker-end="url(#arrowRed)"/>
+
+    <!-- Data flow labels -->
+    <g>
+        <rect x="880" y="415" width="50" height="20" rx="4" fill="#fff" opacity="0.9"/>
+        <text x="905" y="429" font-size="10" fill="#10b981" text-anchor="middle" font-weight="600" font-family="system-ui, sans-serif">WebSocket</text>
+    </g>
+
+    <!-- Key Information Box -->
+    <rect x="50" y="640" width="350" height="200" rx="12" fill="#f8fafc" stroke="#cbd5e0" stroke-width="2" filter="url(#shadow)"/>
+    <text x="225" y="670" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle" font-family="system-ui, sans-serif">System Capabilities</text>
+    
+    <text x="70" y="700" font-size="13" fill="#334155" font-weight="600" font-family="system-ui, sans-serif">✓ Real-time GPS tracking via Meshtastic mesh</text>
+    <text x="70" y="725" font-size="13" fill="#334155" font-weight="600" font-family="system-ui, sans-serif">✓ Multi-hop mesh network relay</text>
+    <text x="70" y="750" font-size="13" fill="#334155" font-weight="600" font-family="system-ui, sans-serif">✓ Multiple mesh gateways for coverage</text>
+    <text x="70" y="775" font-size="13" fill="#334155" font-weight="600" font-family="system-ui, sans-serif">✓ Interactive web-based visualization</text>
+    <text x="70" y="800" font-size="13" fill="#334155" font-weight="600" font-family="system-ui, sans-serif">✓ Automated drift detection alerts</text>
+    <text x="70" y="825" font-size="13" fill="#334155" font-weight="600" font-family="system-ui, sans-serif">✓ MQTT-based data aggregation</text>
+
+    <!-- Technical Details Box -->
+    <rect x="450" y="640" width="700" height="200" rx="12" fill="#f8fafc" stroke="#cbd5e0" stroke-width="2" filter="url(#shadow)"/>
+    <text x="800" y="670" font-size="16" font-weight="bold" fill="#1e293b" text-anchor="middle" font-family="system-ui, sans-serif">Data Flow Details</text>
+    
+    <g>
+        <circle cx="475" cy="705" r="8" fill="#2563eb"/>
+        <text x="495" y="710" font-size="12" fill="#334155" font-family="system-ui, sans-serif">Buoys broadcast GPS positions every few minutes via Meshtastic radio</text>
+    </g>
+    
+    <g>
+        <circle cx="475" cy="735" r="8" fill="#7c3aed"/>
+        <text x="495" y="740" font-size="12" fill="#334155" font-family="system-ui, sans-serif">Mesh network relays packets through nodes to multiple gateways</text>
+    </g>
+    
+    <g>
+        <circle cx="475" cy="765" r="8" fill="#ea580c"/>
+        <text x="495" y="770" font-size="12" fill="#334155" font-family="system-ui, sans-serif">MQTT broker aggregates position data from all mesh gateways</text>
+    </g>
+    
+    <g>
+        <circle cx="475" cy="795" r="8" fill="#10b981"/>
+        <text x="495" y="800" font-size="12" fill="#334155" font-family="system-ui, sans-serif">Backend processes packets, stores history, serves real-time updates</text>
+    </g>
+    
+    <g>
+        <circle cx="475" cy="825" r="8" fill="#dc2626"/>
+        <text x="495" y="830" font-size="12" fill="#334155" font-family="system-ui, sans-serif">Alert system monitors geofences and triggers email notifications</text>
+    </g>
+</svg>

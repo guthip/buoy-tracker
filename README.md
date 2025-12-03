@@ -2,6 +2,25 @@
 
 A real-time web interface for tracking Meshtastic mesh network nodes on a live map.
 
+## The Problem
+
+Racing buoys anchored in tidal waters face a critical risk: mooring chains wear out and break, causing buoys to break free and drift with the tide and wind. Once adrift, expensive buoys are difficult to recover—and AirTags on the buoys only work within Bluetooth range.
+
+To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit GPS positions via mesh network, with position packets received by gateway nodes and relayed through MQTT.
+
+## System Architecture
+
+![Buoy Tracker System Architecture](screenshots/buoy-tracker-architecture.svg)
+
+**Buoy Tracker enables:**
+- **Real-time tracking**: Map-based visualization of buoy positions as updates arrive
+- **Drift detection**: Automatic alerts when buoys move beyond expected anchoring zones
+- **Instant notifications**: Email alerts on drift detection
+- **Signal monitoring**: Battery, RSSI, SNR tracking for network health
+- **Mesh-range coverage**: Works across miles of mesh network, not limited to Bluetooth
+
+**Data flow:** Buoys → Mesh Network → Gateways → MQTT Broker → Backend → Dashboard → Alerts
+
 ## Features
 
 - **Real-time Node Tracking**: Live MQTT feed of mesh node positions
@@ -46,29 +65,7 @@ A real-time web interface for tracking Meshtastic mesh network nodes on a live m
   - Light red card background alerts when nodes move outside expected range
   - Gray markers at home position until first GPS fix
   - Packet activity display with timestamps
-- **Data Handling & Retention**: All packet history, node info, and position trails are stored in memory for the current session. When the server restarts, history is reset and rebuilt from incoming MQTT packets.
-  - **Position Deduplication**: Retransmitted packets automatically filtered to show only unique positions
-  - **Zero-Position Filtering**: Invalid 0,0 positions automatically skipped (prevents false entries)
-  - **Signal History**: Up to 50 recent readings per node (battery, RSSI, SNR) stored in-memory
-  - **Dynamic Config Updates**: Origin coordinates recalculated on config reload/restart
-  - **Debug Tools**: View recent raw MQTT messages
-  - **Configurable**: All settings in `tracker.config`
 
-## Interface Preview
-
-**Basic Window** - Minimal view with essential node information:
-![Buoy Tracker - Basic View](screenshots/basic%20window.png)
-
-**Full Featured Window** - Complete interface with all data visualization:
-![Buoy Tracker - Full Featured View](screenshots/full%20featured%20window.png)
-
-The interface shows real-time node tracking with:
-- Live MQTT connection status and node count
-- Special nodes list with position updates (LPU), distance, and battery voltage
-- Traffic light indicators for monitoring node health (battery, signal strength, SNR)
-- Interactive map with color-coded markers and gateway connections
-- Signal history visualization (battery, RSSI, SNR over time)
-- Menu controls for toggling views and customizing settings
 
 ## Quick Start
 
@@ -78,23 +75,87 @@ The interface shows real-time node tracking with:
 # Install dependencies
 pip install -r requirements.txt
 
-# (Optional) Customize configuration
-
-# Copy the template to create your local config:
+# Create configuration files from templates
 cp tracker.config.template tracker.config
-nano tracker.config
+cp secret.config.template secret.config
 
-# Run the application (uses tracker.config or falls back to template)
+# Edit to customize MQTT broker, special nodes, etc.
+nano tracker.config
+nano secret.config
+
+# Run the application
 python3 run.py
 ```
 
 The web interface will be available at `http://localhost:5102`
 
-The application runs out-of-the-box with default settings. To customize MQTT broker, special nodes, or other settings, copy `tracker.config.template` to `tracker.config` and edit your local copy. **Note:** `tracker.config` is not included in the public repository or Docker images; only `tracker.config.template` is distributed.
-
 ### Docker Deployment (Recommended)
 
-**Using docker-compose (Easiest) - Follow these steps:**
+**Option 1: Using Pre-built Docker Hub Image (Fastest)**
+
+No build required—pull the pre-built container directly:
+
+1. Create volume directories and configuration files from templates:
+```bash
+# Create directories for volumes (config, data, logs)
+mkdir -p config data logs
+
+# Download template files from GitHub
+curl -o config/tracker.config.template https://raw.githubusercontent.com/guthip/buoy-tracker/main/tracker.config.template
+curl -o config/secret.config.template https://raw.githubusercontent.com/guthip/buoy-tracker/main/secret.config.template
+
+# Create configuration files from templates
+cp config/tracker.config.template config/tracker.config
+cp config/secret.config.template config/secret.config
+
+# Customize for your environment
+nano config/tracker.config  # MQTT broker, special nodes, etc.
+nano config/secret.config   # Credentials (if using email alerts)
+```
+
+2. Create minimal docker-compose.yml:
+```yaml
+services:
+  buoy-tracker:
+    image: dokwerker8891/buoy-tracker:latest
+    container_name: buoy-tracker
+    restart: unless-stopped
+    ports:
+      - 5102:5102
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - MQTT_USERNAME
+      - MQTT_PASSWORD
+      - MQTT_KEY
+      - ALERT_SMTP_USERNAME
+      - ALERT_SMTP_PASSWORD
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:5102/api/status]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+```
+
+3. Start the service:
+```bash
+docker compose up -d
+```
+
+4. View logs:
+```bash
+docker compose logs -f
+```
+
+Access the web interface at **http://localhost:5102**
+
+---
+
+**Option 2: Using docker-compose with Source Code (Build Locally)**
+
+Clone the repository and build from source:
 
 1. Clone the repository:
 ```bash
@@ -102,32 +163,58 @@ git clone https://github.com/guthip/buoy-tracker.git
 cd buoy-tracker
 ```
 
-
-2. Create logs directory:
+2. Create volume directories and configuration files from templates:
 ```bash
-mkdir -p logs
+# Create directories for volumes (config, data, logs)
+mkdir -p config data logs
+
+# Create configuration files from templates in config directory
+cp tracker.config.template config/tracker.config
+cp secret.config.template config/secret.config
+
+# Customize for your environment
+nano config/tracker.config  # MQTT broker, special nodes, etc.
+nano config/secret.config   # Credentials (if using email alerts)
 ```
 
-3. Copy and customize configuration files:
-```bash
-cp tracker.config.template tracker.config
-cp secret.config.example secret.config
-nano tracker.config  # Edit your local config
-```
-
-5. Start the service (must run from repo directory with docker-compose.yml):
+3. Start the service:
 ```bash
 docker compose up -d
 ```
 
-6. View logs:
+4. View logs:
 ```bash
 docker compose logs -f
 ```
 
 Access the web interface at **http://localhost:5102**
 
-**Building from Source**
+**Volume Structure** (persists between container restarts):
+- `./config/` → Configuration files (tracker.config, secret.config)
+  - Mount to: `/app/config` in container
+  - Editable on host; container reads from here
+  - Create from templates during initial setup
+- `./data/` → Application data (special_nodes.json, historical data)
+  - Mount to: `/app/data` in container
+  - Persists between restarts
+- `./logs/` → Application logs
+  - Mount to: `/app/logs` in container
+  - Useful for debugging and monitoring
+
+**Making Changes to Configuration:**
+After editing files in `./config/`:
+1. **Without restart** (recommended):
+   ```bash
+   curl -X POST http://localhost:5102/api/config/reload
+   ```
+2. **With restart** (if reload doesn't work):
+   ```bash
+   docker compose restart buoy-tracker
+   ```
+
+**Building Custom Images**
+
+If you want to build a custom image with local modifications:
 
 ```bash
 # Clone the repository
@@ -135,9 +222,9 @@ git clone https://github.com/guthip/buoy-tracker.git
 cd buoy-tracker
 
 # Build the Docker image
-docker build -t buoy-tracker:latest .
+docker build -t my-buoy-tracker:latest .
 
-# Run with docker-compose
+# Run with docker-compose (update service image in docker-compose.yml to my-buoy-tracker:latest)
 docker compose up -d
 ```
 
@@ -146,12 +233,14 @@ docker compose up -d
 - ✅ In-memory history (position and telemetry) for current session
 - ✅ Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), Raspberry Pi (ARM64)
 
-**Volumes Created:**
-- `./tracker.config` → Local configuration file (read-only, not tracked; place next to secret.config)
-- `./tracker.config.template` → Template config (distributed, tracked)
-- `./secret.config.example` → Example secrets file (should be copied to secret.config for deployment)
-- `./secret.config` → Local secrets file (optional, not tracked)
-- `./logs/` → Application logs
+**Configuration files (created from templates in config volume):**
+- `./config/tracker.config.template` → Reference template; copy to `config/tracker.config` and customize for your MQTT broker, special nodes, etc.
+- `./config/secret.config.template` → Template showing required secrets; copy to `config/secret.config` and fill in real values
+
+**Generated directories:**
+- `./config/` → Configuration files (created from templates during setup; mounted as volume for easy editing)
+- `./data/` → Application data persistence (history.json, special node tracking data)
+- `./logs/` → Application logs (created automatically)
 
 
 ## Using the Interface
@@ -179,14 +268,19 @@ docker compose up -d
 
 ## Configuration
 
-
-The application works out-of-the-box with default settings. To customize, copy the template config and edit your local copy:
+Before running the application, create your volume directories and configuration files:
 
 ```bash
-cp tracker.config.template tracker.config
-nano tracker.config
-cp secret.config.example secret.config
-nano secret.config
+# Create directories for volumes
+mkdir -p config data logs
+
+# Create configuration files from templates
+cp tracker.config.template config/tracker.config
+cp secret.config.template config/secret.config
+
+# Customize for your environment
+nano config/tracker.config
+nano config/secret.config  # Optional: only needed if using email alerts
 ```
 
 ### Applying Configuration Changes
@@ -301,7 +395,7 @@ show_all_nodes = false              # Only show special nodes
 show_gateways = false               # Don't show gateways
 show_position_trails = true         # Show position trails
 show_nautical_markers = true        # Show chart markers
-trail_history_hours = 24            # Show 24 hours of history
+trail_history_hours = 168           # Show full week of history
 ```
 
 With this configuration:
@@ -404,7 +498,9 @@ Once a position is learned, movement alerts are triggered relative to that first
 - Position history (up to 2 weeks)
 - Node info (battery, channel, telemetry, position, hardware)
 - Packet history with full details
-- Data is **not persisted** across server restarts - starts fresh on each restart
+- Data persistence across server restarts is controlled by the `enable_persistence` setting in `tracker.config`:
+  - When `false` (default): All history is cleared on server restart (recommended for production)
+  - When `true`: Special node history persists across restarts (development/debugging only)
 - Packet data includes: timestamps, packet types, channel info, position/telemetry/nodeinfo details
 
 ## Email Alerts
@@ -594,11 +690,13 @@ buoy_tracker/
 │   └── app.js               # Frontend JavaScript
 ├── data/                    # Data directory (in-memory only, not persisted)
 ├── tests/                   # Test suite
-├── tracker.config.template  # Configuration template (public)
-├── tracker.config           # Your local configuration (not in repo or public images)
+├── tracker.config.template  # Template (copy to tracker.config during setup)
+├── secret.config.example    # Template (copy to secret.config during setup)
 ├── run.py                   # Application runner
 └── requirements.txt         # Python dependencies
 ```
+
+**Note:** `tracker.config` and `secret.config` are created from templates during deployment and are not included in the repository.
 
 ## Development
 

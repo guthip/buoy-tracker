@@ -76,6 +76,7 @@ PROJECT_LEARNINGS.md
 CHANGELOG.md
 DEPLOYMENT_CHECKLIST.md
 RATE_LIMIT_TESTING.md
+HOP_PROTOCOL_RESEARCH.md
 kill_server.sh
 verify_deployment.sh
 
@@ -85,10 +86,10 @@ create_deployment_bundle.sh
 
 # Server management scripts (local development only)
 start_server.sh
+start_clean_server.sh
+observer_server.sh
+kill_server.sh
 .server.pid
 
 # Security files (internal, not for public release)
-# SECURITY_ANALYSIS.md - Theoretical vulnerability analysis and remediation guidance
-# SECURITY_FIXES.md - v0.9 specific fixes applied
-SECURITY_ANALYSIS.md
-SECURITY_FIXES.md
+SECURITY.md

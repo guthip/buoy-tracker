@@ -21,6 +21,10 @@ from collections import defaultdict
 logging.basicConfig(level=getattr(logging, config.LOG_LEVEL),
                    format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+logger.info(f'=== BUOY TRACKER STARTING (log_level={config.LOG_LEVEL}) ===')
+
+# Suppress verbose Flask/Werkzeug HTTP request logging
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -320,7 +324,7 @@ def health_check() -> Dict[str, str]:
 def api_status() -> Response:
     """Compatibility status endpoint used by the simple.html UI."""
     nodes = mqtt_handler.get_nodes()
-    mqtt_status = mqtt_handler.is_connected()  # Returns: 'receiving_packets', 'connected_to_server', 'connecting', or 'disconnected'
+    mqtt_status = mqtt_handler.is_connected()  # Returns: 'receiving_packets', 'stale_data', 'connected_to_server', 'connecting', or 'disconnected'
     mqtt_connected = mqtt_status in ('receiving_packets', 'connected_to_server')  # True if we have any connection
     return jsonify({
         'mqtt_connected': mqtt_connected,
@@ -389,21 +393,6 @@ def get_special_history() -> Response:
 
 
 
-@app.route('/api/special/packets', methods=['GET'])
-@require_api_key
-@check_rate_limit
-def special_packets_all() -> Response:
-    """Get recent packets for all special nodes."""
-    from flask import request
-    try:
-        limit = request.args.get('limit', type=int, default=50)
-        data = mqtt_handler.get_special_node_packets(node_id=None, limit=limit)
-        return jsonify({'packets': data, 'count': sum(len(v) for v in data.values())})
-    except Exception as e:
-        logger.exception('Failed to get special node packets')
-        return jsonify({'error': str(e)}), 500
-
-
 @app.route('/api/signal/history', methods=['GET'])
 @require_api_key
 @check_rate_limit
@@ -422,20 +411,9 @@ def get_signal_history() -> Response:
         logger.exception('Failed to get signal history')
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/gateways', methods=['GET'])
-@require_api_key
-@check_rate_limit
-def get_gateways() -> Response:
-    """Get all known gateways with their metadata (name, signal strength, position if available)."""
-    try:
-        gateways = mqtt_handler.get_all_gateways()
-        return jsonify({'gateways': gateways, 'count': len(gateways)})
-    except Exception as e:
-        logger.exception('Failed to get gateways')
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/config/movement-threshold', methods=['POST'])
 @require_api_key
+@check_rate_limit
 def update_movement_threshold() -> Response:
     """Update the special nodes movement threshold in memory."""
     try:

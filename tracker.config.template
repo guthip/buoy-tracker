@@ -4,7 +4,7 @@
 
 [app]
 title = SYC buoy tracker
-version = 0.9
+version = 0.92
 
 [mqtt]
 # MQTT broker settings
