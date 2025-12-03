@@ -37,11 +37,11 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     environment:
-      - MQTT_USERNAME
-      - MQTT_PASSWORD
-      - MQTT_KEY
-      - ALERT_SMTP_USERNAME
-      - ALERT_SMTP_PASSWORD
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_KEY: ${MQTT_KEY:-}
+      ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
+      ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
     healthcheck:
       test: [CMD, curl, -f, http://localhost:5102/api/status]
       interval: 30s
