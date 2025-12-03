@@ -1694,9 +1694,8 @@
                             latlngs.push([pnt.lat, pnt.lon]); 
                           } 
                           trails[node.id] = L.polyline(latlngs, {color:'#1976D2', weight:3, opacity:0.7}).addTo(map); 
-                        } else {
-                          console.log('No trail data for node', node.id, pts);
                         }
+                        // Trail data empty for this node
                       } catch(e){ 
                         console.warn('Error parsing trail history for node', node.id, e);
                       }
@@ -1884,7 +1883,6 @@
         try {
           // Skip polling if rate limited
           if (isRateLimitPaused()) {
-            console.log('[RATELIMIT] Skipping poll - paused until', new Date(rateLimitPauseUntil).toLocaleTimeString());
             return;
           }
           pollAttempts++;
@@ -2052,17 +2050,13 @@
   // Modal functions for node details
   window.showGatewayDetails = function(gatewayId, gatewayName) {
     // Display gateway details including which special nodes receive through it
-    console.log('showGatewayDetails called with:', gatewayId, gatewayName);
-    console.log('currentNodesData:', currentNodesData);
     
     // Find the gateway node in currentNodesData
     var gatewayNode = null;
     if (currentNodesData && currentNodesData.length > 0) {
-      console.log('Searching', currentNodesData.length, 'nodes for gateway ID:', gatewayId);
       for (var i = 0; i < currentNodesData.length; i++) {
         if (currentNodesData[i].id === gatewayId) {
           gatewayNode = currentNodesData[i];
-          console.log('Found gateway node:', gatewayNode);
           break;
         }
       }
@@ -2158,17 +2152,10 @@
     var title = document.getElementById('modalTitle');
     var container = document.getElementById('histogramContainer');
     
-    console.log('Modal elements found:', { 
-      modal: !!modal, 
-      title: !!title, 
-      container: !!container 
-    });
-    
     if (modal && title && container) {
       title.textContent = '📡 ' + gatewayName + ' (Gateway)';
       container.innerHTML = '<div style="padding:12px;font-size:13px;line-height:1.6;">' + details + '</div>';
       modal.style.display = 'flex';
-      console.log('Gateway modal displayed successfully');
     } else {
       console.warn('Modal elements missing, using fallback alert');
       // Fallback to alert
