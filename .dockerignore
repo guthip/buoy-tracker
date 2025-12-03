@@ -16,6 +16,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+build_output.txt
 
 # Logs (will be mounted as volume in production)
 *.log
@@ -47,14 +48,15 @@ create_deployment_bundle.sh
 verify_deployment.sh
 .server.pid
 
+# Docker Hub setup documentation (local/internal only)
+DOCKER_HUB_SETUP.md
+
 # Configuration files (must be created from templates during deployment)
 # Both tracker.config and secret.config should NOT be in the image
 tracker.config
 secret.config
-
-# Templates are included in the image for reference - users copy them to create actual config files
-# tracker.config.template - included (reference template mirroring actual structure)
-# secret.config.template - included (template showing required secrets)
+.env
+.env.template
 
 # SECURITY_ANALYSIS.md
 # SECURITY_PATCHES.md
