@@ -93,63 +93,42 @@ The web interface will be available at `http://localhost:5102`
 
 **Option 1: Using Pre-built Docker Hub Image (Fastest)**
 
-No build required—pull the pre-built container directly:
+No build or GitHub cloning required—pull the container, it initializes itself:
 
-1. Create volume directories and configuration files from templates:
+1. Create volume directories:
 ```bash
-# Create directories for volumes (config, data, logs)
 mkdir -p config data logs
-
-# Download template files from GitHub
-curl -o config/tracker.config.template https://raw.githubusercontent.com/guthip/buoy-tracker/main/tracker.config.template
-curl -o config/secret.config.template https://raw.githubusercontent.com/guthip/buoy-tracker/main/secret.config.template
-
-# Create configuration files from templates
-cp config/tracker.config.template config/tracker.config
-cp config/secret.config.template config/secret.config
-
-# Customize for your environment
-nano config/tracker.config  # MQTT broker, special nodes, etc.
-nano config/secret.config   # Credentials (if using email alerts)
 ```
 
-2. Create minimal docker-compose.yml:
-```yaml
-services:
-  buoy-tracker:
-    image: dokwerker8891/buoy-tracker:latest
-    container_name: buoy-tracker
-    restart: unless-stopped
-    ports:
-      - 5102:5102
-    volumes:
-      - ./config:/app/config
-      - ./data:/app/data
-      - ./logs:/app/logs
-    environment:
-      - MQTT_USERNAME
-      - MQTT_PASSWORD
-      - MQTT_KEY
-      - ALERT_SMTP_USERNAME
-      - ALERT_SMTP_PASSWORD
-    healthcheck:
-      test: [CMD, curl, -f, http://localhost:5102/api/status]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+2. Download docker-compose configuration from GitHub:
+```bash
+curl -o docker-compose.yml https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.hub.yml
 ```
 
-3. Start the service:
+3. Start the service (first run will auto-initialize config files):
 ```bash
 docker compose up -d
 ```
 
-4. View logs:
+4. Edit configuration files on the host:
 ```bash
-docker compose logs -f
+nano config/tracker.config  # MQTT broker, special nodes, etc.
+nano config/secret.config   # Credentials (if needed)
+```
+
+5. Reload configuration without restart:
+```bash
+curl -X POST http://localhost:5102/api/config/reload
 ```
 
 Access the web interface at **http://localhost:5102**
+
+**How it works:**
+- Downloads pre-built image from Docker Hub (`dokwerker8891/buoy-tracker:latest`)
+- On first run, container auto-initializes config files from templates (included in image)
+- User edits config files directly on host (`./config/` directory)
+- All data persists in mounted volumes (`./config/`, `./data/`, `./logs/`)
+- No GitHub clone needed—only docker-compose.yml and volumes directories
 
 ---
 

@@ -19,6 +19,10 @@ RUN apt-get update \
 # Copy application
 COPY . /app
 
+# Copy entrypoint script
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Create non-root user
 RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/app app \
     && chown -R app:app /app
@@ -31,4 +35,5 @@ EXPOSE 5102
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:5102/api/status || exit 1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "run.py"]
