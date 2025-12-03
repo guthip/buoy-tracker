@@ -13,175 +13,111 @@ Docker automatically selects the correct architecture for your platform.
 
 ## Quick Start
 
-**Buoy Tracker v0.92** - Real-time Meshtastic mesh network node tracking with data persistence
+### Deploy from Docker Hub (Recommended)
 
-**Using docker-compose (Recommended)**
+No build required—use the pre-built image from Docker Hub:
 
-Clone the repository and use docker-compose:
-
+**1. Create deployment directory:**
 ```bash
-# 1. Clone the repository
-git clone https://github.com/guthip/buoy-tracker.git
-cd buoy-tracker
-
-
-# 2. Create logs directory
-mkdir -p logs
-
-# 3. Copy and customize configuration files
-cp tracker.config.template tracker.config
-cp secret.config.example secret.config
-nano tracker.config  # Edit your local config
-
-# 5. Start the service (must run from repo directory)
-docker compose up -d
-
-# 6. Check status
-docker compose ps
-docker compose logs -f
-
-# Access at http://localhost:5102
+mkdir buoy-tracker && cd buoy-tracker
+mkdir -p config data logs
 ```
 
-**What's created in your directory:**
-```
-./tracker.config       # Local configuration file (mounted read-only to container, not tracked)
-./tracker.config.template # Template config (distributed, tracked)
-./secret.config        # Local secrets file (optional, not tracked)
-./secret.config.example # Example secrets file (distributed, tracked)
-./logs/                # Application logs
+**2. Create `docker-compose.yml` file and copy this content:**
+```yaml
+services:
+  buoy-tracker:
+    image: dokwerker8891/buoy-tracker:latest
+    container_name: buoy-tracker
+    restart: unless-stopped
+    ports:
+      - 5102:5102
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - MQTT_USERNAME
+      - MQTT_PASSWORD
+      - MQTT_KEY
+      - ALERT_SMTP_USERNAME
+      - ALERT_SMTP_PASSWORD
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:5102/api/status]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 ```
 
-# To update to a new version:
+**3. Start the container:**
 ```bash
-docker compose pull
 docker compose up -d
 ```
+On first run, the container auto-initializes config files in `./config/`
 
-Data in `./data/` directory is automatically preserved.
+**4. Customize configuration:**
+```bash
+nano config/tracker.config  # MQTT broker, special nodes, etc.
+nano config/secret.config   # Credentials (if needed)
+```
+
+**5. Reload configuration (without restart):**
+```bash
+curl -X POST http://localhost:5102/api/config/reload
+```
+
+Access the web interface at **http://localhost:5102**
+
+---
 
 ## Running Options
 
-### Recommended: Docker Compose
+### Docker Compose (Recommended)
 
-Uses the included `docker-compose.yml` with pre-configured volumes:
+All configuration lives in `./config/` on the host and is easily editable:
 
 ```bash
-# Start services
-docker compose up -d
-
 # View logs
 docker compose logs -f
 
-# Stop services
+# Check status
+docker compose ps
+
+# Restart
+docker compose restart
+
+# Stop
 docker compose down
 ```
 
-**Automatic volume setup:**
-- `./tracker.config` → Local configuration file (must be a file, not a folder; place next to secret.config, not tracked)
-- `./tracker.config.template` → Template config (distributed, tracked)
-- `./secret.config.example` → Example secrets file (should be copied to secret.config for deployment)
-- `./secret.config` → Local secrets file (optional, not tracked)
+**Volume Structure:**
+- `./config/tracker.config` → Auto-created from template on first run (edit here)
+- `./config/secret.config` → Auto-created from template on first run (edit here)
+- `./config/tracker.config.template` → Included in image (reference)
+- `./config/secret.config.template` → Included in image (reference)
+- `./data/` → Application data persistence (special_nodes.json, etc.)
 - `./logs/` → Application logs
 
-### Manual: docker run with Volumes
+## Configuration
 
-For systems without docker-compose, build from source and run:
-
-```bash
-# Clone the repository and build
-git clone https://github.com/guthip/buoy-tracker.git
-cd buoy-tracker
-docker build -t buoy-tracker:latest .
-
-
-# Create logs directory and local config
-mkdir -p logs
-cp tracker.config.template tracker.config
-
-# Run with volumes for persistence
-docker run -d \
-  --name buoy-tracker \
-  -p 5102:5102 \
-  --restart unless-stopped \
-  -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/logs:/app/logs \
-  buoy-tracker:latest
-```
-
-**Note:** Only mount `tracker.config` (required). Don't mount `secret.config` unless you have one—the app works fine without it. If you do have a `secret.config` file, add: `-v $(pwd)/secret.config:/app/secret.config:ro` to the docker run command.
-
-### Quick Start (No Persistence)
-
-For testing - runs with defaults, no volume mounts (requires build first):
+Configuration files are stored in `./config/` on the host and are editable without rebuilding or restarting the container:
 
 ```bash
-git clone https://github.com/guthip/buoy-tracker.git && cd buoy-tracker
-docker build -t buoy-tracker:latest .
+# Edit MQTT configuration
+nano config/tracker.config
 
-docker run -d \
-  --name buoy-tracker \
-  -p 5102:5102 \
-  buoy-tracker:latest
+# Edit secrets (optional - only if using email alerts)
+nano config/secret.config
+
+# Reload without restart
+curl -X POST http://localhost:5102/api/config/reload
 ```
 
-⚠️ **Note**: Data will be lost when container restarts. Use volumes for production.
-
-## Configuration Priority
-
-The app loads config in this order:
-1. Environment variables (highest priority)
-2. Mounted `secret.config` file (overrides tracker.config for sensitive fields)
-3. Mounted `tracker.config` file (local, not tracked)
-4. Built-in `tracker.config.template` (default fallback, distributed)
-
-## Volume Mounts Strategy
-
-Separate volumes for different concerns makes deployment and upgrades seamless:
-
-### Configuration Volume (Recommended for Production)
-```bash
--v $(pwd)/tracker.config:/app/tracker.config:ro
--v $(pwd)/secret.config:/app/secret.config:ro
-```
-- **Benefits**: Update config without rebuilding image, works at any installation path
-- **Persistence**: Survives container restarts and image upgrades
-- **Security**: Read-only mount prevents accidental changes in container
-- **Multi-environment**: Use same image with different configs (dev/prod/staging)
-- **tracker.config**: Local configuration (not tracked)
-- **tracker.config.template**: Distributed template (tracked)
-- **secret.config**: Sensitive credentials (email passwords, SMTP credentials) - optional, only if using email alerts
-
-### Complete Volume Setup
-```bash
-git clone https://github.com/guthip/buoy-tracker.git && cd buoy-tracker
-docker build -t dokwerker8891/buoy-tracker:latest .
-
-# Create required files and directories
-mkdir -p data logs
-touch tracker.config
-
-docker run -d \
-  --name buoy-tracker \
-  -p 5102:5102 \
-  --restart unless-stopped \
-  -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/logs:/app/logs \
-  buoy-tracker:latest
-```
-
-**Optional:** If you have a `secret.config` file with credentials, add this volume to the docker run command:
-```bash
--v $(pwd)/secret.config:/app/secret.config:ro \
-```
-
-**Why This Approach?**
-1. ✅ Config changes don't require image rebuild or container restart
-2. ✅ Same image works across dev/staging/production with different configs
-3. ✅ Data persists across container upgrades
-4. ✅ Logs accessible from host for monitoring
-5. ✅ Easy to backup configuration separately from data
+**On first run**, the container automatically initializes:
+- `./config/tracker.config` (copied from template in image)
+- `./config/secret.config` (copied from template in image)
+- `./config/tracker.config.template` (reference template from image)
+- `./config/secret.config.template` (reference template from image)
 
 ## Ports
 
