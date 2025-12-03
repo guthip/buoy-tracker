@@ -49,19 +49,40 @@ services:
       retries: 3
 ```
 
-**3. Start the container:**
+**3. (Optional) Create `.env` file for environment variables:**
+
+For security, sensitive credentials can be passed via environment variables instead of config files:
+
+```bash
+# Copy the template
+cp .env.template .env
+
+# Edit with your values (optional - MQTT and SMTP credentials)
+nano .env
+```
+
+This file will be automatically loaded by docker-compose. Supported variables:
+- `MQTT_USERNAME` - MQTT broker username
+- `MQTT_PASSWORD` - MQTT broker password
+- `MQTT_KEY` - MQTT encryption key
+- `ALERT_SMTP_USERNAME` - SMTP username for email alerts
+- `ALERT_SMTP_PASSWORD` - SMTP password for email alerts
+
+**Note:** If you don't create a `.env` file, the container will use values from `config/tracker.config` and `config/secret.config` instead (recommended for most deployments).
+
+**4. Start the container:
 ```bash
 docker compose up -d
 ```
 On first run, the container auto-initializes config files in `./config/`
 
-**4. Customize configuration:**
+**5. Customize configuration:**
 ```bash
 nano config/tracker.config  # MQTT broker, special nodes, etc.
 nano config/secret.config   # Credentials (if needed)
 ```
 
-**5. Restart the container to apply configuration changes:**
+**6. Restart the container to apply configuration changes:**
 ```bash
 docker compose restart
 ```
