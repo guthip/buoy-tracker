@@ -61,9 +61,9 @@ nano config/tracker.config  # MQTT broker, special nodes, etc.
 nano config/secret.config   # Credentials (if needed)
 ```
 
-**5. Reload configuration (without restart):**
+**5. Restart the container to apply configuration changes:**
 ```bash
-curl -X POST http://localhost:5102/api/config/reload
+docker compose restart
 ```
 
 Access the web interface at **http://localhost:5102**
@@ -83,7 +83,7 @@ docker compose logs -f
 # Check status
 docker compose ps
 
-# Restart
+# Restart (apply config changes)
 docker compose restart
 
 # Stop

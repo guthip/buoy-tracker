@@ -116,9 +116,9 @@ nano config/tracker.config  # MQTT broker, special nodes, etc.
 nano config/secret.config   # Credentials (if needed)
 ```
 
-5. Reload configuration without restart:
+5. Restart the container to apply changes:
 ```bash
-curl -X POST http://localhost:5102/api/config/reload
+docker compose restart
 ```
 
 Access the web interface at **http://localhost:5102**
@@ -264,22 +264,10 @@ nano config/secret.config  # Optional: only needed if using email alerts
 
 ### Applying Configuration Changes
 
-After editing `tracker.config`, you have two options:
+After editing `config/tracker.config`, restart the container:
 
-**Option 1: Reload without restart (recommended)**
 ```bash
-# Reload config without stopping the server
-curl -X POST http://localhost:5102/api/config/reload
-```
-This instantly applies changes to special nodes, coordinates, thresholds, and other settings.
-
-**Option 2: Full restart** 
-```bash
-# Only needed if reload fails or for major updates
-docker restart buoy-tracker  # Docker deployment
-# or
-pkill -f "python3 run.py"   # Direct Python execution
-python3 run.py              # Restart locally
+docker compose restart
 ```
 
 ---
