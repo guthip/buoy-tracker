@@ -482,8 +482,9 @@
   };
   
   function loadAppFeatures() {
-    // Load app features from server config via /api/status
-    fetch('/api/status')
+    // Load app features from server config via /health
+    // Returns a promise for proper sequencing on page load
+    return fetch('/health')
       .then(r => r.json())
       .then(data => {
         if (data.features) {
@@ -498,8 +499,6 @@
             trafficLightLegend.style.gridTemplateColumns = appFeatures.show_gateways ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
           }
           // Display options are now config-driven; no toggles to update
-          // Trigger update to apply feature flags
-          updateNodes();
         }
       })
       .catch(e => console.error('Failed to load app features:', e));
@@ -670,7 +669,7 @@
   function buildSignalHistogramSVG(historyPoints) {
     /**
      * Build an SVG line chart showing battery voltage, RSSI, and SNR over time.
-     * Only plots the best (highest) RSSI and SNR per second to reduce clutter.
+     * Only plots the max (highest) RSSI and SNR per minute to reduce clutter.
      * historyPoints: array of {ts, battery, rssi, snr}
      * Returns SVG string with hover tooltips
      */
@@ -678,34 +677,32 @@
       return '<div style="padding: 10px; color: #999; text-align: center;">No signal history yet</div>';
     }
     
-    // Aggregate data by Packet ID - keep best RSSI/SNR per Packet ID
+    // Aggregate data by 1-minute windows - keep max RSSI/SNR per minute
+    var oneMinute = 60;
     var aggregatedData = {};
     for (var i = 0; i < historyPoints.length; i++) {
       var p = historyPoints[i];
-      var packetKey = p.packet_id || Math.floor(p.ts); // Use packet_id if present, else fallback to second
-      if (!aggregatedData[packetKey]) {
-        aggregatedData[packetKey] = {
+      var minuteKey = Math.floor(p.ts / oneMinute); // Group by minute window
+      if (!aggregatedData[minuteKey]) {
+        aggregatedData[minuteKey] = {
           ts: p.ts,
           battery: p.battery,
           rssi: p.rssi,
           snr: p.snr,
-          count: 1,
-          packet_id: p.packet_id
+          count: 1
         };
       } else {
-        // Keep the best (highest) RSSI and SNR values
-        if (p.rssi != null && (aggregatedData[packetKey].rssi == null || p.rssi > aggregatedData[packetKey].rssi)) {
-          aggregatedData[packetKey].rssi = p.rssi;
-          aggregatedData[packetKey].ts = p.ts;
+        // Keep the max (highest) RSSI and SNR values within the minute
+        if (p.rssi != null && (aggregatedData[minuteKey].rssi == null || p.rssi > aggregatedData[minuteKey].rssi)) {
+          aggregatedData[minuteKey].rssi = p.rssi;
         }
-        if (p.snr != null && (aggregatedData[packetKey].snr == null || p.snr > aggregatedData[packetKey].snr)) {
-          aggregatedData[packetKey].snr = p.snr;
-          aggregatedData[packetKey].ts = p.ts;
+        if (p.snr != null && (aggregatedData[minuteKey].snr == null || p.snr > aggregatedData[minuteKey].snr)) {
+          aggregatedData[minuteKey].snr = p.snr;
         }
         if (p.battery != null) {
-          aggregatedData[packetKey].battery = p.battery;
+          aggregatedData[minuteKey].battery = p.battery;
         }
-        aggregatedData[packetKey].count++;
+        aggregatedData[minuteKey].count++;
       }
     }
     // Convert to sorted array
@@ -1805,15 +1802,19 @@
   // initChannels removed: channel filter no longer used
   initMap(); 
   
-  loadAppFeatures(); // Load app features from server config
-  updateStatus(); // Call immediately to get initial status
-  
-  // Initial fetch on page load
-  try {
-    updateNodes();
-  } catch(e) {
-    console.error('[INIT] Error in updateNodes:', e);
-  }
+  // Load app features and then fetch initial data
+  loadAppFeatures().then(function() {
+    updateStatus(); // Call immediately to get initial status
+    
+    // Initial fetch on page load
+    try {
+      updateNodes();
+    } catch(e) {
+      console.error('[INIT] Error in updateNodes:', e);
+    }
+  }).catch(function(e) {
+    console.error('Failed to initialize:', e);
+  });
   
   var statusRefresh = parseInt(document.body.dataset.statusRefresh || '60000', 10);
   var nodeRefresh = parseInt(document.body.dataset.nodeRefresh || '60000', 10);
@@ -2189,7 +2190,7 @@
     // Fetch signal history from API for other nodes
     var url = '/api/signal/history?node_id=' + nodeId;
     var fetchOptions = {};
-    if (apiKey) {
+    if (apiKeyRequired && apiKey) {
       fetchOptions.headers = {
         'Authorization': 'Bearer ' + apiKey
       };
@@ -2198,6 +2199,11 @@
     fetch(url, fetchOptions)
       .then(function(response) {
         if (response.status === 401) {
+          // API key required but missing or invalid - prompt user
+          if (apiKeyRequired && !isLocalhost) {
+            showApiKeyModal();
+            throw new Error('Unauthorized - please enter API key');
+          }
           throw new Error('Unauthorized');
         }
         return response.json();

@@ -3,6 +3,7 @@
 from flask import Flask, jsonify, render_template, request, Response
 from functools import wraps
 import logging
+from logging.handlers import RotatingFileHandler
 import threading
 import sys
 from pathlib import Path
@@ -18,8 +19,38 @@ else:
 import time
 from collections import defaultdict
 
-logging.basicConfig(level=getattr(logging, config.LOG_LEVEL),
-                   format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging with rotating file handler
+log_level = getattr(logging, config.LOG_LEVEL)
+
+# Console handler (stdout)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(log_level)
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
+
+# File handler with rotation (5MB per file, keep 5 backups = 25MB total)
+# Use /app/logs in Docker, otherwise use local logs directory
+if Path('/app').exists() and Path('/app').is_dir():
+    log_dir = Path('/app/logs')
+else:
+    log_dir = Path(__file__).parent.parent / 'logs'
+log_dir.mkdir(parents=True, exist_ok=True)
+log_file = log_dir / 'buoy_tracker.log'
+file_handler = RotatingFileHandler(
+    str(log_file),
+    maxBytes=5 * 1024 * 1024,  # 5MB per file
+    backupCount=5  # Keep 5 backups
+)
+file_handler.setLevel(log_level)
+file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(file_formatter)
+
+# Configure root logger
+root_logger = logging.getLogger()
+root_logger.setLevel(log_level)
+root_logger.addHandler(console_handler)
+root_logger.addHandler(file_handler)
+
 logger = logging.getLogger(__name__)
 logger.info(f'=== BUOY TRACKER STARTING (log_level={config.LOG_LEVEL}) ===')
 
@@ -129,15 +160,22 @@ def check_rate_limit(f: Callable) -> Callable:
 # API Key authentication - stored server-side in secret.config (never in code or env)
 # If no API key configured, endpoints will not require authentication (development mode)
 API_KEY = config.API_KEY
-if API_KEY:
-    logger.info('API key authentication enabled')
+if config.REQUIRE_API_KEY:
+    if API_KEY:
+        logger.info('API key authentication enabled (required by config)')
+    else:
+        logger.warning('API key requirement enabled but no key configured in secret.config')
 else:
-    logger.warning('API key not configured in secret.config - API endpoints will not be protected')
+    logger.info('API key authentication disabled (config: require_api_key=false)')
 
 def require_api_key(f: Callable) -> Callable:
-    """Decorator to require API key in Authorization header."""
+    """Decorator to require API key in Authorization header (if enabled in config)."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        # If API key requirement is disabled in config, allow all requests
+        if not config.REQUIRE_API_KEY:
+            return f(*args, **kwargs)
+        
         # For development: Allow localhost exemption
         # For production: Always require API key
         if config.ENV == 'development':
@@ -296,7 +334,7 @@ def index() -> Response:
 
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
-                          api_key_required=bool(API_KEY),  # Tell client if auth is needed
+                          api_key_required=config.REQUIRE_API_KEY,  # Tell client if auth is needed
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
                           # show_controls_menu: Admin-controlled flag to show/hide Configuration tab
@@ -311,22 +349,14 @@ def index() -> Response:
 
 
 @app.route('/health', methods=['GET'])
-def health_check() -> Dict[str, str]:
-    return jsonify({'status': 'ok'})
-
-
-# /api/mqtt/connect removed - MQTT managed by background thread
-
-
-@app.route('/api/status', methods=['GET'])
-@require_api_key
 @check_rate_limit
-def api_status() -> Response:
-    """Compatibility status endpoint used by the simple.html UI."""
+def health_check() -> Response:
+    """Health check endpoint with status and configuration."""
     nodes = mqtt_handler.get_nodes()
     mqtt_status = mqtt_handler.is_connected()  # Returns: 'receiving_packets', 'stale_data', 'connected_to_server', 'connecting', or 'disconnected'
     mqtt_connected = mqtt_status in ('receiving_packets', 'connected_to_server')  # True if we have any connection
     return jsonify({
+        'status': 'ok',
         'mqtt_connected': mqtt_connected,
         'mqtt_status': mqtt_status,
         'nodes_tracked': len(nodes),
@@ -346,6 +376,12 @@ def api_status() -> Response:
             'trail_history_hours': getattr(config, 'TRAIL_HISTORY_HOURS', 24)
         }
     })
+
+
+# /api/mqtt/connect removed - MQTT managed by background thread
+
+
+# /api/status merged into /health endpoint - see health_check() above
 
 
 @app.route('/api/recent/messages', methods=['GET'])

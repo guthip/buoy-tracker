@@ -335,6 +335,10 @@ SPECIAL_HISTORY_PERSIST_PATH = str(DATA_DIR / 'special_nodes.json')
 # Environment: 'development' (localhost allowed) or 'production' (strict security)
 ENV = os.getenv('FLASK_ENV', config.get('security', 'environment', fallback='development'))
 
+# API Key requirement - whether to enforce API key authentication on endpoints
+# Default: false (rate limiting only). Set to true for additional security.
+REQUIRE_API_KEY = os.getenv('REQUIRE_API_KEY', config.get('security', 'require_api_key', fallback='false')).lower() in ('true', '1', 'yes')
+
 # Trusted reverse proxy IPs - only these can be trusted for X-Forwarded-For header
 # For example: ['10.0.0.50'] for nginx, ['10.0.0.50', '10.0.0.51'] for load balancer
 # Empty list = no reverse proxy trusted (direct connection only)

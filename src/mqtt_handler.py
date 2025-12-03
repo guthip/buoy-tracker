@@ -42,8 +42,8 @@ PACKET_STALENESS_THRESHOLD = 300  # 5 minutes - if no packet in this time, consi
 
 # Special nodes history: node_id -> deque of {ts, lat, lon, alt}
 special_history = {}
-_last_history_save = 0
-_last_gateway_pruning = 0  # Track when gateway pruning last ran
+_last_history_save = -9999999  # No longer used - removed throttling
+_last_gateway_pruning = -9999999  # Initialize to far past so gateway pruning can run on first save  # Track when gateway pruning last ran
 
 # Store MQTT topic per node to extract channel name
 node_topics = {}
@@ -618,18 +618,19 @@ def _save_special_nodes_data(force=False):
     """
     Save unified special node data to single JSON file.
     Structure: {node_id: {info: {...}, position_history: [...], packets: [...]}}
-    Only saves when force=True or when data has changed (with 5s minimum throttle to batch updates).
-    Gateway pruning only runs periodically (hourly) to avoid frequent recalculation.
+    Applies retention cleanup to prevent file size explosion:
+    - Position history: 7 days
+    - Packets: 7 days  
+    - Gateways: quality-based (7 days for high reliability, 1 day for low)
+    Gateway pruning evaluation runs once per hour to avoid recalculation overhead.
     """
-    global _last_history_save, _last_gateway_pruning
+    global _last_gateway_pruning
     now_ts = time.time()
-    
-    # Throttle to at minimum once every 5s to batch rapid updates
-    if not force and (now_ts - _last_history_save) < 5:
-        return
     
     # Determine if we should run gateway pruning (once per hour)
     run_gateway_pruning = force or (now_ts - _last_gateway_pruning) >= 3600
+    
+    logger.debug(f"_save_special_nodes_data called (force={force}, run_pruning={run_gateway_pruning})")
     
     try:
         path = Path(config.SPECIAL_HISTORY_PERSIST_PATH).parent / 'special_nodes.json'
@@ -759,8 +760,6 @@ def _save_special_nodes_data(force=False):
         
         # Atomic rename (overwrites destination on POSIX systems)
         Path(tmp_path).replace(path)
-        
-        _last_history_save = now_ts
         
         # Update pruning timer if we just ran pruning
         if run_gateway_pruning:
@@ -2052,6 +2051,9 @@ def get_nodes():
                 gateway_all_detections[gateway_id] = []
             gateway_all_detections[gateway_id].append(gw_info)
     
+    logger.debug(f"Detected gateways from special_node_gateways: {list(detected_gateways.keys())}")
+    logger.debug(f"Result node IDs already present: {result_ids}")
+    
     # Add detected gateways that aren't already in result
     for gateway_id, gw_info in detected_gateways.items():
         if gateway_id not in result_ids:
@@ -2100,18 +2102,21 @@ def get_nodes():
             result.append(gateway_node)
 
     # Limit to 100 nodes to prevent response explosion
+    # BUT: Always include gateways (infrastructure) - they don't count toward the limit
     # Prioritize: special nodes first, then blue (recently seen), then orange, then red (stale)
     special_nodes = [n for n in result if n.get('is_special')]
-    regular_nodes = [n for n in result if not n.get('is_special')]
+    gateways = [n for n in result if n.get('is_gateway') and not n.get('is_special')]
+    regular_nodes = [n for n in result if not n.get('is_special') and not n.get('is_gateway')]
     
     # Sort regular nodes by status priority (blue > orange > red)
     status_priority = {'blue': 0, 'orange': 1, 'red': 2}
     regular_nodes.sort(key=lambda n: status_priority.get(n.get('status'), 3))
     
-    # Combine: all special nodes + up to remaining slots for regular nodes
-    result = special_nodes + regular_nodes
+    # Combine: all special nodes + all gateways (no limit) + up to remaining slots for regular nodes
+    result = special_nodes + gateways + regular_nodes
     if len(result) > 100:
-        result = result[:100]
+        # Limit regular nodes only, keep all special nodes and gateways
+        result = special_nodes + gateways + regular_nodes[:max(0, 100 - len(special_nodes) - len(gateways))]
     
     return result
 

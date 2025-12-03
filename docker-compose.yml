@@ -1,7 +1,7 @@
 services:
   buoy-tracker:
-    # Build from local Dockerfile
-    build: .
+    # Deploy from Docker Hub (pre-built image)
+    image: dokwerker8891/buoy-tracker:latest
     container_name: buoy-tracker
     restart: unless-stopped
     ports:
@@ -27,7 +27,7 @@ services:
       ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
     healthcheck:
-      test: [CMD, curl, -f, http://localhost:5102/api/status]
+      test: [CMD, curl, -f, http://localhost:5102/health]
       interval: 30s
       timeout: 5s
       retries: 3

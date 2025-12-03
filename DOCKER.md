@@ -43,21 +43,44 @@ services:
       ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
     healthcheck:
-      test: [CMD, curl, -f, http://localhost:5102/api/status]
+      test: [CMD, curl, -f, http://localhost:5102/health]
       interval: 30s
       timeout: 5s
       retries: 3
 ```
 
-**3. (Optional) Create `.env` file for environment variables:**
+**3. Start the container:**
+```bash
+docker compose up -d
+```
+On first run, the container auto-initializes config files in `./config/`
 
-For security, sensitive credentials can be passed via environment variables instead of config files:
+**4. Customize configuration:**
+```bash
+nano config/tracker.config  # MQTT broker, special nodes, etc.
+nano config/secret.config   # Credentials (if needed)
+```
+
+**5. (Optional) Use environment variables instead of config files:**
+
+For security, sensitive credentials can be passed via environment variables instead of config files. Create a `.env` file (example below is configured for San Francisco Bay Area):
 
 ```bash
-# Copy the template
-cp .env.template .env
+# Create .env with your credentials (optional)
+cat > .env << 'EOF'
+# MQTT Credentials (San Francisco Bay Area Meshtastic Network)
+MQTT_USERNAME=meshdev
+MQTT_PASSWORD=large4cats
+MQTT_KEY=AQ==
 
-# Edit with your values (optional - MQTT and SMTP credentials)
+# Email Alert Credentials (if using SMTP alerts)
+ALERT_SMTP_USERNAME=your_smtp_username
+ALERT_SMTP_PASSWORD=your_smtp_password
+EOF
+```
+
+Then edit with your actual values:
+```bash
 nano .env
 ```
 
@@ -68,19 +91,7 @@ This file will be automatically loaded by docker-compose. Supported variables:
 - `ALERT_SMTP_USERNAME` - SMTP username for email alerts
 - `ALERT_SMTP_PASSWORD` - SMTP password for email alerts
 
-**Note:** If you don't create a `.env` file, the container will use values from `config/tracker.config` and `config/secret.config` instead (recommended for most deployments).
-
-**4. Start the container:
-```bash
-docker compose up -d
-```
-On first run, the container auto-initializes config files in `./config/`
-
-**5. Customize configuration:**
-```bash
-nano config/tracker.config  # MQTT broker, special nodes, etc.
-nano config/secret.config   # Credentials (if needed)
-```
+**Note:** Environment variables override values in `config/tracker.config` and `config/secret.config`. If you don't create a `.env` file, the container will use values from the config files instead (recommended for most deployments).
 
 **6. Restart the container to apply configuration changes:**
 ```bash
@@ -91,11 +102,9 @@ Access the web interface at **http://localhost:5102**
 
 ---
 
-## Running Options
+## Management Commands
 
-### Docker Compose (Recommended)
-
-All configuration lives in `./config/` on the host and is easily editable:
+Use these commands to manage the running container:
 
 ```bash
 # View logs
@@ -109,19 +118,14 @@ docker compose restart
 
 # Stop
 docker compose down
-```
 
-**Volume Structure:**
-- `./config/tracker.config` → Auto-created from template on first run (edit here)
-- `./config/secret.config` → Auto-created from template on first run (edit here)
-- `./config/tracker.config.template` → Included in image (reference)
-- `./config/secret.config.template` → Included in image (reference)
-- `./data/` → Application data persistence (special_nodes.json, etc.)
-- `./logs/` → Application logs
+# Access shell inside container
+docker compose exec buoy-tracker /bin/bash
+```
 
 ## Configuration
 
-Configuration files are stored in `./config/` on the host and are editable without rebuilding or restarting the container:
+Configuration files are stored in `./config/` on the host and are editable without rebuilding:
 
 ```bash
 # Edit MQTT configuration
@@ -130,15 +134,19 @@ nano config/tracker.config
 # Edit secrets (optional - only if using email alerts)
 nano config/secret.config
 
-# Reload without restart
-curl -X POST http://localhost:5102/api/config/reload
+# Restart to apply changes
+docker compose restart
 ```
 
 **On first run**, the container automatically initializes:
 - `./config/tracker.config` (copied from template in image)
 - `./config/secret.config` (copied from template in image)
-- `./config/tracker.config.template` (reference template from image)
-- `./config/secret.config.template` (reference template from image)
+
+**Volume Structure:**
+- `./config/tracker.config` → Auto-created on first run (edit here for MQTT broker, special nodes, etc.)
+- `./config/secret.config` → Auto-created on first run (edit here for credentials)
+- `./data/` → Application data persistence (special_nodes.json, etc.)
+- `./logs/` → Application logs
 
 ## Ports
 
@@ -146,77 +154,22 @@ curl -X POST http://localhost:5102/api/config/reload
 
 ## Health Check
 
-The container includes a health check on `/health` endpoint:
+The container includes a health check:
 
 ```bash
-# Check if container is healthy
-docker inspect --format='{{.State.Health.Status}}' buoy-tracker
-```
-
-## Management Commands
-
-```bash
-# View logs
-docker logs -f buoy-tracker
-
-# Stop container
-docker stop buoy-tracker
-
-# Start container
-docker start buoy-tracker
-
-# Remove container
-docker rm -f buoy-tracker
-
-# Access shell inside container
-docker exec -it buoy-tracker /bin/bash
+# Check container health
+docker compose ps
 ```
 
 ## Upgrading
 
-**Using docker-compose:**
 ```bash
 # Pull latest image and restart
 docker compose pull
 docker compose up -d
 ```
+
 Data in `./data/` is automatically preserved.
-
-**Using docker run:**
-```bash
-# Stop and remove old container
-docker stop buoy-tracker
-docker rm buoy-tracker
-
-# Rebuild from latest source
-cd buoy-tracker
-git pull origin main
-docker build -t buoy-tracker:latest .
-
-# Start with same volumes
-docker run -d \
-  --name buoy-tracker \
-  -p 5102:5102 \
-  --restart unless-stopped \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/tracker.config:/app/tracker.config:ro \
-  -v $(pwd)/logs:/app/logs \
-  buoy-tracker:latest
-```
-
-Data in `./data/` is automatically preserved across upgrades.
-
-## Historical Data
-
-**Important**: Real-time tracking data (current node positions, active connections) is stored in memory. Configuration and node metadata are persisted in `./data/` directory.
-
-### Data Persistence
-
-The following data persists across restarts:
-- `logs/` - Application logs directory
-- Configuration files (`tracker.config`, `secret.config`)
-
-The application automatically rebuilds tracking data from MQTT packets on each startup. No historical data files need to be transferred between deployments.
 
 ## Fresh Deployment
 
@@ -224,7 +177,29 @@ Simply start the container with your configuration files, and the application wi
 1. Connect to your MQTT broker
 2. Begin receiving packets from mesh nodes
 3. Automatically create required data files (logs, etc.)
-4. Start rebuilding position history and gateway connections from live MQTT traffic
+4. Build position history and gateway connections from live MQTT traffic
+
+## Data Persistence
+
+The following persists across container restarts:
+- `./config/tracker.config` - MQTT and application settings
+- `./config/secret.config` - Credentials (if configured)
+- `./logs/` - Application logs
+- `./data/` - Persistent application data (special nodes, node metadata, etc.)
+
+On restart, the tracker rebuilds live data (node positions, connections) from incoming MQTT packets.
+
+**Controlling persistence:**
+
+You can enable or disable persistence in `tracker.config`:
+
+```ini
+[app_features]
+enable_persistence = true   # Enable disk persistence (recommended for development)
+enable_persistence = false  # Disable (recommended for production/stateless operation)
+```
+
+When disabled (default for production), all special node history is cleared on restart. When enabled, it persists across restarts.
 
 ## Troubleshooting
 
@@ -254,12 +229,10 @@ docker inspect buoy-tracker | grep -A 10 Mounts
 
 ## Production Recommendations
 
-1. **Use environment variables** for secrets (not config file)
-2. **Set up reverse proxy** (nginx) with SSL
-3. **Configure log rotation** for `logs/` directory
-4. **Backup `data/`** directory regularly
-5. **Monitor health endpoint** for alerts
-6. **Use Docker restart policies**: `--restart unless-stopped`
+1. **Use environment variables for secrets** (MQTT password, SMTP credentials) - keeps sensitive data out of config files and enables secrets to be managed by your container orchestration platform (Docker secrets, Kubernetes secrets, etc.)
+2. **Set up reverse proxy** (nginx) with SSL for secure HTTPS access
+3. **Monitor health endpoint** (`/api/status`) for alerts
+4. **Use Docker restart policies**: `--restart unless-stopped`
 
 ## Email Distribution Template
 
@@ -282,34 +255,21 @@ The container runs with sensible defaults. To customize:
 See DOCKER.md for complete instructions.
 ```
 
----
-
-## Quick Reference
-
-**Getting Started:**
-```bash
-mkdir buoy-tracker && cd buoy-tracker
-touch tracker.config
-mkdir -p data logs
-docker compose up -d
-```
-
-**Access:** http://localhost:5102
-
-**Management:**
-```bash
-docker compose logs -f       # View logs
-docker compose ps            # Check status  
-docker compose restart       # Restart
-docker compose down          # Stop
-```
-
 ## Security & Authorization
 
-All API endpoints require authorization using an API key (if configured). The API key must be set in `secret.config` and provided by clients in the `Authorization: Bearer <API_KEY>` header for all requests.
+API endpoint authentication is **optional and configurable**:
 
-- The API key is securely stored in `secret.config` (not tracked by git).
-- If `API_KEY` is not configured, authorization is not required.
-- Unauthorized requests to protected endpoints will receive a 401 response.
-- Localhost (127.0.0.1) automatically receives the API key if configured.
-- For more details, see the security section in `CHANGELOG.md`.
+- **Default behavior (require_api_key=false)**: All API endpoints protected by rate limiting only
+- **Enhanced security (require_api_key=true)**: Endpoints require `Authorization: Bearer <API_KEY>` header
+- **Exception**: `/health` endpoint always public (used by Docker healthcheck)
+
+**Configuration:**
+1. Set `require_api_key = true` in `tracker.config` under `[security]` section
+2. Set API key in `secret.config` under `[webapp] api_key`
+3. In development mode, localhost is automatically exempted from auth requirement
+
+**Behavior:**
+- If `require_api_key=false`: Rate limiting only (default)
+- If `require_api_key=true` and no API key configured: Warning logged, auth not enforced
+- If `require_api_key=true` with API key: All endpoints (except `/health`) require auth
+- Unauthorized requests receive 401 response

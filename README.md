@@ -622,25 +622,33 @@ curl -X POST http://localhost:5102/api/test-alert-battery
 
 ## API Reference
 
+### Authentication
+
+API endpoints use **optional authentication** based on the `require_api_key` setting in `tracker.config`:
+
+- **Default (require_api_key=false)**: All endpoints protected by rate limiting only
+- **Optional (require_api_key=true)**: Endpoints require `Authorization: Bearer <api_key>` header
+- **Exception**: `/health` endpoint never requires authentication (used by Docker healthcheck)
+
+**When authentication is enabled:**
+- In development mode (`ENV=development`): localhost requests are exempted
+- In production mode: all requests require API key
+- API key is configured in `secret.config` under `[webapp] api_key`
+
 ### Core Endpoints
 
+- **`GET /health`** - Health check with MQTT status and config (always public, no auth)
 - **`GET /api/nodes`** - All tracked nodes with position, battery, channel
-- **`GET /api/status`** - MQTT connection status and node counts
-- **`GET /api/recent_messages?limit=100`** - Recent MQTT messages for debugging
-- **`GET /health`** - Health check
+- **`GET /api/recent/messages?limit=100`** - Recent MQTT messages for debugging
 
 ### Special Node Endpoints
 
 - **`GET /api/special/history?node_id=<id>&hours=<hours>`** - Position history for a node
-- **`GET /api/special/all_history?hours=<hours>`** - History for all special nodes
-- **`GET /api/special/packets?limit=<n>`** - Recent packets from special nodes
-- **`GET /api/special/packets/<node_id>?limit=<n>`** - Packets from specific node
+- **`GET /api/signal/history?node_id=<id>`** - Battery/RSSI/SNR history for a node
 
-### MQTT Control
+### Admin Endpoints
 
-- **`POST /api/mqtt/connect`** - Connect to MQTT broker
-- **`POST /api/mqtt/disconnect`** - Disconnect from broker
-- **`GET /api/mqtt/status`** - Connection details
+- **`POST /api/config/movement-threshold`** - Update movement threshold for special nodes (requires auth when enabled)
 
 ## Project Structure
 

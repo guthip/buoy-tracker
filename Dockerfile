@@ -33,7 +33,7 @@ VOLUME ["/app/config", "/app/data", "/app/logs"]
 EXPOSE 5102
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:5102/api/status || exit 1
+  CMD curl -f http://localhost:5102/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "run.py"]
