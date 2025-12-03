@@ -9,10 +9,10 @@
           "ch3_current": 0.7
         }
       },
-      "last_seen": 1764804325.8214898,
+      "last_seen": 1764804534.743457,
       "battery": 80,
-      "rx_rssi": -89,
-      "rx_snr": 5.25,
+      "rx_rssi": -97,
+      "rx_snr": -7.75,
       "best_gateway": {
         "id": 382652512,
         "name": "Pilsner",
@@ -741,7 +741,7 @@
   },
   "492590216": {
     "info": {
-      "channel": 0,
+      "channel": 31,
       "role": "CLIENT_MUTE",
       "latitude": 37.5803743,
       "longitude": -122.2178173,
@@ -751,16 +751,16 @@
       "long_name": "Sequoia YC Mark E 5488",
       "short_name": "Sequoia",
       "hw_model": "RAK4631",
-      "last_seen": 1764802479.622176,
-      "rx_rssi": -97,
-      "rx_snr": 0.75,
+      "last_seen": 1764804612.5118148,
+      "rx_rssi": -111,
+      "rx_snr": 9.25,
       "best_gateway": {
         "id": 382652512,
         "name": "Pilsner",
         "lat": null,
         "lon": null,
         "rssi": -92,
-        "snr": null
+        "snr": -6.25
       },
       "best_gateway_rssi": -92,
       "telemetry": {
@@ -1475,6 +1475,23 @@
         "air_util_tx": 0.008583333,
         "power_voltage": null,
         "power_current": null
+      },
+      {
+        "timestamp": 1764804520.772674,
+        "packet_type": "NODEINFO_APP",
+        "id": 67971160,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -92,
+        "rx_snr": -6.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark E 5488",
+        "short_name": "SYCE"
       }
     ],
     "gateways": {
@@ -1496,8 +1513,8 @@
         "lat": null,
         "lon": null,
         "rssi": -92,
-        "snr": null,
-        "last_seen": 1764801943.1812322,
+        "snr": -6.25,
+        "last_seen": 1764804520.7730088,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3
@@ -1517,10 +1534,10 @@
           "uptime_seconds": 947827
         }
       },
-      "last_seen": 1764804311.213685,
+      "last_seen": 1764804425.448538,
       "battery": 100,
-      "rx_rssi": -105,
-      "rx_snr": 3.0,
+      "rx_rssi": -109,
+      "rx_snr": 9.25,
       "channel": 31,
       "origin_lat": 37.532333333333334,
       "origin_lon": -122.17183333333334,

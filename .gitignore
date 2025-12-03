@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.so
 .Python
@@ -70,6 +71,8 @@ ssl/
 # tracker.config is NOT included in the repo or Docker images; only tracker.config.template is public
 tracker.config
 secret.config
+special_nodes.json
+data/special_nodes.json
 
 # Project documentation (local/development only - not for public GitHub)
 PROJECT_LEARNINGS.md
