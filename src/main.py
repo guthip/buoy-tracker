@@ -126,7 +126,7 @@ class SimpleRateLimiter:
 
 # Calculate rate limit from config
 # Formula: (3600 / polling_seconds) * (3_base_endpoints + N_special_nodes) * 2.0_safety_multiplier
-# Base endpoints: api/status, api/nodes, api/special/packets (3 requests)
+# Base endpoints: health, api/nodes, api/special/history (3 requests)
 # Per special node: api/special/history request when trails enabled (N requests)
 # Rate limit is computed from actual special nodes configured in tracker.config
 _polling_seconds = config.API_POLLING_INTERVAL_MS // 1000

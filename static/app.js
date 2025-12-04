@@ -24,9 +24,9 @@
       }
     };
 
-    // Initialize settings inputs with config values from /api/status
+    // Initialize settings inputs with config values from /health
     function initSettingsInputs() {
-      makeApiRequest('GET', 'api/status', function(xhr) {
+      makeApiRequest('GET', 'health', function(xhr) {
         if (xhr.status !== 200) return;
         var data = {};
         try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
@@ -421,7 +421,7 @@
   // Load thresholds from server config on startup
   function loadConfigThresholds() {
     try {
-      makeApiRequest('GET', 'api/status', function(xhr) {
+      makeApiRequest('GET', 'health', function(xhr) {
         try {
           if (xhr.status === 200) {
             var data = JSON.parse(xhr.responseText);
@@ -1725,7 +1725,7 @@
       var statusEl = document.getElementById('mqtt-status');
       if (!statusEl) return;
       
-      makeApiRequest('GET', 'api/status', function(xhr){ 
+      makeApiRequest('GET', 'health', function(xhr){ 
         try {
           if (xhr.status === 200){ 
             // Connection restored
