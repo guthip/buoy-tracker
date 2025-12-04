@@ -1,533 +1,505 @@
 {
   "3681533965": {
     "info": {
-      "channel_name": "MediumFast",
-      "telemetry": {
-        "time": 1764804313,
-        "power_metrics": {
-          "ch3_voltage": 3.972,
-          "ch3_current": 0.7
-        }
-      },
-      "last_seen": 1764804534.743457,
-      "battery": 80,
-      "rx_rssi": -97,
-      "rx_snr": -7.75,
-      "best_gateway": {
-        "id": 382652512,
-        "name": "Pilsner",
-        "lat": null,
-        "lon": null,
-        "rssi": -99,
-        "snr": -8.5
-      },
-      "best_gateway_rssi": -99,
       "channel": 31,
       "role": "CLIENT_MUTE",
-      "latitude": 37.563705,
-      "longitude": -122.2184636,
+      "latitude": 37.5638153,
+      "longitude": -122.2187805,
       "origin_lat": 37.5635,
       "origin_lon": -122.21883333333334,
+      "channel_name": "MediumFast",
       "long_name": "Sequoia YC Mark S  c00d",
       "short_name": "Sequoia",
       "hw_model": "RAK4631",
-      "distance_from_origin_m": 39.76993185219793,
+      "last_seen": 1764812787.4485319,
+      "rx_rssi": -111,
+      "rx_snr": 9.75,
+      "best_gateway": {
+        "id": 2688088084,
+        "name": "Unknown",
+        "lat": null,
+        "lon": null,
+        "rssi": -88,
+        "snr": -7.5
+      },
+      "best_gateway_rssi": -88,
+      "telemetry": {
+        "time": 1764810794,
+        "power_metrics": {
+          "ch3_voltage": 3.96,
+          "ch3_current": 0.7
+        }
+      },
+      "battery": 80,
+      "distance_from_origin_m": 35.367679048069824,
       "moved_far": false,
       "altitude": 0,
-      "last_position_update": 1764799995.2818508
+      "last_position_update": 1764811842.117366
     },
     "position_history": [
       {
-        "ts": 1764795464.338569,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
+        "ts": 1764811835.835378,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -110,
-        "snr": -11.0
-      },
-      {
-        "ts": 1764795464.351596,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -90,
-        "snr": -9.5
-      },
-      {
-        "ts": 1764795464.361384,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -96,
-        "snr": 2.25
-      },
-      {
-        "ts": 1764795464.4342551,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -113,
-        "snr": -6.25
-      },
-      {
-        "ts": 1764795464.649097,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -100,
-        "snr": -3.0
-      },
-      {
-        "ts": 1764795464.6624131,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -103,
-        "snr": -6.75
-      },
-      {
-        "ts": 1764795464.673627,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -95,
-        "snr": 2.0
-      },
-      {
-        "ts": 1764795464.681904,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -82,
-        "snr": -12.5
-      },
-      {
-        "ts": 1764795464.6891599,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -114,
-        "snr": -7.0
-      },
-      {
-        "ts": 1764795464.696411,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -99,
-        "snr": -3.5
-      },
-      {
-        "ts": 1764795464.70238,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
+        "battery": 80,
         "rssi": -101,
-        "snr": -8.75
+        "snr": -5.0
       },
       {
-        "ts": 1764795464.707802,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
+        "ts": 1764811835.8519511,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -96,
-        "snr": -2.25
-      },
-      {
-        "ts": 1764795464.712932,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -106,
-        "snr": 4.25
-      },
-      {
-        "ts": 1764795464.935199,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -116,
-        "snr": -12.75
-      },
-      {
-        "ts": 1764795465.051174,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -132,
-        "snr": -12.25
-      },
-      {
-        "ts": 1764795465.066371,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -104,
-        "snr": 3.5
-      },
-      {
-        "ts": 1764795465.302648,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -84,
-        "snr": 9.0
-      },
-      {
-        "ts": 1764795465.318336,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -86,
-        "snr": -3.75
-      },
-      {
-        "ts": 1764795465.329206,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -84,
-        "snr": -4.25
-      },
-      {
-        "ts": 1764795465.3377762,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -104,
-        "snr": -13.5
-      },
-      {
-        "ts": 1764795465.3452091,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -106,
-        "snr": -0.5
-      },
-      {
-        "ts": 1764795465.3519459,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -102,
-        "snr": -7.75
-      },
-      {
-        "ts": 1764795465.580364,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -88,
-        "snr": -14.75
-      },
-      {
-        "ts": 1764795465.5962481,
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -119,
-        "snr": -14.75
-      },
-      {
-        "ts": 1764796362.9323661,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -83,
-        "snr": -13.5
-      },
-      {
-        "ts": 1764796363.173568,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -99,
-        "snr": -8.75
-      },
-      {
-        "ts": 1764796363.277267,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -103,
-        "snr": -8.75
-      },
-      {
-        "ts": 1764796363.293487,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -95,
-        "snr": 1.75
-      },
-      {
-        "ts": 1764796363.305446,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -101,
-        "snr": -5.5
-      },
-      {
-        "ts": 1764796363.314506,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -100,
-        "snr": -8.0
-      },
-      {
-        "ts": 1764796363.322509,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -109,
-        "snr": -10.0
-      },
-      {
-        "ts": 1764796363.329241,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -93,
+        "battery": 80,
+        "rssi": -94,
         "snr": 0.25
       },
       {
-        "ts": 1764796363.33548,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
+        "ts": 1764811835.863389,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -75,
-        "snr": -9.25
+        "battery": 80,
+        "rssi": -96,
+        "snr": 0.75
       },
       {
-        "ts": 1764796363.956352,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
+        "ts": 1764811835.8725288,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -107,
-        "snr": 1.0
+        "battery": 80,
+        "rssi": -91,
+        "snr": 3.25
       },
       {
-        "ts": 1764796363.971776,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
+        "ts": 1764811835.8802419,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -117,
-        "snr": -13.5
-      },
-      {
-        "ts": 1764796363.9827058,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
+        "battery": 80,
         "rssi": -105,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764811835.887142,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -99,
         "snr": -10.25
       },
       {
-        "ts": 1764796364.77169,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
+        "ts": 1764811836.12736,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -112,
-        "snr": -9.75
-      },
-      {
-        "ts": 1764796435.6342,
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -71,
-        "snr": 13.25
-      },
-      {
-        "ts": 1764799991.109806,
-        "lat": 37.563705,
-        "lon": -122.2184636,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -97,
-        "snr": -8.0
-      },
-      {
-        "ts": 1764799991.446605,
-        "lat": 37.563705,
-        "lon": -122.2184636,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -100,
-        "snr": 4.5
-      },
-      {
-        "ts": 1764799991.55536,
-        "lat": 37.563705,
-        "lon": -122.2184636,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -75,
-        "snr": -8.0
-      },
-      {
-        "ts": 1764799991.571281,
-        "lat": 37.563705,
-        "lon": -122.2184636,
-        "alt": 0,
-        "battery": 81,
-        "rssi": -111,
+        "battery": 80,
+        "rssi": -77,
         "snr": -5.25
       },
       {
-        "ts": 1764799991.885073,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.153194,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -93,
-        "snr": -1.25
+        "battery": 80,
+        "rssi": -113,
+        "snr": -12.75
       },
       {
-        "ts": 1764799992.3387341,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.167091,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -93,
-        "snr": 4.75
+        "battery": 80,
+        "rssi": -100,
+        "snr": -6.75
       },
       {
-        "ts": 1764799992.571729,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.1776881,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
+        "battery": 80,
+        "rssi": -81,
+        "snr": -2.75
+      },
+      {
+        "ts": 1764811836.186312,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -96,
+        "snr": 3.5
+      },
+      {
+        "ts": 1764811836.1939259,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -93,
+        "snr": -0.25
+      },
+      {
+        "ts": 1764811836.2012658,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -93,
+        "snr": 3.0
+      },
+      {
+        "ts": 1764811836.2071621,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -133,
+        "snr": -13.25
+      },
+      {
+        "ts": 1764811836.212747,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
         "rssi": -104,
-        "snr": -6.5
+        "snr": 4.0
       },
       {
-        "ts": 1764799992.610583,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.325624,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -105,
-        "snr": -10.25
+        "battery": 80,
+        "rssi": -87,
+        "snr": -7.0
       },
       {
-        "ts": 1764799992.893415,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.360171,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -107,
-        "snr": -7.5
+        "battery": 80,
+        "rssi": -95,
+        "snr": 4.25
       },
       {
-        "ts": 1764799993.0591931,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.37152,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -46,
-        "snr": 11.25
+        "battery": 80,
+        "rssi": -86,
+        "snr": 3.75
       },
       {
-        "ts": 1764799993.312597,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.38055,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
+        "battery": 80,
+        "rssi": -62,
+        "snr": 7.0
+      },
+      {
+        "ts": 1764811836.446302,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
         "rssi": -90,
-        "snr": 9.0
+        "snr": 3.25
       },
       {
-        "ts": 1764799993.332223,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811836.646126,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -79,
-        "snr": 9.0
+        "battery": 80,
+        "rssi": -84,
+        "snr": -13.25
       },
       {
-        "ts": 1764799995.281856,
-        "lat": 37.563705,
-        "lon": -122.2184636,
+        "ts": 1764811837.0944839,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
         "alt": 0,
-        "battery": 81,
-        "rssi": -104,
-        "snr": -9.75
+        "battery": 80,
+        "rssi": -111,
+        "snr": -1.0
+      },
+      {
+        "ts": 1764811837.111326,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -96,
+        "snr": -7.0
+      },
+      {
+        "ts": 1764811837.1231549,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -106,
+        "snr": -7.25
+      },
+      {
+        "ts": 1764811837.1322272,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -103,
+        "snr": -4.5
+      },
+      {
+        "ts": 1764811837.141025,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -78,
+        "snr": 6.25
+      },
+      {
+        "ts": 1764811837.1484852,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -91,
+        "snr": 8.25
+      },
+      {
+        "ts": 1764811837.155178,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -94,
+        "snr": 7.0
+      },
+      {
+        "ts": 1764811837.161296,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -85,
+        "snr": 4.0
+      },
+      {
+        "ts": 1764811837.6073668,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -72,
+        "snr": -1.75
+      },
+      {
+        "ts": 1764811837.626008,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -78,
+        "snr": -7.75
+      },
+      {
+        "ts": 1764811837.638763,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -100,
+        "snr": -11.5
+      },
+      {
+        "ts": 1764811837.649225,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": null,
+        "snr": null
+      },
+      {
+        "ts": 1764811837.7654998,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -73,
+        "snr": -3.25
+      },
+      {
+        "ts": 1764811837.820328,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -99,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764811837.899553,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -71,
+        "snr": -2.25
+      },
+      {
+        "ts": 1764811838.081006,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -87,
+        "snr": 0.75
+      },
+      {
+        "ts": 1764811838.099232,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -113,
+        "snr": -8.5
+      },
+      {
+        "ts": 1764811838.120152,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -86,
+        "snr": -4.25
+      },
+      {
+        "ts": 1764811838.135558,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -84,
+        "snr": 5.25
+      },
+      {
+        "ts": 1764811838.4354482,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -111,
+        "snr": -7.0
+      },
+      {
+        "ts": 1764811838.455343,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -94,
+        "snr": 4.0
+      },
+      {
+        "ts": 1764811838.5972102,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -88,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764811838.616699,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -85,
+        "snr": -1.0
+      },
+      {
+        "ts": 1764811838.6289191,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -51,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764811839.0438871,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -54,
+        "snr": 11.0
+      },
+      {
+        "ts": 1764811839.06614,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -89,
+        "snr": 5.0
+      },
+      {
+        "ts": 1764811839.4224808,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -102,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764811842.093455,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -102,
+        "snr": -5.0
+      },
+      {
+        "ts": 1764811842.1173701,
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "alt": 0,
+        "battery": 80,
+        "rssi": -64,
+        "snr": 10.75
       }
     ],
     "packets": [
       {
-        "timestamp": 1764790481.863177,
-        "packet_type": "TELEMETRY_APP",
-        "id": 213389611,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -75,
-        "rx_snr": 11.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!ec083897",
-        "battery_level": 101,
-        "voltage": 4.247,
-        "channel_utilization": 17.800001,
-        "air_util_tx": 0.009111111,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764791041.148584,
+        "timestamp": 1764809247.229901,
         "packet_type": "NODEINFO_APP",
-        "id": 2884596012,
+        "id": 3860377916,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": 3,
-        "rx_rssi": -98,
-        "rx_snr": -9.75,
+        "rx_rssi": -88,
+        "rx_snr": -7.5,
         "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
         "role": "CLIENT_MUTE",
         "hw_model": "RAK4631",
@@ -535,181 +507,75 @@
         "short_name": "SYCS"
       },
       {
-        "timestamp": 1764791415.491982,
+        "timestamp": 1764810311.670549,
         "packet_type": "TELEMETRY_APP",
-        "id": 1263507758,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -101,
-        "rx_snr": -14.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "battery_level": null,
-        "voltage": null,
-        "channel_utilization": null,
-        "air_util_tx": null,
-        "power_voltage": 3.976,
-        "power_current": -0.1
-      },
-      {
-        "timestamp": 1764794644.942494,
-        "packet_type": "NODEINFO_APP",
-        "id": 3407018287,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 2,
-        "rx_rssi": -100,
-        "rx_snr": 4.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark S  c00d",
-        "short_name": "SYCS"
-      },
-      {
-        "timestamp": 1764795465.290261,
-        "packet_type": "POSITION_APP",
-        "id": 35419440,
+        "id": 1666532669,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": null,
-        "rx_rssi": -84,
-        "rx_snr": 9.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a0388bbc",
-        "lat": 37.5632191,
-        "lon": -122.2191536,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764796435.62147,
-        "packet_type": "POSITION_APP",
-        "id": 4246201649,
-        "channel": 0,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -71,
-        "rx_snr": 13.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!7a6c6764",
-        "lat": 37.5633851,
-        "lon": -122.2187661,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764796988.9786391,
-        "packet_type": "TELEMETRY_APP",
-        "id": 2060767538,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -15,
+        "rx_rssi": -75,
         "rx_snr": 10.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced49c",
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
         "battery_level": 101,
-        "voltage": 4.264,
-        "channel_utilization": 21.026667,
-        "air_util_tx": 0.018416667,
+        "voltage": 4.279,
+        "channel_utilization": 18.231667,
+        "air_util_tx": 0.00875,
         "power_voltage": null,
         "power_current": null
       },
       {
-        "timestamp": 1764797896.9084969,
+        "timestamp": 1764810803.046378,
         "packet_type": "TELEMETRY_APP",
-        "id": 858987827,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -99,
-        "rx_snr": -8.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "battery_level": null,
-        "voltage": null,
-        "channel_utilization": null,
-        "air_util_tx": null,
-        "power_voltage": 3.976,
-        "power_current": -0.2
-      },
-      {
-        "timestamp": 1764799993.0376608,
-        "packet_type": "POSITION_APP",
-        "id": 859723061,
+        "id": 1431465278,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": null,
-        "rx_rssi": -46,
-        "rx_snr": 11.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!fa74d32c",
-        "lat": 37.563705,
-        "lon": -122.2184636,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764801844.3041668,
-        "packet_type": "NODEINFO_APP",
-        "id": 1566931255,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 1,
-        "rx_rssi": -77,
-        "rx_snr": 0.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!6748fd3c",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark S  c00d",
-        "short_name": "SYCS"
-      },
-      {
-        "timestamp": 1764803527.444612,
-        "packet_type": "TELEMETRY_APP",
-        "id": 3665633592,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 2,
-        "rx_rssi": -74,
-        "rx_snr": 10.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2ebdbec",
-        "battery_level": 101,
-        "voltage": 4.267,
-        "channel_utilization": 18.883333,
-        "air_util_tx": 0.018416667,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764804319.288308,
-        "packet_type": "TELEMETRY_APP",
-        "id": 1800577337,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 1,
-        "rx_rssi": -60,
-        "rx_snr": 10.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2eb4138",
+        "rx_rssi": -80,
+        "rx_snr": 6.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2ebd33c",
         "battery_level": null,
         "voltage": null,
         "channel_utilization": null,
         "air_util_tx": null,
-        "power_voltage": 3.972,
+        "power_voltage": 3.96,
         "power_current": 0.7
+      },
+      {
+        "timestamp": 1764811836.376279,
+        "packet_type": "POSITION_APP",
+        "id": 1814594879,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 1,
+        "rx_rssi": -62,
+        "rx_snr": 7.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2eb4138",
+        "lat": 37.5638153,
+        "lon": -122.2187805,
+        "altitude": null
+      },
+      {
+        "timestamp": 1764812654.024287,
+        "packet_type": "NODEINFO_APP",
+        "id": 1730471232,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -50,
+        "rx_snr": 10.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!fa74d32c",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark S  c00d",
+        "short_name": "SYCS"
       }
     ],
     "gateways": {
@@ -718,21 +584,9 @@
         "name": "Unknown",
         "lat": null,
         "lon": null,
-        "rssi": -98,
-        "snr": -9.75,
-        "last_seen": 1764791041.149413,
-        "confidence": "direct",
-        "hop_start": 3,
-        "hop_limit": 3
-      },
-      "382652512": {
-        "id": 382652512,
-        "name": "Pilsner",
-        "lat": null,
-        "lon": null,
-        "rssi": -99,
-        "snr": -8.5,
-        "last_seen": 1764797896.908879,
+        "rssi": -88,
+        "snr": -7.5,
+        "last_seen": 1764809247.230623,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3
@@ -742,2200 +596,2506 @@
   "492590216": {
     "info": {
       "channel": 31,
-      "role": "CLIENT_MUTE",
-      "latitude": 37.5803743,
-      "longitude": -122.2178173,
+      "channel_name": "MediumFast",
       "origin_lat": 37.58016666666666,
       "origin_lon": -122.21783333333333,
-      "channel_name": "MediumFast",
-      "long_name": "Sequoia YC Mark E 5488",
-      "short_name": "Sequoia",
-      "hw_model": "RAK4631",
-      "last_seen": 1764804612.5118148,
-      "rx_rssi": -111,
-      "rx_snr": 9.25,
-      "best_gateway": {
-        "id": 382652512,
-        "name": "Pilsner",
-        "lat": null,
-        "lon": null,
-        "rssi": -92,
-        "snr": -6.25
-      },
-      "best_gateway_rssi": -92,
-      "telemetry": {
-        "time": 1764801942,
-        "device_metrics": {
-          "battery_level": 101,
-          "voltage": 4.269,
-          "channel_utilization": 21.925,
-          "air_util_tx": 0.008583333,
-          "uptime_seconds": 951486
-        }
-      },
-      "battery": 100,
-      "distance_from_origin_m": 23.130964713267755,
+      "distance_from_origin_m": 23.104065529862844,
       "moved_far": false,
+      "latitude": 37.5803738,
+      "longitude": -122.217854,
       "altitude": 0,
-      "last_position_update": 1764798262.841821
-    },
-    "position_history": [
-      {
-        "ts": 1764795678.249453,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": -0.5
-      },
-      {
-        "ts": 1764795679.161765,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -111,
-        "snr": -13.5
-      },
-      {
-        "ts": 1764795679.318321,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -24,
-        "snr": 10.5
-      },
-      {
-        "ts": 1764795680.136062,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -6.25
-      },
-      {
-        "ts": 1764795680.1498141,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -85,
-        "snr": 5.25
-      },
-      {
-        "ts": 1764795680.1608331,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -94,
-        "snr": 1.25
-      },
-      {
-        "ts": 1764795680.392416,
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": -8.75
-      },
-      {
-        "ts": 1764796457.038763,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
-        "snr": -4.0
-      },
-      {
-        "ts": 1764796459.109697,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": 3.0
-      },
-      {
-        "ts": 1764796459.703916,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -75,
-        "snr": -7.25
-      },
-      {
-        "ts": 1764796459.9972942,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -94,
-        "snr": 2.0
-      },
-      {
-        "ts": 1764796460.072418,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -105,
-        "snr": -10.75
-      },
-      {
-        "ts": 1764796460.623469,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -54,
-        "snr": 11.0
-      },
-      {
-        "ts": 1764796460.639014,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -94,
-        "snr": -2.5
-      },
-      {
-        "ts": 1764796460.650367,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": 0.25
-      },
-      {
-        "ts": 1764796460.659662,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -98,
-        "snr": -4.75
-      },
-      {
-        "ts": 1764796460.671672,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -87,
-        "snr": -7.75
-      },
-      {
-        "ts": 1764796460.7452888,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": 3.5
-      },
-      {
-        "ts": 1764796461.032526,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -86,
-        "snr": 5.0
-      },
-      {
-        "ts": 1764796461.136074,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": -4.0
-      },
-      {
-        "ts": 1764796461.152452,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": null
-      },
-      {
-        "ts": 1764796461.16372,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": -8.5
-      },
-      {
-        "ts": 1764796461.172988,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -93,
-        "snr": 2.5
-      },
-      {
-        "ts": 1764796461.180937,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -107,
-        "snr": 2.75
-      },
-      {
-        "ts": 1764796461.188119,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": -8.5
-      },
-      {
-        "ts": 1764796461.749717,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": 3.75
-      },
-      {
-        "ts": 1764796462.0944052,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -5,
-        "snr": 11.5
-      },
-      {
-        "ts": 1764796462.239201,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -108,
-        "snr": -7.75
-      },
-      {
-        "ts": 1764796464.077188,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -49,
-        "snr": 11.0
-      },
-      {
-        "ts": 1764796464.721102,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -105,
-        "snr": 0.25
-      },
-      {
-        "ts": 1764796465.450869,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -109,
-        "snr": -3.25
-      },
-      {
-        "ts": 1764796465.467489,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": -9.0
-      },
-      {
-        "ts": 1764796466.594796,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -0.5
-      },
-      {
-        "ts": 1764796466.611825,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": -1.0
-      },
-      {
-        "ts": 1764796466.8693628,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -118,
-        "snr": -10.5
-      },
-      {
-        "ts": 1764796466.9150069,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -115,
-        "snr": -8.75
-      },
-      {
-        "ts": 1764796475.8844318,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": 4.0
-      },
-      {
-        "ts": 1764796475.904424,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -113,
-        "snr": -5.75
-      },
-      {
-        "ts": 1764796476.2365708,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -82,
-        "snr": 4.25
-      },
-      {
-        "ts": 1764796476.2555861,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": -0.75
-      },
-      {
-        "ts": 1764796476.6998882,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -114,
-        "snr": -11.0
-      },
-      {
-        "ts": 1764796555.9631438,
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -70,
-        "snr": 12.0
-      },
-      {
-        "ts": 1764798259.7783418,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": -2.0
-      },
-      {
-        "ts": 1764798260.938157,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -87,
-        "snr": 4.0
-      },
-      {
-        "ts": 1764798262.292681,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -96,
-        "snr": -2.0
-      },
-      {
-        "ts": 1764798262.313625,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -105,
-        "snr": -7.0
-      },
-      {
-        "ts": 1764798262.3264341,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": 0.5
-      },
-      {
-        "ts": 1764798262.336889,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -4.75
-      },
-      {
-        "ts": 1764798262.345595,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -76,
-        "snr": 9.0
-      },
-      {
-        "ts": 1764798262.353336,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -117,
-        "snr": -13.25
-      },
-      {
-        "ts": 1764798262.360546,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -73,
-        "snr": -3.5
-      },
-      {
-        "ts": 1764798262.367001,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": 1.5
-      },
-      {
-        "ts": 1764798262.3727171,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -85,
-        "snr": -3.75
-      },
-      {
-        "ts": 1764798262.378519,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": -4.25
-      },
-      {
-        "ts": 1764798262.383528,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -102,
-        "snr": -12.0
-      },
-      {
-        "ts": 1764798262.568344,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -89,
-        "snr": 7.5
-      },
-      {
-        "ts": 1764798262.603722,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -113,
-        "snr": -8.25
-      },
-      {
-        "ts": 1764798262.6212769,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -115,
-        "snr": -6.5
-      },
-      {
-        "ts": 1764798262.741309,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -116,
-        "snr": -12.25
-      },
-      {
-        "ts": 1764798262.8418229,
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -84,
-        "snr": 9.5
-      }
-    ],
-    "packets": [
-      {
-        "timestamp": 1764790864.988833,
-        "packet_type": "NODEINFO_APP",
-        "id": 335613007,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -91,
-        "rx_snr": -2.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark E 5488",
-        "short_name": "SYCE"
-      },
-      {
-        "timestamp": 1764793723.31312,
-        "packet_type": "NODEINFO_APP",
-        "id": 384444496,
-        "channel": 0,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -71,
-        "rx_snr": 11.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!7a6c6764",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark E 5488",
-        "short_name": "SYCE"
-      },
-      {
-        "timestamp": 1764795282.1329951,
-        "packet_type": "TELEMETRY_APP",
-        "id": 3778478161,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -89,
-        "rx_snr": -4.75,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "battery_level": 101,
-        "voltage": 4.301,
-        "channel_utilization": 22.45,
-        "air_util_tx": 0.008583333,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764795679.3082361,
-        "packet_type": "POSITION_APP",
-        "id": 3538820178,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -24,
-        "rx_snr": 10.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "lat": 37.5802471,
-        "lon": -122.2172645,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764796457.026837,
-        "packet_type": "POSITION_APP",
-        "id": 3098122323,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -91,
-        "rx_snr": -4.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "lat": 37.5801656,
-        "lon": -122.2175966,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764797320.58367,
-        "packet_type": "NODEINFO_APP",
-        "id": 4073612372,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -92,
-        "rx_snr": null,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark E 5488",
-        "short_name": "SYCE"
-      },
-      {
-        "timestamp": 1764798259.763154,
-        "packet_type": "POSITION_APP",
-        "id": 1886550101,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -90,
-        "rx_snr": -2.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
-        "lat": 37.5803743,
-        "lon": -122.2178173,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764800922.7432032,
-        "packet_type": "NODEINFO_APP",
-        "id": 787936342,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 2,
-        "rx_rssi": -75,
-        "rx_snr": 10.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark E 5488",
-        "short_name": "SYCE"
-      },
-      {
-        "timestamp": 1764801943.180487,
-        "packet_type": "TELEMETRY_APP",
-        "id": 1341702231,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -92,
-        "rx_snr": null,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "battery_level": 101,
-        "voltage": 4.269,
-        "channel_utilization": 21.925,
-        "air_util_tx": 0.008583333,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764804520.772674,
-        "packet_type": "NODEINFO_APP",
-        "id": 67971160,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 3,
-        "rx_rssi": -92,
-        "rx_snr": -6.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark E 5488",
-        "short_name": "SYCE"
-      }
-    ],
-    "gateways": {
-      "2688088084": {
-        "id": 2688088084,
-        "name": "Unknown",
-        "lat": null,
-        "lon": null,
-        "rssi": -90,
-        "snr": -2.0,
-        "last_seen": 1764798259.7639198,
-        "confidence": "direct",
-        "hop_start": 3,
-        "hop_limit": 3
-      },
-      "382652512": {
-        "id": 382652512,
-        "name": "Pilsner",
-        "lat": null,
-        "lon": null,
-        "rssi": -92,
-        "snr": -6.25,
-        "last_seen": 1764804520.7730088,
-        "confidence": "direct",
-        "hop_start": 3,
-        "hop_limit": 3
-      }
-    }
-  },
-  "2512106321": {
-    "info": {
-      "channel_name": "MediumFast",
-      "telemetry": {
-        "time": 1764804301,
-        "device_metrics": {
-          "battery_level": 101,
-          "voltage": 4.136,
-          "channel_utilization": 24.869999,
-          "air_util_tx": 0.01836111,
-          "uptime_seconds": 947827
-        }
-      },
-      "last_seen": 1764804425.448538,
-      "battery": 100,
-      "rx_rssi": -109,
-      "rx_snr": 9.25,
-      "channel": 31,
-      "origin_lat": 37.532333333333334,
-      "origin_lon": -122.17183333333334,
-      "distance_from_origin_m": 13.145877836128596,
-      "moved_far": false,
-      "latitude": 37.5323138,
-      "longitude": -122.1716863,
-      "altitude": 0,
-      "last_position_update": 1764803508.8033412,
+      "last_seen": 1764813167.244564,
+      "last_position_update": 1764811439.873991,
+      "rx_rssi": -92,
+      "rx_snr": -4.0,
       "role": "CLIENT_MUTE",
-      "long_name": "Sequoia YC Mark A b351",
+      "long_name": "Sequoia YC Mark E 5488",
       "short_name": "Sequoia",
       "hw_model": "RAK4631"
     },
     "position_history": [
       {
-        "ts": 1764791714.065112,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
+        "ts": 1764811202.3316321,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -102,
-        "snr": -7.0
-      },
-      {
-        "ts": 1764791714.0737028,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -99,
-        "snr": -8.0
-      },
-      {
-        "ts": 1764791714.079517,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": -4.25
-      },
-      {
-        "ts": 1764791714.0862541,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -96,
-        "snr": 1.25
-      },
-      {
-        "ts": 1764791714.090393,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": -3.5
-      },
-      {
-        "ts": 1764791714.094483,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
+        "battery": null,
         "rssi": -100,
-        "snr": -4.5
-      },
-      {
-        "ts": 1764791714.0986218,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -106,
-        "snr": -11.75
-      },
-      {
-        "ts": 1764791714.103957,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -105,
-        "snr": 4.5
-      },
-      {
-        "ts": 1764791714.107457,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -81,
-        "snr": -11.75
-      },
-      {
-        "ts": 1764791714.411689,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -76,
-        "snr": 1.0
-      },
-      {
-        "ts": 1764791714.447972,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": 3.75
-      },
-      {
-        "ts": 1764791714.6390479,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": 1.0
-      },
-      {
-        "ts": 1764791714.646343,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -87,
-        "snr": -6.5
-      },
-      {
-        "ts": 1764791714.6940641,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -86,
         "snr": 4.75
       },
       {
-        "ts": 1764791714.7034838,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
+        "ts": 1764811202.9779358,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -107,
-        "snr": -7.25
-      },
-      {
-        "ts": 1764791714.7109702,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -80,
-        "snr": 3.0
-      },
-      {
-        "ts": 1764791714.719059,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -72,
-        "snr": -2.0
-      },
-      {
-        "ts": 1764791714.7250712,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -64,
-        "snr": 5.5
-      },
-      {
-        "ts": 1764791714.730546,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -76,
-        "snr": -6.25
-      },
-      {
-        "ts": 1764791714.741569,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -92,
-        "snr": -0.75
-      },
-      {
-        "ts": 1764791714.746656,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -108,
-        "snr": -0.75
-      },
-      {
-        "ts": 1764791714.7823849,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -69,
-        "snr": -3.5
-      },
-      {
-        "ts": 1764791714.84378,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": 4.5
-      },
-      {
-        "ts": 1764791714.9290712,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -99,
-        "snr": -7.25
-      },
-      {
-        "ts": 1764791715.0069299,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -102,
+        "battery": null,
+        "rssi": -104,
         "snr": -8.75
       },
       {
-        "ts": 1764791715.02158,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
+        "ts": 1764811382.2339358,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": 12.5
+        "battery": null,
+        "rssi": -102,
+        "snr": -4.75
       },
       {
-        "ts": 1764791715.159071,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
+        "ts": 1764811382.2489002,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -73,
-        "snr": 10.0
+        "battery": null,
+        "rssi": -78,
+        "snr": 9.5
       },
       {
-        "ts": 1764791715.302999,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
+        "ts": 1764811382.260132,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -67,
-        "snr": 2.25
-      },
-      {
-        "ts": 1764791715.31245,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -82,
-        "snr": -11.25
-      },
-      {
-        "ts": 1764791715.3213,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -107,
-        "snr": -0.5
-      },
-      {
-        "ts": 1764791715.9413388,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -50,
-        "snr": 10.75
-      },
-      {
-        "ts": 1764791716.116935,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
-        "snr": -5.25
-      },
-      {
-        "ts": 1764791716.483989,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -24,
-        "snr": 10.75
-      },
-      {
-        "ts": 1764791718.060568,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": -4.25
-      },
-      {
-        "ts": 1764791718.092051,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -63,
-        "snr": 10.25
-      },
-      {
-        "ts": 1764791720.0426629,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -110,
-        "snr": -7.25
-      },
-      {
-        "ts": 1764791720.0545878,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -112,
-        "snr": -10.5
-      },
-      {
-        "ts": 1764791720.2874491,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -119,
-        "snr": -15.0
-      },
-      {
-        "ts": 1764791724.1338701,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -85,
-        "snr": 3.0
-      },
-      {
-        "ts": 1764791724.146799,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -81,
-        "snr": 4.25
-      },
-      {
-        "ts": 1764791724.154952,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": -0.25
-      },
-      {
-        "ts": 1764791724.449214,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -111,
-        "snr": -3.75
-      },
-      {
-        "ts": 1764791724.462634,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -112,
-        "snr": -9.75
-      },
-      {
-        "ts": 1764791728.1543071,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -109,
-        "snr": 9.25
-      },
-      {
-        "ts": 1764791732.2351732,
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -113,
-        "snr": -11.5
-      },
-      {
-        "ts": 1764795326.039447,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -111,
-        "snr": -9.25
-      },
-      {
-        "ts": 1764795326.05387,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": -5.5
-      },
-      {
-        "ts": 1764795326.0616379,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": 0.25
-      },
-      {
-        "ts": 1764795327.7587268,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -5.0
-      },
-      {
-        "ts": 1764795328.245375,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -98,
-        "snr": -4.25
-      },
-      {
-        "ts": 1764795328.2577658,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -10.75
-      },
-      {
-        "ts": 1764795328.266421,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -88,
-        "snr": 0.5
-      },
-      {
-        "ts": 1764795328.273294,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
+        "battery": null,
+        "rssi": -106,
         "snr": -1.0
       },
       {
-        "ts": 1764795328.292144,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
+        "ts": 1764811382.269013,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -81,
-        "snr": 4.5
-      },
-      {
-        "ts": 1764795328.300863,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": -6.75
-      },
-      {
-        "ts": 1764795328.49568,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -111,
-        "snr": -10.25
-      },
-      {
-        "ts": 1764795328.507391,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -110,
-        "snr": -8.25
-      },
-      {
-        "ts": 1764795328.517368,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -85,
-        "snr": 2.5
-      },
-      {
-        "ts": 1764795328.5248709,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
-        "snr": 2.5
-      },
-      {
-        "ts": 1764795328.531041,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -96,
-        "snr": 5.0
-      },
-      {
-        "ts": 1764795328.536934,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -118,
-        "snr": -8.25
-      },
-      {
-        "ts": 1764795328.549357,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -111,
-        "snr": -5.25
-      },
-      {
-        "ts": 1764795328.6964412,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": 7.0
-      },
-      {
-        "ts": 1764795328.7932951,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": -2.5
-      },
-      {
-        "ts": 1764795328.921095,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -37,
-        "snr": 11.5
-      },
-      {
-        "ts": 1764795328.937349,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -108,
-        "snr": -10.25
-      },
-      {
-        "ts": 1764795328.953142,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -96,
-        "snr": -1.25
-      },
-      {
-        "ts": 1764795328.961954,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -98,
-        "snr": -2.5
-      },
-      {
-        "ts": 1764795328.969246,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": 1.75
-      },
-      {
-        "ts": 1764795329.036958,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -5.25
-      },
-      {
-        "ts": 1764795329.2457101,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -107,
-        "snr": 1.5
-      },
-      {
-        "ts": 1764795329.330732,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -86,
-        "snr": 8.75
-      },
-      {
-        "ts": 1764795329.451301,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -109,
-        "snr": -2.25
-      },
-      {
-        "ts": 1764795329.4639401,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -84,
-        "snr": -1.75
-      },
-      {
-        "ts": 1764795329.9809139,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -108,
-        "snr": -8.75
-      },
-      {
-        "ts": 1764795329.9948711,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": 2.75
-      },
-      {
-        "ts": 1764795330.217278,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -82,
-        "snr": -0.5
-      },
-      {
-        "ts": 1764795330.230651,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -107,
-        "snr": -8.75
-      },
-      {
-        "ts": 1764795330.240614,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": 1.0
-      },
-      {
-        "ts": 1764795330.2489269,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": 2.75
-      },
-      {
-        "ts": 1764795330.291285,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -83,
-        "snr": 10.5
-      },
-      {
-        "ts": 1764795330.4705658,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": 4.75
-      },
-      {
-        "ts": 1764795330.483273,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -103,
-        "snr": -11.75
-      },
-      {
-        "ts": 1764795330.493974,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": 0.75
-      },
-      {
-        "ts": 1764795330.502453,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": 5.0
-      },
-      {
-        "ts": 1764795330.927587,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -81,
-        "snr": 11.0
-      },
-      {
-        "ts": 1764795331.174977,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -105,
-        "snr": -6.75
-      },
-      {
-        "ts": 1764795331.782936,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": 3.0
-      },
-      {
-        "ts": 1764795332.206628,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -85,
-        "snr": -3.75
-      },
-      {
-        "ts": 1764795332.4885812,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -113,
-        "snr": -9.25
-      },
-      {
-        "ts": 1764795332.5012538,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -118,
-        "snr": -13.5
-      },
-      {
-        "ts": 1764795337.910789,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -72,
-        "snr": 10.75
-      },
-      {
-        "ts": 1764795340.534463,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -109,
-        "snr": 9.25
-      },
-      {
-        "ts": 1764795897.5791428,
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -84,
-        "snr": -1.5
-      },
-      {
-        "ts": 1764803446.7502668,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": -4.25
-      },
-      {
-        "ts": 1764803446.770356,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -96,
-        "snr": 1.5
-      },
-      {
-        "ts": 1764803446.783464,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": -5.75
-      },
-      {
-        "ts": 1764803446.7946398,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -93,
-        "snr": -2.25
-      },
-      {
-        "ts": 1764803446.8038762,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -97,
-        "snr": -2.0
-      },
-      {
-        "ts": 1764803446.812004,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -106,
-        "snr": 4.0
-      },
-      {
-        "ts": 1764803446.819425,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
-        "snr": 4.0
-      },
-      {
-        "ts": 1764803446.825939,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -100,
-        "snr": -8.25
-      },
-      {
-        "ts": 1764803447.147035,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -105,
-        "snr": 3.0
-      },
-      {
-        "ts": 1764803447.163666,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -76,
-        "snr": -5.25
-      },
-      {
-        "ts": 1764803447.1776488,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -114,
-        "snr": -10.75
-      },
-      {
-        "ts": 1764803447.4888031,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -24,
-        "snr": 10.25
-      },
-      {
-        "ts": 1764803447.588904,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -89,
-        "snr": 10.5
-      },
-      {
-        "ts": 1764803447.611132,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -82,
-        "snr": 9.25
-      },
-      {
-        "ts": 1764803447.801827,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": 2.0
-      },
-      {
-        "ts": 1764803447.818798,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -88,
-        "snr": -7.5
-      },
-      {
-        "ts": 1764803447.866782,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
+        "battery": null,
         "rssi": -99,
         "snr": -4.75
       },
       {
-        "ts": 1764803447.959842,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764811382.2764091,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -81,
-        "snr": 5.5
+        "battery": null,
+        "rssi": -118,
+        "snr": -12.0
       },
       {
-        "ts": 1764803447.980076,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764811382.557763,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -96,
-        "snr": 1.75
+        "battery": null,
+        "rssi": -110,
+        "snr": -11.5
       },
       {
-        "ts": 1764803447.9914901,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764811382.569331,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -86,
-        "snr": 0.5
+        "battery": null,
+        "rssi": -103,
+        "snr": -12.25
       },
       {
-        "ts": 1764803448.004061,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764811382.579707,
+        "lat": 37.5803738,
+        "lon": -122.217854,
         "alt": 0,
-        "battery": 100,
-        "rssi": -96,
+        "battery": null,
+        "rssi": -91,
+        "snr": 0.75
+      },
+      {
+        "ts": 1764811382.587898,
+        "lat": 37.5803738,
+        "lon": -122.217854,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": 1.5
+      },
+      {
+        "ts": 1764811382.661851,
+        "lat": 37.5803738,
+        "lon": -122.217854,
+        "alt": 0,
+        "battery": null,
+        "rssi": -114,
+        "snr": -6.75
+      },
+      {
+        "ts": 1764811382.817635,
+        "lat": 37.5803738,
+        "lon": -122.217854,
+        "alt": 0,
+        "battery": null,
+        "rssi": -108,
+        "snr": -11.0
+      },
+      {
+        "ts": 1764811439.873997,
+        "lat": 37.5803738,
+        "lon": -122.217854,
+        "alt": 0,
+        "battery": null,
+        "rssi": -68,
+        "snr": 14.0
+      }
+    ],
+    "packets": [
+      {
+        "timestamp": 1764811382.243152,
+        "packet_type": "POSITION_APP",
+        "id": 1254915164,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -78,
+        "rx_snr": 9.5,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!698443bc",
+        "lat": 37.5803738,
+        "lon": -122.217854,
+        "altitude": null
+      },
+      {
+        "timestamp": 1764811724.746367,
+        "packet_type": "NODEINFO_APP",
+        "id": 604677213,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -101,
+        "rx_snr": 2.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark E 5488",
+        "short_name": "SYCE"
+      }
+    ]
+  },
+  "2512106321": {
+    "info": {
+      "channel": 31,
+      "channel_name": "MediumFast",
+      "origin_lat": 37.532333333333334,
+      "origin_lon": -122.17183333333334,
+      "distance_from_origin_m": 38.82694044330511,
+      "moved_far": false,
+      "latitude": 37.5326191,
+      "longitude": -122.1715803,
+      "altitude": 0,
+      "last_seen": 1764814361.020236,
+      "last_position_update": 1764814361.020237,
+      "rx_rssi": -110,
+      "rx_snr": 9.25,
+      "role": "CLIENT_MUTE",
+      "long_name": "Sequoia YC Mark A b351",
+      "short_name": "Sequoia",
+      "hw_model": "RAK4631",
+      "telemetry": {
+        "time": 1764810722,
+        "device_metrics": {
+          "battery_level": 101,
+          "voltage": 4.15,
+          "channel_utilization": 12.351666,
+          "air_util_tx": 0.013527778,
+          "uptime_seconds": 954247
+        }
+      },
+      "battery": 100
+    },
+    "position_history": [
+      {
+        "ts": 1764809764.401349,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -98,
+        "snr": -4.0
+      },
+      {
+        "ts": 1764809764.407441,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": -9.75
+      },
+      {
+        "ts": 1764809764.4511008,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -84,
+        "snr": 6.75
+      },
+      {
+        "ts": 1764809764.4586399,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -85,
+        "snr": 6.75
+      },
+      {
+        "ts": 1764809764.464979,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -73,
+        "snr": 9.5
+      },
+      {
+        "ts": 1764809764.470307,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": -14.0
+      },
+      {
+        "ts": 1764809764.474737,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -84,
+        "snr": -5.75
+      },
+      {
+        "ts": 1764809764.478991,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -97,
         "snr": 5.0
       },
       {
-        "ts": 1764803448.015808,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764809764.482443,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -89,
+        "snr": 5.75
+      },
+      {
+        "ts": 1764809764.621755,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -115,
+        "snr": -13.0
+      },
+      {
+        "ts": 1764809764.7104871,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -80,
+        "snr": 4.75
+      },
+      {
+        "ts": 1764809764.71826,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": -6.5
+      },
+      {
+        "ts": 1764809764.724947,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -90,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764809764.730012,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -84,
+        "snr": 7.75
+      },
+      {
+        "ts": 1764809764.7356942,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": -4.25
+      },
+      {
+        "ts": 1764809764.739448,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -105,
+        "snr": -10.25
+      },
+      {
+        "ts": 1764809764.743131,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -117,
+        "snr": -7.25
+      },
+      {
+        "ts": 1764809764.754966,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -88,
+        "snr": 6.0
+      },
+      {
+        "ts": 1764809764.7591648,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -113,
+        "snr": -9.5
+      },
+      {
+        "ts": 1764809764.832521,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -102,
+        "snr": -3.75
+      },
+      {
+        "ts": 1764809764.839765,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -84,
+        "snr": 5.75
+      },
+      {
+        "ts": 1764809764.861297,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": -1.75
+      },
+      {
+        "ts": 1764809764.870938,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764809764.875954,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": -5.75
+      },
+      {
+        "ts": 1764809764.959528,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -82,
+        "snr": 11.0
+      },
+      {
+        "ts": 1764809765.0059688,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -96,
+        "snr": -6.25
+      },
+      {
+        "ts": 1764809765.0142138,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": -1.0
+      },
+      {
+        "ts": 1764809765.052989,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -16,
+        "snr": 10.25
+      },
+      {
+        "ts": 1764809765.210046,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -109,
+        "snr": -3.0
+      },
+      {
+        "ts": 1764809765.2180932,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": 1.25
+      },
+      {
+        "ts": 1764809765.225416,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -102,
+        "snr": 2.75
+      },
+      {
+        "ts": 1764809765.2316139,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -114,
+        "snr": -5.5
+      },
+      {
+        "ts": 1764809765.236189,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -90,
+        "snr": 10.25
+      },
+      {
+        "ts": 1764809765.2485209,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -102,
+        "snr": -4.0
+      },
+      {
+        "ts": 1764809765.318135,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -114,
+        "snr": -9.5
+      },
+      {
+        "ts": 1764809765.3320699,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -61,
+        "snr": 4.5
+      },
+      {
+        "ts": 1764809765.338889,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -104,
+        "snr": -12.75
+      },
+      {
+        "ts": 1764809765.814235,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -52,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764809765.823797,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -105,
+        "snr": -9.75
+      },
+      {
+        "ts": 1764809765.830938,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": -1.0
+      },
+      {
+        "ts": 1764809765.8377118,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -111,
+        "snr": -7.25
+      },
+      {
+        "ts": 1764809765.859304,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -72,
+        "snr": -1.75
+      },
+      {
+        "ts": 1764809765.864753,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": -0.25
+      },
+      {
+        "ts": 1764809765.890451,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -74,
+        "snr": -4.75
+      },
+      {
+        "ts": 1764809766.185461,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -118,
+        "snr": -8.0
+      },
+      {
+        "ts": 1764809766.218726,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -49,
+        "snr": 11.0
+      },
+      {
+        "ts": 1764809766.227221,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -90,
+        "snr": -3.5
+      },
+      {
+        "ts": 1764809766.234675,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -25,
+        "snr": 10.25
+      },
+      {
+        "ts": 1764809766.2419999,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -73,
+        "snr": 10.0
+      },
+      {
+        "ts": 1764809766.400705,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -105,
+        "snr": -6.75
+      },
+      {
+        "ts": 1764809766.428742,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -110,
+        "snr": -11.0
+      },
+      {
+        "ts": 1764809766.5666938,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -134,
+        "snr": -12.5
+      },
+      {
+        "ts": 1764809766.713349,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -122,
+        "snr": -12.5
+      },
+      {
+        "ts": 1764809766.769002,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -105,
+        "snr": -1.75
+      },
+      {
+        "ts": 1764809766.795965,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -54,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764809767.4512188,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": 8.5
+      },
+      {
+        "ts": 1764809768.043832,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -21,
+        "snr": 11.25
+      },
+      {
+        "ts": 1764809768.176039,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -92,
+        "snr": 7.5
+      },
+      {
+        "ts": 1764809768.890541,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -94,
+        "snr": 6.75
+      },
+      {
+        "ts": 1764809769.203458,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -6,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764809769.345811,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -76,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764809875.665269,
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "alt": 0,
+        "battery": null,
+        "rssi": -110,
+        "snr": 9.25
+      },
+      {
+        "ts": 1764811577.531412,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
         "alt": 0,
         "battery": 100,
         "rssi": -94,
+        "snr": 0.75
+      },
+      {
+        "ts": 1764811577.5505779,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764811577.561888,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -2.75
+      },
+      {
+        "ts": 1764811577.570868,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -5.75
+      },
+      {
+        "ts": 1764811577.578571,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 1.5
+      },
+      {
+        "ts": 1764811577.584917,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -92,
+        "snr": 4.0
+      },
+      {
+        "ts": 1764811577.610155,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 3.5
+      },
+      {
+        "ts": 1764811577.616246,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -87,
+        "snr": -8.75
+      },
+      {
+        "ts": 1764811577.6199522,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": -5.5
+      },
+      {
+        "ts": 1764811577.623451,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -80,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764811577.6267772,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -94,
+        "snr": -1.25
+      },
+      {
+        "ts": 1764811577.63012,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -11.5
+      },
+      {
+        "ts": 1764811577.633335,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": -3.25
+      },
+      {
+        "ts": 1764811577.636532,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -83,
+        "snr": 9.25
+      },
+      {
+        "ts": 1764811577.63978,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": 5.75
+      },
+      {
+        "ts": 1764811577.643019,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -6.5
+      },
+      {
+        "ts": 1764811577.6464498,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -5.0
+      },
+      {
+        "ts": 1764811577.64976,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": -3.5
+      },
+      {
+        "ts": 1764811577.653327,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -14.25
+      },
+      {
+        "ts": 1764811577.656675,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -74,
+        "snr": -3.75
+      },
+      {
+        "ts": 1764811577.660009,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -60,
+        "snr": 9.5
+      },
+      {
+        "ts": 1764811577.665094,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764811577.6684842,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -113,
+        "snr": -8.75
+      },
+      {
+        "ts": 1764811577.6718678,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": -3.0
+      },
+      {
+        "ts": 1764811577.6752589,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": 9.25
+      },
+      {
+        "ts": 1764811577.680435,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -112,
+        "snr": -7.5
+      },
+      {
+        "ts": 1764811577.6838698,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": 1.75
+      },
+      {
+        "ts": 1764811577.6873071,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
         "snr": null
       },
       {
-        "ts": 1764803448.0256078,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764811577.692555,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -107,
+        "snr": -1.0
+      },
+      {
+        "ts": 1764811577.6996522,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -82,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764811577.703134,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -4.0
+      },
+      {
+        "ts": 1764811577.72511,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": 4.0
+      },
+      {
+        "ts": 1764811577.821821,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 2.0
+      },
+      {
+        "ts": 1764811577.828817,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -110,
+        "snr": -1.0
+      },
+      {
+        "ts": 1764811577.853694,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -90,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764811577.865033,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764811577.904248,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": 5.0
+      },
+      {
+        "ts": 1764811577.9203908,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -108,
+        "snr": -9.0
+      },
+      {
+        "ts": 1764811577.928183,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -76,
+        "snr": 6.0
+      },
+      {
+        "ts": 1764811578.1793542,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -87,
+        "snr": 7.0
+      },
+      {
+        "ts": 1764811578.312052,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -61,
+        "snr": 6.25
+      },
+      {
+        "ts": 1764811578.467228,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": 1.0
+      },
+      {
+        "ts": 1764811578.565085,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": 6.5
+      },
+      {
+        "ts": 1764811579.045095,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": -1.75
+      },
+      {
+        "ts": 1764811579.059466,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": 1.25
+      },
+      {
+        "ts": 1764811579.071559,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": 9.0
+      },
+      {
+        "ts": 1764811579.0803819,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -78,
+        "snr": 6.5
+      },
+      {
+        "ts": 1764811579.3798451,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -99,
+        "snr": -1.25
+      },
+      {
+        "ts": 1764811579.542969,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": null,
+        "snr": null
+      },
+      {
+        "ts": 1764811579.889214,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": -6.75
+      },
+      {
+        "ts": 1764811579.900636,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -13.0
+      },
+      {
+        "ts": 1764811580.091629,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -110,
+        "snr": -7.75
+      },
+      {
+        "ts": 1764811580.252046,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -8,
+        "snr": 11.25
+      },
+      {
+        "ts": 1764811580.609393,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -91,
+        "snr": -0.75
+      },
+      {
+        "ts": 1764811580.619497,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -91,
+        "snr": -3.25
+      },
+      {
+        "ts": 1764811580.847913,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -78,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764811581.016487,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -33,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764811584.766837,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -79,
+        "snr": 10.25
+      },
+      {
+        "ts": 1764811642.918346,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -71,
+        "snr": 13.5
+      },
+      {
+        "ts": 1764811643.1205409,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -24,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764811644.521031,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": 4.25
+      },
+      {
+        "ts": 1764811983.933038,
+        "lat": 37.5332961,
+        "lon": -122.1713956,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": -9.5
+      },
+      {
+        "ts": 1764812478.412995,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -83,
+        "snr": 5.75
+      },
+      {
+        "ts": 1764812479.012622,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -10.25
+      },
+      {
+        "ts": 1764812479.031209,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -100,
+        "snr": -5.0
+      },
+      {
+        "ts": 1764812479.043365,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764812479.053725,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -100,
+        "snr": -10.0
+      },
+      {
+        "ts": 1764812479.062509,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -91,
         "snr": 3.25
       },
       {
-        "ts": 1764803448.034328,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.06988,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -93,
-        "snr": 2.5
+        "rssi": -115,
+        "snr": -11.25
       },
       {
-        "ts": 1764803448.260315,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.076704,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -102,
-        "snr": -5.75
+        "rssi": -96,
+        "snr": -2.5
       },
       {
-        "ts": 1764803448.282899,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -92,
-        "snr": 1.25
-      },
-      {
-        "ts": 1764803448.297274,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
-        "snr": 8.0
-      },
-      {
-        "ts": 1764803448.3086379,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.0830772,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -104,
-        "snr": -5.5
+        "snr": 4.5
       },
       {
-        "ts": 1764803448.31888,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.089275,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -8.25
+      },
+      {
+        "ts": 1764812479.262995,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -9.25
+      },
+      {
+        "ts": 1764812479.2806342,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -82,
+        "snr": -3.0
+      },
+      {
+        "ts": 1764812479.292196,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -4.0
+      },
+      {
+        "ts": 1764812479.301868,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -85,
+        "snr": 5.25
+      },
+      {
+        "ts": 1764812479.310317,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -83,
         "snr": 7.75
       },
       {
-        "ts": 1764803448.327659,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -79,
-        "snr": 8.75
-      },
-      {
-        "ts": 1764803448.4758751,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.317771,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -76,
-        "snr": 9.5
+        "snr": -1.0
       },
       {
-        "ts": 1764803448.492494,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.324525,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -7.5
+      },
+      {
+        "ts": 1764812479.3307111,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -84,
+        "snr": -4.0
+      },
+      {
+        "ts": 1764812479.336482,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -107,
+        "snr": -10.0
+      },
+      {
+        "ts": 1764812479.341772,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -118,
+        "snr": -13.75
+      },
+      {
+        "ts": 1764812479.346892,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -134,
+        "snr": -13.5
+      },
+      {
+        "ts": 1764812479.352009,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 3.75
+      },
+      {
+        "ts": 1764812479.357232,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -76,
-        "snr": -7.25
+        "snr": 0.5
       },
       {
-        "ts": 1764803448.5050828,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.461269,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -72,
-        "snr": -1.5
+        "rssi": -117,
+        "snr": -9.75
       },
       {
-        "ts": 1764803448.523416,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.475084,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -110,
-        "snr": -10.25
+        "rssi": -114,
+        "snr": -15.0
       },
       {
-        "ts": 1764803448.573057,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.5110898,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -120,
-        "snr": -10.25
+        "rssi": -85,
+        "snr": 5.75
       },
       {
-        "ts": 1764803448.9127522,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.549375,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -47,
-        "snr": 10.5
+        "rssi": -107,
+        "snr": -7.75
       },
       {
-        "ts": 1764803448.9394932,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.609417,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -121,
+        "snr": -12.75
+      },
+      {
+        "ts": 1764812479.6929688,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -102,
         "snr": -4.25
       },
       {
-        "ts": 1764803450.244565,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.7118762,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -92,
-        "snr": 0.25
+        "rssi": -84,
+        "snr": 4.25
       },
       {
-        "ts": 1764803451.272713,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.724389,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -85,
-        "snr": 7.0
+        "rssi": -104,
+        "snr": 2.0
       },
       {
-        "ts": 1764803451.296319,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.7642822,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -100,
-        "snr": -6.25
+        "rssi": -109,
+        "snr": -9.0
       },
       {
-        "ts": 1764803451.312663,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.786618,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -117,
-        "snr": -13.5
+        "rssi": -102,
+        "snr": -7.75
       },
       {
-        "ts": 1764803451.3258932,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.804694,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -86,
-        "snr": -3.25
+        "rssi": -111,
+        "snr": -7.25
       },
       {
-        "ts": 1764803451.3362591,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.863635,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -82,
-        "snr": 2.5
+        "snr": 10.5
       },
       {
-        "ts": 1764803474.234045,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.9461608,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
-        "rssi": -71,
-        "snr": 9.0
+        "rssi": -87,
+        "snr": 3.75
       },
       {
-        "ts": 1764803474.303931,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812479.9863,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
         "alt": 0,
         "battery": 100,
         "rssi": -107,
         "snr": -8.25
       },
       {
-        "ts": 1764803508.803367,
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "ts": 1764812480.061132,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 5.25
+      },
+      {
+        "ts": 1764812480.081147,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764812480.1906078,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": -1.5
+      },
+      {
+        "ts": 1764812480.211221,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -69,
+        "snr": 9.5
+      },
+      {
+        "ts": 1764812480.241678,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -53,
+        "snr": 11.25
+      },
+      {
+        "ts": 1764812480.257344,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -3.5
+      },
+      {
+        "ts": 1764812480.547431,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -61,
+        "snr": 6.5
+      },
+      {
+        "ts": 1764812480.567677,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": 0.5
+      },
+      {
+        "ts": 1764812480.897092,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": null,
+        "snr": null
+      },
+      {
+        "ts": 1764812480.9175549,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -61,
+        "snr": 8.0
+      },
+      {
+        "ts": 1764812481.0615559,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": 10.0
+      },
+      {
+        "ts": 1764812481.160615,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -92,
+        "snr": 8.0
+      },
+      {
+        "ts": 1764812481.263322,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -70,
+        "snr": -0.25
+      },
+      {
+        "ts": 1764812481.8509781,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": -7.5
+      },
+      {
+        "ts": 1764812481.870922,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -6.75
+      },
+      {
+        "ts": 1764812481.92627,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 6.5
+      },
+      {
+        "ts": 1764812483.523257,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": 2.25
+      },
+      {
+        "ts": 1764812696.8861141,
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -24,
+        "snr": 11.0
+      },
+      {
+        "ts": 1764814284.220308,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -94,
+        "snr": -10.25
+      },
+      {
+        "ts": 1764814284.241653,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -99,
+        "snr": -11.75
+      },
+      {
+        "ts": 1764814284.720264,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": -9.5
+      },
+      {
+        "ts": 1764814284.730973,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 1.25
+      },
+      {
+        "ts": 1764814284.7419798,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -100,
+        "snr": -4.5
+      },
+      {
+        "ts": 1764814284.7524621,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -11.5
+      },
+      {
+        "ts": 1764814284.762048,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": -7.25
+      },
+      {
+        "ts": 1764814284.770155,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": -3.5
+      },
+      {
+        "ts": 1764814284.777434,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -100,
+        "snr": -11.0
+      },
+      {
+        "ts": 1764814284.784053,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 5.25
+      },
+      {
+        "ts": 1764814284.791048,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -7.0
+      },
+      {
+        "ts": 1764814284.845216,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
         "alt": 0,
         "battery": 100,
         "rssi": -110,
-        "snr": 9.75
+        "snr": -11.75
+      },
+      {
+        "ts": 1764814284.85668,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -98,
+        "snr": 0.75
+      },
+      {
+        "ts": 1764814284.8638542,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": -9.75
+      },
+      {
+        "ts": 1764814285.038114,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 4.25
+      },
+      {
+        "ts": 1764814285.0556428,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": 1.0
+      },
+      {
+        "ts": 1764814285.1514912,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -91,
+        "snr": 6.0
+      },
+      {
+        "ts": 1764814285.1843572,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -80,
+        "snr": -4.25
+      },
+      {
+        "ts": 1764814285.198324,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -98,
+        "snr": -8.25
+      },
+      {
+        "ts": 1764814285.209737,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -84,
+        "snr": -15.0
+      },
+      {
+        "ts": 1764814285.2197912,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -11.0
+      },
+      {
+        "ts": 1764814285.5525708,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -114,
+        "snr": -11.0
+      },
+      {
+        "ts": 1764814285.62889,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": -3.0
+      },
+      {
+        "ts": 1764814285.6469839,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -87,
+        "snr": 4.0
+      },
+      {
+        "ts": 1764814285.660806,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -92,
+        "snr": 1.25
+      },
+      {
+        "ts": 1764814285.828953,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -79,
+        "snr": -3.5
+      },
+      {
+        "ts": 1764814285.851528,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -77,
+        "snr": 6.25
+      },
+      {
+        "ts": 1764814285.8669,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -69,
+        "snr": 13.0
+      },
+      {
+        "ts": 1764814285.9562728,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -7.75
+      },
+      {
+        "ts": 1764814285.972142,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -4.0
+      },
+      {
+        "ts": 1764814286.2227452,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": -4.25
+      },
+      {
+        "ts": 1764814286.2452428,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": -2.0
+      },
+      {
+        "ts": 1764814286.273739,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": 3.25
+      },
+      {
+        "ts": 1764814286.317727,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -112,
+        "snr": -9.5
+      },
+      {
+        "ts": 1764814286.405696,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -76,
+        "snr": -5.75
+      },
+      {
+        "ts": 1764814286.4226098,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -98,
+        "snr": -8.75
+      },
+      {
+        "ts": 1764814286.487703,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -7.25
+      },
+      {
+        "ts": 1764814286.502527,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -87,
+        "snr": -6.5
+      },
+      {
+        "ts": 1764814286.6483269,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -5.25
+      },
+      {
+        "ts": 1764814286.673298,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -84,
+        "snr": -10.0
+      },
+      {
+        "ts": 1764814286.690202,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -115,
+        "snr": -6.0
+      },
+      {
+        "ts": 1764814286.758592,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -108,
+        "snr": -9.25
+      },
+      {
+        "ts": 1764814286.7731571,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -15.0
+      },
+      {
+        "ts": 1764814286.8102012,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -82,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764814286.959776,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -70,
+        "snr": 0.25
+      },
+      {
+        "ts": 1764814287.0153642,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": 5.0
+      },
+      {
+        "ts": 1764814287.034142,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -6.75
+      },
+      {
+        "ts": 1764814287.0487108,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -5.75
+      },
+      {
+        "ts": 1764814287.0603971,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -91,
+        "snr": 8.5
+      },
+      {
+        "ts": 1764814287.3511958,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -24,
+        "snr": 10.0
+      },
+      {
+        "ts": 1764814287.804644,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -73,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764814288.1177018,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 8.25
+      },
+      {
+        "ts": 1764814288.1351502,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": 6.5
+      },
+      {
+        "ts": 1764814288.148844,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": 9.25
+      },
+      {
+        "ts": 1764814288.301415,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -93,
+        "snr": 0.25
+      },
+      {
+        "ts": 1764814288.4488661,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -70,
+        "snr": -2.5
+      },
+      {
+        "ts": 1764814288.947712,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": 1.0
+      },
+      {
+        "ts": 1764814288.966253,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -115,
+        "snr": -12.25
+      },
+      {
+        "ts": 1764814289.129214,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -3.75
+      },
+      {
+        "ts": 1764814289.148863,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -64,
+        "snr": 10.5
+      },
+      {
+        "ts": 1764814290.486172,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -20,
+        "snr": 11.5
+      },
+      {
+        "ts": 1764814361.020283,
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -110,
+        "snr": 9.25
       }
     ],
     "packets": [
       {
-        "timestamp": 1764791107.3963468,
-        "packet_type": "TELEMETRY_APP",
-        "id": 2337121515,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 1,
-        "rx_rssi": -76,
-        "rx_snr": 0.75,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!6748fd3c",
-        "battery_level": 101,
-        "voltage": 4.098,
-        "channel_utilization": 23.433334,
-        "air_util_tx": 0.008694444,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764791714.408484,
+        "timestamp": 1764809764.462133,
         "packet_type": "POSITION_APP",
-        "id": 3720006892,
+        "id": 4091455735,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
-        "hop_limit": 1,
-        "rx_rssi": -76,
-        "rx_snr": 1.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!6748fd3c",
-        "lat": 37.5325453,
-        "lon": -122.1714351,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764795328.9107351,
-        "packet_type": "POSITION_APP",
-        "id": 3827869934,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -37,
-        "rx_snr": 11.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!b29fa95c",
-        "lat": 37.5323935,
-        "lon": -122.1718178,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764797590.349729,
-        "packet_type": "TELEMETRY_APP",
-        "id": 1479351536,
-        "channel": 0,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 1,
-        "rx_rssi": -69,
-        "rx_snr": 10.75,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!7a6c6764",
-        "battery_level": 101,
-        "voltage": 4.247,
-        "channel_utilization": 24.965,
-        "air_util_tx": 0.013527778,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764799751.13646,
-        "packet_type": "NODEINFO_APP",
-        "id": 3171604721,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -79,
+        "hop_limit": 2,
+        "rx_rssi": -73,
         "rx_snr": 9.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16cfa214",
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2ebdbec",
+        "lat": 37.5326531,
+        "lon": -122.171795,
+        "altitude": null
+      },
+      {
+        "timestamp": 1764810549.1761851,
+        "packet_type": "NODEINFO_APP",
+        "id": 601554168,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 1,
+        "rx_rssi": -71,
+        "rx_snr": 10.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a20a0f0c",
         "role": "CLIENT_MUTE",
         "hw_model": "RAK4631",
         "long_name": "Sequoia YC Mark A b351",
         "short_name": "SYCA"
       },
       {
-        "timestamp": 1764803447.477812,
+        "timestamp": 1764810728.5614378,
+        "packet_type": "TELEMETRY_APP",
+        "id": 1802577145,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -74,
+        "rx_snr": 9.5,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
+        "battery_level": 101,
+        "voltage": 4.15,
+        "channel_utilization": 12.351666,
+        "air_util_tx": 0.013527778,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1764811577.6218119,
         "packet_type": "POSITION_APP",
-        "id": 1420161268,
+        "id": 364011770,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": 1,
-        "rx_rssi": -24,
-        "rx_snr": 10.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "lat": 37.5323138,
-        "lon": -122.1716863,
+        "rx_rssi": -80,
+        "rx_snr": 0.5,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!99005060",
+        "lat": 37.5332961,
+        "lon": -122.1713956,
         "altitude": null
       },
       {
-        "timestamp": 1764804309.119606,
-        "packet_type": "TELEMETRY_APP",
-        "id": 3149545717,
+        "timestamp": 1764812479.354659,
+        "packet_type": "POSITION_APP",
+        "id": 1592539387,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": 1,
-        "rx_rssi": -24,
-        "rx_snr": 10.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "battery_level": 101,
-        "voltage": 4.136,
-        "channel_utilization": 24.869999,
-        "air_util_tx": 0.01836111,
-        "power_voltage": null,
-        "power_current": null
+        "rx_rssi": -76,
+        "rx_snr": 0.5,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!6748fd3c",
+        "lat": 37.5329898,
+        "lon": -122.1713365,
+        "altitude": null
+      },
+      {
+        "timestamp": 1764814148.7783968,
+        "packet_type": "NODEINFO_APP",
+        "id": 4201193724,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -74,
+        "rx_snr": 10.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark A b351",
+        "short_name": "SYCA"
+      },
+      {
+        "timestamp": 1764814285.8422039,
+        "packet_type": "POSITION_APP",
+        "id": 2032701693,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -77,
+        "rx_snr": 6.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a20a1164",
+        "lat": 37.5326191,
+        "lon": -122.1715803,
+        "altitude": null
       }
     ]
   },
@@ -2943,28 +3103,37 @@
     "info": {
       "channel_name": "MediumFast",
       "telemetry": {
-        "time": 1764803519,
+        "time": 1764810360,
         "device_metrics": {
           "battery_level": 101,
-          "voltage": 3.969,
-          "channel_utilization": 21.785,
+          "voltage": 4.281,
+          "channel_utilization": 17.053333,
           "air_util_tx": 0.008583333,
-          "uptime_seconds": 953692
+          "uptime_seconds": 960532
         }
       },
-      "last_seen": 1764803951.517107,
+      "last_seen": 1764811090.307199,
       "battery": 100,
-      "rx_rssi": -24,
-      "rx_snr": 10.5,
+      "rx_rssi": -101,
+      "rx_snr": 3.25,
+      "best_gateway": {
+        "id": 2688088084,
+        "name": "Herkimer-9/G2 f814",
+        "lat": null,
+        "lon": null,
+        "rssi": -93,
+        "snr": -4.25
+      },
+      "best_gateway_rssi": -93,
       "channel": 31,
       "origin_lat": 37.5705,
       "origin_lon": -122.20216666666667,
-      "distance_from_origin_m": 13.059325401950492,
+      "distance_from_origin_m": 9.886388518035904,
       "moved_far": false,
-      "latitude": 37.5705801,
-      "longitude": -122.2020583,
+      "latitude": 37.5704453,
+      "longitude": -122.2022551,
       "altitude": 0,
-      "last_position_update": 1764803951.517108,
+      "last_position_update": 1764810364.2120209,
       "role": "CLIENT_MUTE",
       "long_name": "Sequoia YC Mark X 0b0b",
       "short_name": "Sequoia",
@@ -2972,379 +3141,267 @@
     },
     "position_history": [
       {
-        "ts": 1764792214.694387,
-        "lat": 37.5699545,
-        "lon": -122.201782,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -101,
-        "snr": 4.25
-      },
-      {
-        "ts": 1764798538.1455739,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -98,
-        "snr": -7.25
-      },
-      {
-        "ts": 1764798539.571274,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -24,
-        "snr": 10.5
-      },
-      {
-        "ts": 1764798539.5825868,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -104,
-        "snr": -6.0
-      },
-      {
-        "ts": 1764798540.9752162,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
+        "ts": 1764810361.1110091,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
         "alt": 0,
         "battery": 100,
         "rssi": -93,
-        "snr": 1.25
+        "snr": -4.25
       },
       {
-        "ts": 1764798540.9920619,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
+        "ts": 1764810361.596339,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
         "alt": 0,
         "battery": 100,
-        "rssi": -108,
-        "snr": -13.5
+        "rssi": -97,
+        "snr": -0.5
       },
       {
-        "ts": 1764798542.1274061,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -90,
-        "snr": 5.0
-      },
-      {
-        "ts": 1764798542.1488361,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -95,
-        "snr": 3.25
-      },
-      {
-        "ts": 1764798542.163096,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -94,
-        "snr": -1.0
-      },
-      {
-        "ts": 1764798542.173695,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -117,
-        "snr": -6.5
-      },
-      {
-        "ts": 1764798542.182697,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -102,
-        "snr": -11.25
-      },
-      {
-        "ts": 1764798542.211319,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -113,
-        "snr": -6.25
-      },
-      {
-        "ts": 1764798553.878987,
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -99,
-        "snr": -3.5
-      },
-      {
-        "ts": 1764799445.237632,
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -98,
-        "snr": -6.75
-      },
-      {
-        "ts": 1764799445.628234,
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -98,
-        "snr": 4.75
-      },
-      {
-        "ts": 1764799447.958397,
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -92,
-        "snr": 1.25
-      },
-      {
-        "ts": 1764799447.9711921,
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -108,
-        "snr": -9.75
-      },
-      {
-        "ts": 1764799447.9774709,
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -91,
-        "snr": 4.25
-      },
-      {
-        "ts": 1764799447.984035,
-        "lat": 37.5704623,
-        "lon": -122.201747,
+        "ts": 1764810361.608541,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
         "alt": 0,
         "battery": 100,
         "rssi": -101,
-        "snr": -10.0
+        "snr": -6.0
       },
       {
-        "ts": 1764799447.990432,
-        "lat": 37.5704623,
-        "lon": -122.201747,
+        "ts": 1764810362.043466,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
         "alt": 0,
         "battery": 100,
         "rssi": -102,
-        "snr": -7.5
+        "snr": -3.75
       },
       {
-        "ts": 1764799447.996323,
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "alt": 0,
-        "battery": 100,
-        "rssi": -116,
-        "snr": -5.0
-      },
-      {
-        "ts": 1764799448.002743,
-        "lat": 37.5704623,
-        "lon": -122.201747,
+        "ts": 1764810362.05677,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
         "alt": 0,
         "battery": 100,
         "rssi": -96,
-        "snr": 2.75
+        "snr": 2.0
       },
       {
-        "ts": 1764803951.517128,
-        "lat": 37.5705801,
-        "lon": -122.2020583,
+        "ts": 1764810362.066366,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
         "alt": 0,
         "battery": 100,
-        "rssi": -24,
+        "rssi": -92,
+        "snr": 3.5
+      },
+      {
+        "ts": 1764810362.0736058,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": -2.0
+      },
+      {
+        "ts": 1764810362.079547,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -116,
+        "snr": -11.25
+      },
+      {
+        "ts": 1764810362.0852711,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": 4.0
+      },
+      {
+        "ts": 1764810362.0924659,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -99,
+        "snr": -9.0
+      },
+      {
+        "ts": 1764810362.2935412,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": 3.5
+      },
+      {
+        "ts": 1764810362.304458,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 1.75
+      },
+      {
+        "ts": 1764810362.31326,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -100,
+        "snr": -5.0
+      },
+      {
+        "ts": 1764810362.3209758,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -115,
+        "snr": -11.5
+      },
+      {
+        "ts": 1764810362.3937228,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -118,
+        "snr": -13.5
+      },
+      {
+        "ts": 1764810362.404062,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 8.5
+      },
+      {
+        "ts": 1764810362.415765,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 4.25
+      },
+      {
+        "ts": 1764810362.500957,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": -8.75
+      },
+      {
+        "ts": 1764810362.592878,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -77,
+        "snr": -11.5
+      },
+      {
+        "ts": 1764810363.145503,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -43,
         "snr": 10.5
+      },
+      {
+        "ts": 1764810363.159468,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": 10.75
+      },
+      {
+        "ts": 1764810364.2120278,
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -82,
+        "snr": 9.75
       }
     ],
     "packets": [
       {
-        "timestamp": 1764790493.766443,
+        "timestamp": 1764810354.235591,
         "packet_type": "TELEMETRY_APP",
-        "id": 538748564,
+        "id": 2993000096,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": 3,
         "rx_rssi": -94,
-        "rx_snr": -6.25,
+        "rx_snr": -5.0,
         "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
         "battery_level": 101,
-        "voltage": 4.251,
-        "channel_utilization": 23.011667,
-        "air_util_tx": 0.017472222,
+        "voltage": 4.281,
+        "channel_utilization": 17.053333,
+        "air_util_tx": 0.008583333,
         "power_voltage": null,
         "power_current": null
       },
       {
-        "timestamp": 1764792214.684968,
+        "timestamp": 1764810361.105314,
         "packet_type": "POSITION_APP",
-        "id": 2192737941,
+        "id": 3384051361,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -93,
+        "rx_snr": -4.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
+        "lat": 37.5704453,
+        "lon": -122.2022551,
+        "altitude": null
+      },
+      {
+        "timestamp": 1764811090.298038,
+        "packet_type": "NODEINFO_APP",
+        "id": 952690338,
         "channel": 31,
         "channel_name": "MediumFast",
         "portnum_name": "Unknown",
         "hop_start": 3,
         "hop_limit": 2,
         "rx_rssi": -101,
-        "rx_snr": 4.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "lat": 37.5699545,
-        "lon": -122.201782,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764793088.830693,
-        "packet_type": "NODEINFO_APP",
-        "id": 3574994582,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 2,
-        "rx_rssi": -100,
-        "rx_snr": 4.25,
+        "rx_snr": 3.25,
         "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
         "role": "CLIENT_MUTE",
         "hw_model": "RAK4631",
         "long_name": "Sequoia YC Mark X 0b0b",
         "short_name": "SYCX"
-      },
-      {
-        "timestamp": 1764796689.583362,
-        "packet_type": "NODEINFO_APP",
-        "id": 535129751,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -79,
-        "rx_snr": 8.0,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16cfa214",
-        "role": "CLIENT_MUTE",
-        "hw_model": "RAK4631",
-        "long_name": "Sequoia YC Mark X 0b0b",
-        "short_name": "SYCX"
-      },
-      {
-        "timestamp": 1764796982.3651571,
-        "packet_type": "TELEMETRY_APP",
-        "id": 3478776472,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -24,
-        "rx_snr": 10.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "battery_level": 101,
-        "voltage": 4.208,
-        "channel_utilization": 19.145,
-        "air_util_tx": 0.008583333,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764798539.555514,
-        "packet_type": "POSITION_APP",
-        "id": 3112905369,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": 1,
-        "rx_rssi": -24,
-        "rx_snr": 10.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "lat": 37.5702045,
-        "lon": -122.2019418,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764799447.974412,
-        "packet_type": "POSITION_APP",
-        "id": 1582328474,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -91,
-        "rx_snr": 4.25,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
-        "lat": 37.5704623,
-        "lon": -122.201747,
-        "altitude": null
-      },
-      {
-        "timestamp": 1764803516.4077382,
-        "packet_type": "TELEMETRY_APP",
-        "id": 966118044,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -79,
-        "rx_snr": 7.75,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16cfa214",
-        "battery_level": 101,
-        "voltage": 3.969,
-        "channel_utilization": 21.785,
-        "air_util_tx": 0.008583333,
-        "power_voltage": null,
-        "power_current": null
-      },
-      {
-        "timestamp": 1764803951.4966059,
-        "packet_type": "POSITION_APP",
-        "id": 496973470,
-        "channel": 31,
-        "channel_name": "MediumFast",
-        "portnum_name": "Unknown",
-        "hop_start": 3,
-        "hop_limit": null,
-        "rx_rssi": -24,
-        "rx_snr": 10.5,
-        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
-        "lat": 37.5705801,
-        "lon": -122.2020583,
-        "altitude": null
       }
     ],
     "gateways": {
       "2688088084": {
         "id": 2688088084,
-        "name": "Unknown",
+        "name": "Herkimer-9/G2 f814",
         "lat": null,
         "lon": null,
-        "rssi": -94,
-        "snr": -6.25,
-        "last_seen": 1764790493.766937,
+        "rssi": -93,
+        "snr": -4.25,
+        "last_seen": 1764810361.105782,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3

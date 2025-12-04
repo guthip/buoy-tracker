@@ -296,7 +296,7 @@
       }
       
       var xhr = new XMLHttpRequest();
-      xhr.timeout = 5000; // 5 second timeout
+      xhr.timeout = 15000; // 15 second timeout for slow connections (was 5s)
       xhr.open(method, url, true);
       
       // Aggressive no-cache headers
@@ -484,11 +484,26 @@
   function loadAppFeatures() {
     // Load app features from server config via /health
     // Returns a promise for proper sequencing on page load
-    return fetch('/health')
-      .then(r => r.json())
+    // Use AbortController for timeout (fetch doesn't have native timeout)
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() { 
+      controller.abort(); 
+      console.error('[FEATURES] /health request timed out after 15s');
+    }, 15000); // 15 second timeout for slow connections
+    
+    return fetch('/health', { signal: controller.signal })
+      .then(r => {
+        clearTimeout(timeoutId);
+        if (!r.ok) {
+          console.error('[FEATURES] /health returned status', r.status);
+          throw new Error('HTTP ' + r.status);
+        }
+        return r.json();
+      })
       .then(data => {
         if (data.features) {
           appFeatures = data.features;
+          console.log('[FEATURES] Loaded from server:', appFeatures);
           // Update legend visibility based on show_gateways
           var legendRSSI = document.getElementById('legendRSSI');
           var legendSNR = document.getElementById('legendSNR');
@@ -498,10 +513,32 @@
           if (trafficLightLegend) {
             trafficLightLegend.style.gridTemplateColumns = appFeatures.show_gateways ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
           }
+          // Initialize control menu checkboxes immediately
+          if (document.getElementById('showAllNodesInput')) {
+            document.getElementById('showAllNodesInput').checked = appFeatures.show_all_nodes;
+          }
+          if (document.getElementById('showGatewaysInput')) {
+            document.getElementById('showGatewaysInput').checked = appFeatures.show_gateways;
+          }
+          if (document.getElementById('showPositionTrailsInput')) {
+            document.getElementById('showPositionTrailsInput').checked = appFeatures.show_position_trails;
+          }
+          if (document.getElementById('showNauticalMarkersInput')) {
+            document.getElementById('showNauticalMarkersInput').checked = appFeatures.show_nautical_markers;
+          }
+          if (document.getElementById('trailHistoryInput')) {
+            document.getElementById('trailHistoryInput').value = appFeatures.trail_history_hours || 168;
+          }
           // Display options are now config-driven; no toggles to update
+        } else {
+          console.warn('[FEATURES] No features in /health response');
         }
       })
-      .catch(e => console.error('Failed to load app features:', e));
+      .catch(e => {
+        clearTimeout(timeoutId);
+        console.error('[FEATURES] Failed to load app features:', e.message || e);
+        // Don't throw - let app continue with defaults
+      });
   }
 
     // Ensure the menu checkbox for trails is always checked on load
@@ -1723,7 +1760,11 @@
   function updateStatus(){
     try {
       var statusEl = document.getElementById('mqtt-status');
-      if (!statusEl) return;
+      if (!statusEl) {
+        console.warn('[STATUS] Status element not found in DOM');
+        return;
+      }
+      console.log('[STATUS] Fetching health status...');
       
       makeApiRequest('GET', 'health', function(xhr){ 
         try {
@@ -1742,20 +1783,30 @@
             } else if (data2 && data2.mqtt_status === 'connecting') {
               txt = '⏳ Connecting...';
             }
+            console.log('[STATUS] Updated to:', txt);
             statusEl.textContent = txt;
           } else if (xhr.status === 429) {
             pausePollingForRateLimit();
             statusEl.textContent = '⏸️ Rate limited (paused 60s)';
+            console.warn('[STATUS] Rate limited (429)');
           } else if (xhr.status === 0) {
             // Network error - server unreachable
             window.connectionLost = true;
               showConnectionBanner();
             statusEl.textContent = '❌ Server Unreachable';
+            console.warn('[STATUS] Server unreachable (status 0 - network error)');
+          } else if (xhr.status === 401) {
+            statusEl.textContent = '🔒 Unauthorized';
+            console.warn('[STATUS] Unauthorized (401)');
+          } else {
+            console.warn('[STATUS] Unexpected response status:', xhr.status, '- Response:', xhr.responseText ? xhr.responseText.substring(0, 100) : '(no response)');
+            statusEl.textContent = '❓ Error (' + xhr.status + ')';
           }
         } catch(e) {
-          // Silent catch - don't let callback errors propagate
+          console.error('[STATUS] Error parsing response:', e);
+          statusEl.textContent = '❓ Parse error';
         }
-      });
+      }, null); // No explicit timeout param - uses hardcoded 15s
     } catch(e) {
       // Silent - don't let updateStatus errors break the poll loop
       console.error('[STATUS] Error calling updateStatus:', e);
@@ -1802,8 +1853,13 @@
   initMap(); 
   
   // Load app features and then fetch initial data
+  console.log('[INIT] Starting app initialization...');
+  var initComplete = false;
+  
   loadAppFeatures().then(function() {
+    console.log('[INIT] App features loaded, updating status...');
     updateStatus(); // Call immediately to get initial status
+    initComplete = true;
     
     // Initial fetch on page load
     try {
@@ -1812,8 +1868,22 @@
       console.error('[INIT] Error in updateNodes:', e);
     }
   }).catch(function(e) {
-    console.error('Failed to initialize:', e);
+    console.error('[INIT] Failed to initialize features:', e);
+    initComplete = true;
+    // Even if features fail to load, try to update status
+    setTimeout(function() {
+      console.log('[INIT] Retrying status update after feature load failure...');
+      updateStatus();
+    }, 500);
   });
+  
+  // Safety fallback: if initialization takes more than 12 seconds, force a status update
+  setTimeout(function() {
+    if (!initComplete) {
+      console.warn('[INIT] Initialization timeout - forcing status update');
+      updateStatus();
+    }
+  }, 12000);
   
   var statusRefresh = parseInt(document.body.dataset.statusRefresh || '60000', 10);
   var nodeRefresh = parseInt(document.body.dataset.nodeRefresh || '60000', 10);
