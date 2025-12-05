@@ -50,6 +50,9 @@ verify_deployment.sh
 
 # Docker Hub setup documentation (local/internal only)
 DOCKER_HUB_SETUP.md
+MESHTASTIC_SIGNAL_METRICS.md
+SIGNAL_ANALYSIS_PLAN.md
+effort_assessment.md
 
 # Configuration files (must be created from templates during deployment)
 # Both tracker.config and secret.config should NOT be in the image

@@ -272,6 +272,7 @@
   var markers = {};
   var gatewayMarkers = {}; // markers for gateways receiving special node packets
   var trails = {};
+  var trail_markers = {}; // individual position history markers per node (node_id -> array of markers)
   var movementCircles = {}; // origin-anchored movement alert circles per node
   var thresholdRings = {}; // threshold rings around home positions for special nodes
   var movementLines = {}; // red lines from origin to current position when moved
@@ -663,7 +664,7 @@
     // OpenSeaMap overlay - nautical markers and depth contours (worldwide)
     window.seamarkOverlay = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png', {
       attribution: '',
-      maxZoom: 18,
+      maxZoom: 19,
       minZoom: 0,
       opacity: 1.0,
       zIndex: 400
@@ -1720,17 +1721,91 @@
                       try { 
                         var h = JSON.parse(xhr2.responseText); 
                         var pts = h.points || []; 
+                        
+                        // Remove old trail polyline
                         if (trails[node.id]) { 
                           map.removeLayer(trails[node.id]); 
                           delete trails[node.id]; 
-                        } 
+                        }
+                        
+                        // Remove old position history markers
+                        if (trail_markers[node.id]) {
+                          for (var m = 0; m < trail_markers[node.id].length; m++) {
+                            map.removeLayer(trail_markers[node.id][m]);
+                          }
+                          delete trail_markers[node.id];
+                        }
+                        
                         if (pts.length >= 2){ 
                           var latlngs = []; 
-                          for(var u=0;u<pts.length;u++){ 
+                          trail_markers[node.id] = [];
+                          var firstPointIndex = 0;
+                          var lastPointIndex = pts.length - 1;
+                          
+                          for(var u=0; u<pts.length; u++){ 
                             var pnt = pts[u]; 
-                            latlngs.push([pnt.lat, pnt.lon]); 
-                          } 
-                          trails[node.id] = L.polyline(latlngs, {color:'#1976D2', weight:3, opacity:0.7}).addTo(map); 
+                            latlngs.push([pnt.lat, pnt.lon]);
+                            
+                            var markerOpts = {
+                              radius: 5,
+                              fillColor: '#CCCCCC',
+                              color: '#666',
+                              weight: 2,
+                              opacity: 0.8,
+                              fillOpacity: 0.4
+                            };
+                            
+                            // Special styling for first and last points
+                            if (u === firstPointIndex) {
+                              // Oldest point: green filled circle
+                              markerOpts = {
+                                radius: 5,
+                                fillColor: '#4CAF50',
+                                color: '#4CAF50',
+                                weight: 1,
+                                opacity: 0.9,
+                                fillOpacity: 0.9
+                              };
+                            } else if (u === lastPointIndex) {
+                              // Newest point: red filled circle
+                              markerOpts = {
+                                radius: 5,
+                                fillColor: '#FF6B6B',
+                                color: '#FF6B6B',
+                                weight: 1,
+                                opacity: 0.9,
+                                fillOpacity: 0.9
+                              };
+                            }
+                            
+                            var historyMarker = L.circleMarker([pnt.lat, pnt.lon], markerOpts).addTo(map);
+                            
+                            // Add popup with timestamp and signal info
+                            var popupText = 'Pos #' + (u+1) + ' / ' + pts.length;
+                            if (u === firstPointIndex) popupText += ' (OLDEST)';
+                            if (u === lastPointIndex) popupText += ' (NEWEST)';
+                            popupText += '<br>';
+                            if (pnt.ts) {
+                              var popupDate = new Date(pnt.ts * 1000).toLocaleString();
+                              popupText += 'Time: ' + popupDate + '<br>';
+                            }
+                            popupText += 'Lat: ' + pnt.lat.toFixed(6) + '<br>';
+                            popupText += 'Lon: ' + pnt.lon.toFixed(6);
+                            if (pnt.battery !== null && pnt.battery !== undefined) {
+                              popupText += '<br>Battery: ' + Math.round(pnt.battery) + '%';
+                            }
+                            if (pnt.rssi !== null && pnt.rssi !== undefined) {
+                              popupText += '<br>RSSI: ' + pnt.rssi + ' dBm';
+                            }
+                            if (pnt.snr !== null && pnt.snr !== undefined) {
+                              popupText += '<br>SNR: ' + (Math.round(pnt.snr * 10) / 10) + ' dB';
+                            }
+                            historyMarker.bindPopup(popupText);
+                            trail_markers[node.id].push(historyMarker);
+                          }
+                          
+                          // Draw polyline trail
+                          trails[node.id] = L.polyline(latlngs, {color:'#1976D2', weight:3, opacity:0.7}).addTo(map);
                         }
                         // Trail data empty for this node
                       } catch(e){ 
@@ -1743,12 +1818,21 @@
                 })(sn);
               }
             } else { 
+              // Remove trails and history markers
               for (var tk in trails){ 
                 if(trails.hasOwnProperty(tk)){ 
                   map.removeLayer(trails[tk]); 
                   delete trails[tk]; 
-                } 
-              } 
+                }
+              }
+              for (var tmk in trail_markers) {
+                if (trail_markers.hasOwnProperty(tmk)) {
+                  for (var tm = 0; tm < trail_markers[tmk].length; tm++) {
+                    map.removeLayer(trail_markers[tmk][tm]);
+                  }
+                  delete trail_markers[tmk];
+                }
+              }
             }
           }
         });

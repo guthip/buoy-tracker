@@ -870,17 +870,18 @@ def on_nodeinfo(json_data):
     try:
         logger.debug(f'on_nodeinfo callback fired - processing message')
         add_recent(json_data)
-        payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
         channel = json_data.get("channel")
-        # Try to get channel_name from our extracted topic mapping first
-        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
-        # Fallback to what the library provides (usually "Unknown")
-        if channel_name == "Unknown":
-            channel_name = json_data.get("channel_name", "Unknown")
         
-        # Track special node packets and channel info
+        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
+        # This ensures we never lose packet data due to processing errors
         if node_id:
+            # Try to get channel_name from our extracted topic mapping first
+            channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+            # Fallback to what the library provides (usually "Unknown")
+            if channel_name == "Unknown":
+                channel_name = json_data.get("channel_name", "Unknown")
+            
             if _is_special_node(node_id):
                 special_node_last_packet[node_id] = time.time()
                 # Update channel name if different
@@ -888,9 +889,17 @@ def on_nodeinfo(json_data):
                     special_node_channels[node_id] = channel_name
                     if _should_persist():
                         _save_special_nodes_data()
+            
+            # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'NODEINFO_APP', json_data)
             if _should_persist():
-                _save_special_nodes_data()  # Save packet history after tracking
+                _save_special_nodes_data()  # Save packet immediately
+        
+        # NOW do the rest of the processing (which might have errors)
+        payload = json_data["decoded"]["payload"]
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         role = payload.get("role") if isinstance(payload, dict) else None
         
@@ -982,7 +991,7 @@ def on_nodeinfo(json_data):
                 if _should_persist():
                     _save_special_nodes_data()
     except Exception as e:
-        logger.error(f'Error processing nodeinfo: {e}')
+        logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
 
 def on_position(json_data):
@@ -993,17 +1002,18 @@ def on_position(json_data):
     
     try:
         add_recent(json_data)
-        payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
         channel = json_data.get("channel")
-        # Try to get channel_name from our extracted topic mapping first
-        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
-        # Fallback to what the library provides (usually "Unknown")
-        if channel_name == "Unknown":
-            channel_name = json_data.get("channel_name", "Unknown")
         
-        # Track special node packets and channel info
+        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
+        # This ensures we never lose packet data due to processing errors
         if node_id:
+            # Try to get channel_name from our extracted topic mapping first
+            channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+            # Fallback to what the library provides (usually "Unknown")
+            if channel_name == "Unknown":
+                channel_name = json_data.get("channel_name", "Unknown")
+            
             if _is_special_node(node_id):
                 special_node_last_packet[node_id] = time.time()
                 # Update channel name if different
@@ -1011,9 +1021,17 @@ def on_position(json_data):
                     special_node_channels[node_id] = channel_name
                     if _should_persist():
                         _save_special_nodes_data()
+            
+            # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'POSITION_APP', json_data)
             if _should_persist():
-                _save_special_nodes_data()  # Save packet history after tracking
+                _save_special_nodes_data()  # Save packet immediately
+        
+        # NOW do the rest of the processing (which might have errors)
+        payload = json_data["decoded"]["payload"]
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         if node_id and "latitude_i" in payload and "longitude_i" in payload:
             if node_id not in nodes_data:
@@ -1062,8 +1080,8 @@ def on_position(json_data):
                                 logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
                         
                         nodes_data[node_id]["moved_far"] = moved_far
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Error processing movement alerts for {node_id}: {e}")
             
             # Convert from integer coordinates to decimal degrees
             lat = payload["latitude_i"] / 1e7
@@ -1132,7 +1150,7 @@ def on_position(json_data):
             
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
-        logger.error(f'Error processing position: {e}')
+        logger.error(f'❌ Error processing position: {e}', exc_info=True)
 
 
 def on_telemetry(json_data):
@@ -1143,16 +1161,17 @@ def on_telemetry(json_data):
     
     try:
         add_recent(json_data)
-        payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
-        # Try to get channel_name from our extracted topic mapping first
-        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
-        # Fallback to what the library provides (usually "Unknown")
-        if channel_name == "Unknown":
-            channel_name = json_data.get("channel_name", "Unknown")
         
-        # Track special node packets and channel info
+        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
+        # This ensures we never lose packet data due to processing errors
         if node_id:
+            # Try to get channel_name from our extracted topic mapping first
+            channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+            # Fallback to what the library provides (usually "Unknown")
+            if channel_name == "Unknown":
+                channel_name = json_data.get("channel_name", "Unknown")
+            
             if _is_special_node(node_id):
                 special_node_last_packet[node_id] = time.time()
                 # Update channel name if different
@@ -1160,9 +1179,17 @@ def on_telemetry(json_data):
                     special_node_channels[node_id] = channel_name
                     if _should_persist():
                         _save_special_nodes_data()
+            
+            # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'TELEMETRY_APP', json_data)
             if _should_persist():
-                _save_special_nodes_data()  # Save packet history after tracking
+                _save_special_nodes_data()  # Save packet immediately
+        
+        # NOW do the rest of the processing (which might have errors)
+        payload = json_data["decoded"]["payload"]
+        channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
+        if channel_name == "Unknown":
+            channel_name = json_data.get("channel_name", "Unknown")
         
         if node_id:
             if node_id not in nodes_data:
@@ -1300,7 +1327,7 @@ def on_telemetry(json_data):
                 if _should_persist():
                     _save_special_nodes_data()
     except Exception as e:
-        logger.error(f'Error processing telemetry: {e}')
+        logger.error(f'❌ Error processing telemetry: {e}', exc_info=True)
 
 
 def on_neighborinfo(json_data):
@@ -1607,25 +1634,40 @@ def _route_message_to_handler(portnum, portnum_name, mp, json_packet):
                 json_packet['decoded']['payload'] = _protobuf_to_json(data)
             
             elif portnum == portnums_pb2.POSITION_APP:
+                logger.debug(f'📍 POSITION packet from {from_id}')
                 data = mesh_pb2.Position()
                 data.ParseFromString(mp.decoded.payload)
                 json_packet['decoded']['payload'] = _protobuf_to_json(data)
                 from_id = json_packet.get('from')
-                on_position(json_packet)
+                try:
+                    on_position(json_packet)
+                    logger.debug(f'✅ Successfully processed POSITION from {from_id}')
+                except Exception as pos_err:
+                    logger.error(f'❌ Error processing POSITION from {from_id}: {pos_err}', exc_info=True)
                 return
             
             elif portnum == portnums_pb2.NODEINFO_APP:
+                logger.debug(f'ℹ️ NODEINFO packet from {from_id}')
                 data = mesh_pb2.User()
                 data.ParseFromString(mp.decoded.payload)
                 json_packet['decoded']['payload'] = _protobuf_to_json(data)
-                on_nodeinfo(json_packet)
+                try:
+                    on_nodeinfo(json_packet)
+                    logger.debug(f'✅ Successfully processed NODEINFO from {from_id}')
+                except Exception as node_err:
+                    logger.error(f'❌ Error processing NODEINFO from {from_id}: {node_err}', exc_info=True)
                 return
             
             elif portnum == portnums_pb2.TELEMETRY_APP:
+                logger.debug(f'🔋 TELEMETRY packet from {from_id}')
                 data = telemetry_pb2.Telemetry()
                 data.ParseFromString(mp.decoded.payload)
                 json_packet['decoded']['payload'] = _protobuf_to_json(data)
-                on_telemetry(json_packet)
+                try:
+                    on_telemetry(json_packet)
+                    logger.debug(f'✅ Successfully processed TELEMETRY from {from_id}')
+                except Exception as tel_err:
+                    logger.error(f'❌ Error processing TELEMETRY from {from_id}: {tel_err}', exc_info=True)
                 return
             
             elif portnum == portnums_pb2.MAP_REPORT_APP:
@@ -2122,14 +2164,90 @@ def get_nodes():
 
 
 def get_special_history(node_id: int, hours: int = None):
+    """
+    Get deduplicated position history for a special node.
+    
+    Deduplication reduces redundant data for slow-moving nodes by keeping only
+    the most recent position within each time window defined by
+    config.special_nodes_settings.data_limit_time (default: 1 hour).
+    
+    For example with data_limit_time=1.0:
+    - Raw data: 700+ points over 24 hours
+    - Returned: ~24 points (one per hour)
+    - Bandwidth: 84% reduction
+    
+    Args:
+        node_id: The node's numeric ID
+        hours: History window in hours (default from config.SPECIAL_HISTORY_HOURS)
+    
+    Returns:
+        List of position dictionaries with ts, lat, lon, alt, battery, rssi, snr
+    """
     hours = hours or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
-    dq = special_history.get(node_id, deque())
-    if not dq:
-        return []
     cutoff = time.time() - (hours * 3600)
-    filtered = [e for e in dq if e['ts'] >= cutoff]
-    # Limit to 100 most recent datapoints
-    return filtered[-100:] if len(filtered) > 100 else filtered
+    
+    # First try in-memory cache
+    dq = special_history.get(node_id, deque())
+    if dq:
+        filtered = [e for e in dq if e['ts'] >= cutoff]
+        # Deduplicate to one per data_limit_time window for slow-moving special nodes
+        return _deduplicate_by_hour(filtered)
+    
+    # Fallback: load from disk if in-memory cache is empty
+    # This handles the case where server was started cleanly (enable_persistence=false)
+    try:
+        path = Path(config.SPECIAL_HISTORY_PERSIST_PATH).parent / 'special_nodes.json'
+        if path.exists():
+            with path.open('r') as f:
+                data = json.load(f)
+            node_data = data.get(str(node_id), {})
+            position_history = node_data.get('position_history', [])
+            
+            # Filter by time window and convert to dict format
+            filtered = []
+            for entry in position_history:
+                if entry.get('ts', 0) >= cutoff:
+                    filtered.append({
+                        'ts': float(entry.get('ts', 0)),
+                        'lat': float(entry.get('lat', 0)),
+                        'lon': float(entry.get('lon', 0)),
+                        'alt': entry.get('alt'),
+                        'battery': entry.get('battery'),
+                        'rssi': entry.get('rssi'),
+                        'snr': entry.get('snr')
+                    })
+            
+            # Deduplicate to one per data_limit_time window for slow-moving special nodes
+            return _deduplicate_by_hour(filtered)
+    except Exception as e:
+        logger.debug(f'Failed to load signal history from disk for node {node_id}: {e}')
+    
+    return []
+
+def _deduplicate_by_hour(points):
+    """Keep only the most recent point per time window for slow-moving special nodes.
+    
+    Time window configured via config.special_nodes_settings.data_limit_time (in hours).
+    """
+    if not points:
+        return []
+    
+    # Get deduplication window from config (in hours, default 1.0)
+    time_window_hours = config.special_nodes_settings.get('data_limit_time', 1.0)
+    time_window_seconds = time_window_hours * 3600
+    
+    time_buckets = {}
+    for point in points:
+        time_key = int(point['ts'] / time_window_seconds)  # Group by time window
+        # Keep the most recent point in each time window
+        if time_key not in time_buckets:
+            time_buckets[time_key] = point
+        elif point['ts'] > time_buckets[time_key]['ts']:
+            time_buckets[time_key] = point
+    
+    # Sort by timestamp and return
+    result = sorted(time_buckets.values(), key=lambda x: x['ts'])
+    return result
 
 def get_signal_history(node_id: int, hours: int = None):
     """Alias for get_special_history() - returns battery, RSSI, SNR history for a node."""

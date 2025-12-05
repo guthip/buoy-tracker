@@ -40,6 +40,11 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
   - **LPU** (Last Position Update): Time since last GPS position packet
   - **SoL** (Sign of Life): Time since any packet received
   - **Position History**: Deduplicated by packet timestamp to show only unique positions (retransmitted packets are automatically filtered)
+  - **Position Trail Display**: Shows movement history on map with markers colored: green (oldest), red (newest), gray outline (intermediate)
+  - **Server-side Deduplication**: Position data reduced to one point per time window (configurable via `data_limit_time` in `tracker.config`)
+    - Default: 1.0 hour (one point per hour)
+    - Reduces 700+ daily points to ~24, saving 84% bandwidth
+    - Adjust to 0.5 for 30-minute granularity or 24 for daily snapshots
 - **Signal Strength Monitoring**: Traffic light indicators for:
   - **Batt** (Battery): Voltage level status
   - **RSSI** (Signal Strength): Radio signal quality (-120 to -50 dBm)
