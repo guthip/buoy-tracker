@@ -887,13 +887,11 @@ def on_nodeinfo(json_data):
                 # Update channel name if different
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
-                    if _should_persist():
-                        _save_special_nodes_data()
+                    _save_special_nodes_data()
             
             # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'NODEINFO_APP', json_data)
-            if _should_persist():
-                _save_special_nodes_data()  # Save packet immediately
+            _save_special_nodes_data()  # Save packet immediately
         
         # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
@@ -988,8 +986,7 @@ def on_nodeinfo(json_data):
             
             # Save node data if it's a special node
             if _is_special_node(node_id):
-                if _should_persist():
-                    _save_special_nodes_data()
+                _save_special_nodes_data()
     except Exception as e:
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
@@ -1019,13 +1016,11 @@ def on_position(json_data):
                 # Update channel name if different
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
-                    if _should_persist():
-                        _save_special_nodes_data()
+                    _save_special_nodes_data()
             
             # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'POSITION_APP', json_data)
-            if _should_persist():
-                _save_special_nodes_data()  # Save packet immediately
+            _save_special_nodes_data()  # Save packet immediately
         
         # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
@@ -1125,8 +1120,7 @@ def on_position(json_data):
                     special_node_position_timestamps[node_id].add(rx_time)
                     _prune_history(node_id, now_ts=entry['ts'])
                     
-                    if _should_persist():
-                        _save_special_nodes_data()
+                    _save_special_nodes_data()
                     logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
                 elif rx_time is not None:
                     logger.debug(f'Skipped duplicate position for {node_id} (rxTime: {rx_time} already seen)')
@@ -1145,8 +1139,7 @@ def on_position(json_data):
                     special_history[node_id].append(entry)
                     _prune_history(node_id, now_ts=entry['ts'])
                     
-                    if _should_persist():
-                        _save_special_nodes_data()
+                    _save_special_nodes_data()
             
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
@@ -1177,13 +1170,11 @@ def on_telemetry(json_data):
                 # Update channel name if different
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
-                    if _should_persist():
-                        _save_special_nodes_data()
+                    _save_special_nodes_data()
             
             # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'TELEMETRY_APP', json_data)
-            if _should_persist():
-                _save_special_nodes_data()  # Save packet immediately
+            _save_special_nodes_data()  # Save packet immediately
         
         # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
@@ -1324,8 +1315,7 @@ def on_telemetry(json_data):
             
             # Save node data if it's a special node
             if _is_special_node(node_id):
-                if _should_persist():
-                    _save_special_nodes_data()
+                _save_special_nodes_data()
     except Exception as e:
         logger.error(f'❌ Error processing telemetry: {e}', exc_info=True)
 
@@ -1370,11 +1360,9 @@ def on_mapreport(json_data):
                 # Update channel name if different
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
-                    if _should_persist():
-                        _save_special_nodes_data()
+                    _save_special_nodes_data()
             _track_special_node_packet(node_id, 'MAP_REPORT_APP', json_data)
-            if _should_persist():
-                _save_special_nodes_data()  # Save packet history after tracking
+            _save_special_nodes_data()  # Save packet history after tracking
         
         if node_id and isinstance(payload, dict):
             if node_id not in nodes_data:

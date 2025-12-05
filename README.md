@@ -470,9 +470,11 @@ Once a position is learned, movement alerts are triggered relative to that first
 - Position history (up to 2 weeks)
 - Node info (battery, channel, telemetry, position, hardware)
 - Packet history with full details
-- Data persistence across server restarts is controlled by the `enable_persistence` setting in `tracker.config`:
-  - When `false` (default): All history is cleared on server restart (recommended for production)
-  - When `true`: Special node history persists across restarts (development/debugging only)
+- Data is always saved to disk (`special_nodes.json`) while running
+- The `enable_persistence` setting in `tracker.config` controls startup behavior:
+  - When `false` (default): Historical data is NOT loaded from disk on startup - start fresh (recommended for production)
+  - When `true`: Load any existing historical data from disk on startup (development/debugging)
+- Either way, new data collected is saved to disk for future reference
 - Packet data includes: timestamps, packet types, channel info, position/telemetry/nodeinfo details
 
 ## Email Alerts

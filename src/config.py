@@ -294,6 +294,12 @@ SPECIAL_HISTORY_HOURS = TRAIL_HISTORY_HOURS
 _stale_after_hours = config.getint('special_nodes_settings', 'stale_after_hours', fallback=12)
 STALE_AFTER_SECONDS = _stale_after_hours * 3600
 
+# Create special_nodes_settings dict for mqtt_handler access
+special_nodes_settings = {
+    'stale_after_hours': _stale_after_hours,
+    'data_limit_time': config.getfloat('special_nodes_settings', 'data_limit_time', fallback=1.0),
+}
+
 # Alert Configuration
 ALERT_ENABLED = config.getboolean('alerts', 'enabled', fallback=False)
 # Alert cooldown: configured in hours, converted to seconds for internal use
