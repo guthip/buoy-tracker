@@ -10,6 +10,7 @@ import base64
 import time
 import logging
 import json
+import threading
 from collections import deque
 from pathlib import Path
 import os
@@ -176,8 +177,10 @@ def _track_special_node_packet(node_id, packet_type, json_data):
     if not _is_special_node(node_id):
         return
     
+    # Ensure tracking dicts exist for this node
     if node_id not in special_node_packets:
         special_node_packets[node_id] = []
+    if node_id not in _packet_id_tracking:
         _packet_id_tracking[node_id] = {}
     
     # Get packet ID for deduplication
@@ -1517,12 +1520,23 @@ def _on_mqtt_disconnect(client_obj, userdata, disconnect_flags, reason_code, pro
     """
     MQTT disconnect callback - called when broker connection is lost.
     Logs the disconnection for debugging and monitoring.
-    The client will automatically attempt to reconnect due to _reconnect_on_failure flag.
+    Attempts to reconnect after a brief delay.
     """
-    global last_packet_time
+    global last_packet_time, client
     logger.warning(f'MQTT connection lost: {reason_code} ({disconnect_flags})')
-    if reason_code.is_failure():
-        logger.warning(f'Connection failed with reason: {reason_code.value}')
+    
+    # Check if it's a failure (not a clean disconnect)
+    try:
+        is_failure = reason_code.is_failure if isinstance(reason_code.is_failure, bool) else reason_code.is_failure()
+    except (AttributeError, TypeError):
+        is_failure = True
+    
+    if is_failure:
+        logger.warning(f'Connection failed with reason: {reason_code}')
+        # Attempt reconnection after a short delay
+        logger.info('Attempting to reconnect to MQTT broker in 5 seconds...')
+        threading.Timer(5.0, lambda: reconnect_mqtt()).start()
+    
     # Reset packet tracking on disconnect
     last_packet_time = 0
 
