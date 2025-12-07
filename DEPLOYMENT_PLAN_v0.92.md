@@ -239,6 +239,40 @@ This release implements **Option 4: Combined Quality Framework** for gateway det
 - [ ] Log rotation configured (see DOCKER.md)
 - [ ] Log files sized appropriately
 
+### 2.5 Internet Access Prerequisites
+
+#### 2.5.1 Network Access Required
+⚠️ **ACTION REQUIRED FROM USER**
+
+Before executing Phase 3 (Docker Hub Push & GitHub Release), please confirm that the deployment machine has **unrestricted internet access** for:
+
+- [ ] **Docker Hub** (hub.docker.com)
+  - [ ] Push new container images (dokwerker8891/buoy-tracker:0.92)
+  - [ ] Confirm Docker login credentials ready
+  
+- [ ] **GitHub** (github.com)
+  - [ ] Create release tags on guthip/buoy-tracker repository
+  - [ ] Create GitHub release with assets and notes
+  - [ ] Confirm GitHub authentication configured (PAT or SSH key)
+  
+- [ ] **Package Repositories**
+  - [ ] PyPI (for dependency verification)
+  - [ ] npm/JavaScript CDNs (if applicable)
+
+#### 2.5.2 Firewall & Network Checks
+- [ ] Test Docker Hub connectivity: `docker pull hello-world`
+- [ ] Test GitHub connectivity: `git ls-remote https://github.com/guthip/buoy-tracker.git`
+- [ ] Verify DNS resolution: `nslookup hub.docker.com`
+- [ ] Verify DNS resolution: `nslookup github.com`
+- [ ] Confirm no corporate proxy blocking outbound HTTPS (443)
+
+#### 2.5.3 Authentication Verification
+- [ ] Docker Hub login works: `docker login` → authenticate with PAT token
+- [ ] GitHub CLI ready: `gh auth status` (if using gh CLI)
+- [ ] SSH key configured for GitHub: `ssh -T git@github.com` (if using SSH)
+
+**⚠️ CRITICAL**: Once you confirm internet access is available and working, proceed to Phase 3.
+
 ---
 
 ## Phase 3: Release Execution (Days 3-4)

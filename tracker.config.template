@@ -74,11 +74,6 @@ low_battery_threshold = 50
 
 [app_features]
 # Web interface display options (set to true/false)
-# PRODUCTION DEPLOYMENT TIPS:
-#   - Set show_controls_menu = false to lock down UI and prevent users from modifying settings
-#   - Lock specific features (show_all_nodes, trails, etc.) based on your deployment needs
-#   - Frozen settings = consistent user experience across all browsers
-show_controls_menu = true
 show_all_nodes = false
 show_gateways = true
 show_position_trails = true
@@ -118,12 +113,9 @@ movement_threshold = 100
 # Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13'
 
 [security]
-# API endpoint authentication
-# Set to true to require API key for all endpoints (except /health)
-# Set to false to rely on rate limiting only (default)
-# Default: false
-# Note: Rate limiting is always active regardless of this setting
-require_api_key = false
+# API Key Protection
+# All users can view the map and data
+# Password (API key) is required to access Control Menu (settings and configuration changes)
 
 [alerts]
 # Email alert settings for movement notifications

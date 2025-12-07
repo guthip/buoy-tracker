@@ -202,17 +202,6 @@ SHOW_GATEWAYS = config.getboolean('app_features', 'show_gateways', fallback=True
 SHOW_POSITION_TRAILS = config.getboolean('app_features', 'show_position_trails', fallback=True)
 SHOW_GATEWAY_CONNECTIONS = config.getboolean('app_features', 'show_gateway_connections', fallback=True)
 SHOW_NAUTICAL_MARKERS = config.getboolean('app_features', 'show_nautical_markers', fallback=True)
-# SHOW_CONTROLS_MENU: Admin-controlled setting to show/hide the Configuration panel
-#   - true: Users see both "Legend" and "Controls" tabs in the settings menu (default)
-#   - false: Users only see "Legend" tab; "Controls" tab is hidden (locks configuration)
-# This is a read-only setting controlled by the administrator via tracker.config.
-# End users cannot override this setting. When false, prevents user modification of:
-#   - Node display filters (all nodes, gateways, etc.)
-#   - Position trail settings
-#   - Battery/movement thresholds
-#   - API polling interval
-# Use this to enforce consistent configuration across all users in public deployments.
-SHOW_CONTROLS_MENU = config.getboolean('app_features', 'show_controls_menu', fallback=True)
 TRAIL_HISTORY_HOURS = config.getint('app_features', 'trail_history_hours', fallback=24)
 
 # Special Nodes Configuration (parse format: node_id = label,home_lat,home_lon)
@@ -341,9 +330,10 @@ SPECIAL_HISTORY_PERSIST_PATH = str(DATA_DIR / 'special_nodes.json')
 # Environment: 'development' (localhost allowed) or 'production' (strict security)
 ENV = os.getenv('FLASK_ENV', config.get('security', 'environment', fallback='development'))
 
-# API Key requirement - whether to enforce API key authentication on endpoints
-# Default: false (rate limiting only). Set to true for additional security.
-REQUIRE_API_KEY = os.getenv('REQUIRE_API_KEY', config.get('security', 'require_api_key', fallback='false')).lower() in ('true', '1', 'yes')
+# API Key Authentication - Always Required
+# All write endpoints (Control Menu) require password authentication
+# Read-only endpoints (map view, data access) are public
+REQUIRE_API_KEY = True  # Simplified: always require API key for protected endpoints
 
 # Trusted reverse proxy IPs - only these can be trusted for X-Forwarded-For header
 # For example: ['10.0.0.50'] for nginx, ['10.0.0.50', '10.0.0.51'] for load balancer

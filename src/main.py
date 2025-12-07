@@ -158,26 +158,15 @@ def check_rate_limit(f: Callable) -> Callable:
     return decorated
 
 # API Key authentication - stored server-side in secret.config (never in code or env)
-# If no API key configured, endpoints will not require authentication (development mode)
+# Control Menu access requires password. Read-only endpoints are public.
 API_KEY = config.API_KEY
-if config.REQUIRE_API_KEY:
-    if API_KEY:
-        logger.info('API key authentication enabled (required by config)')
-    else:
-        logger.warning('API key requirement enabled but no key configured in secret.config')
-else:
-    logger.info('API key authentication disabled (config: require_api_key=false)')
+logger.info('API key authentication enabled (required for Control Menu access)')
 
 def require_api_key(f: Callable) -> Callable:
-    """Decorator to require API key in Authorization header (if enabled in config)."""
+    """Decorator to require API key in Authorization header for protected endpoints."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        # If API key requirement is disabled in config, allow all requests
-        if not config.REQUIRE_API_KEY:
-            return f(*args, **kwargs)
-        
         # For development: Allow localhost exemption
-        # For production: Always require API key
         if config.ENV == 'development':
             is_localhost = request.remote_addr in LOCALHOST_ADDRESSES
             if is_localhost:
@@ -334,13 +323,10 @@ def index() -> Response:
 
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
-                          api_key_required=config.REQUIRE_API_KEY,  # Tell client if auth is needed
+                          api_key_required=True,  # API key always required for Control Menu
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
-                          # show_controls_menu: Admin-controlled flag to show/hide Configuration tab
-                          # When false, prevents end users from modifying UI settings (locked configuration)
-                          show_controls_menu=getattr(config, 'SHOW_CONTROLS_MENU', True),
-                          build_id=int(time.time())))
+                          build_id=int(time.time()))))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'

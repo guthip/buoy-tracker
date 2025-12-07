@@ -253,7 +253,7 @@
             <h2 id="menu-title">⚙️ Settings & Controls</h2>
             <div id="menu-tabs" style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #ddd;">
                 <button class="tab-btn tab-legend active" id="legendTabBtn" onclick="showMenuTab('legend')">Legend</button>
-                {% if show_controls_menu %}<!-- Controls tab: Only shown if show_controls_menu = true in tracker.config (admin-controlled) --><button class="tab-btn tab-controls" id="controlsTabBtn" onclick="showMenuTab('controls')">Controls</button>{% endif %}
+                <button class="tab-btn tab-controls" id="controlsTabBtn" onclick="showMenuTab('controls')">Controls</button>
                     <!-- Removed stray CSS for tab buttons -->
             </div>
             <div id="tab-legend" style="display:block;">

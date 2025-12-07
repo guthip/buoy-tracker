@@ -257,19 +257,18 @@ See DOCKER.md for complete instructions.
 
 ## Security & Authorization
 
-API endpoint authentication is **optional and configurable**:
+**Access Model:**
+- All users can **view the map and data** without authentication
+- **Control Menu (settings and configuration changes) requires password** via API key
+- Rate limiting is always active on all endpoints
+- `/health` endpoint always public (used by Docker healthcheck)
 
-- **Default behavior (require_api_key=false)**: All API endpoints protected by rate limiting only
-- **Enhanced security (require_api_key=true)**: Endpoints require `Authorization: Bearer <API_KEY>` header
-- **Exception**: `/health` endpoint always public (used by Docker healthcheck)
-
-**Configuration:**
-1. Set `require_api_key = true` in `tracker.config` under `[security]` section
-2. Set API key in `secret.config` under `[webapp] api_key`
+**Password Protection:**
+1. Set API key in `secret.config` under `[webapp] api_key = your_secure_password`
+2. Control Menu actions automatically send Authorization header with password
 3. In development mode, localhost is automatically exempted from auth requirement
 
 **Behavior:**
-- If `require_api_key=false`: Rate limiting only (default)
-- If `require_api_key=true` and no API key configured: Warning logged, auth not enforced
-- If `require_api_key=true` with API key: All endpoints (except `/health`) require auth
+- If API key is configured: Control Menu actions require correct password (401 if missing/invalid)
+- If no API key configured: No authentication required (development mode)
 - Unauthorized requests receive 401 response
