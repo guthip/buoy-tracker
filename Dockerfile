@@ -24,8 +24,15 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create non-root user
-RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/app app \
-    && chown -R app:app /app
+RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/app app
+
+# Create config/data/logs directories BEFORE changing ownership
+# Make them world-writable so entrypoint (running as root) can write to them
+RUN mkdir -p /app/config /app/data /app/logs \
+    && chmod 777 /app/config /app/data /app/logs
+
+# Set ownership of application source files to app user
+RUN chown -R app:app /app
 
 VOLUME ["/app/config", "/app/data", "/app/logs"]
 EXPOSE 5103
@@ -33,6 +40,5 @@ EXPOSE 5103
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:5103/health || exit 1
 
-# Run entrypoint as root (it will switch to app user before running the app)
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "run.py"]
