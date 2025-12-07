@@ -1535,7 +1535,7 @@ def _on_mqtt_disconnect(client_obj, userdata, disconnect_flags, reason_code, pro
         logger.warning(f'Connection failed with reason: {reason_code}')
         # Attempt reconnection after a short delay
         logger.info('Attempting to reconnect to MQTT broker in 5 seconds...')
-        threading.Timer(5.0, lambda: reconnect_mqtt()).start()
+        threading.Timer(5.0, lambda: connect_mqtt()).start()
     
     # Reset packet tracking on disconnect
     last_packet_time = 0
