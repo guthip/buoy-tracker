@@ -1,11 +1,12 @@
 #!/bin/bash
 # Entrypoint script for Buoy Tracker Docker container
 # Handles first-run initialization of configuration files
-# Runs as root initially, then switches to app user to run the application
+# Should run as root to create and set up config files
 
 set -e
 
 echo "=== Buoy Tracker Entrypoint ==="
+
 
 # Ensure config/data/logs directories exist with proper permissions
 mkdir -p /app/config /app/data /app/logs
