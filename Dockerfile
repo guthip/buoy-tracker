@@ -27,13 +27,12 @@ RUN chmod +x /entrypoint.sh
 RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/app app \
     && chown -R app:app /app
 
-USER app
-
 VOLUME ["/app/config", "/app/data", "/app/logs"]
 EXPOSE 5103
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:5103/health || exit 1
 
+# Run entrypoint as root (it will switch to app user before running the app)
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "run.py"]
