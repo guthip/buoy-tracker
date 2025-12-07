@@ -14,6 +14,19 @@
         tabLegend.style.display = 'block';
         tabControls.style.display = 'none';
       } else {
+        // Trying to access Controls - check auth first if required
+        if (apiKeyRequired && !isLocalhost && !apiKey) {
+          // Don't show controls tab, go back to legend
+          legendTabBtn.classList.add('active');
+          legendTabBtn.classList.add('tab-legend');
+          controlsTabBtn.classList.remove('active');
+          controlsTabBtn.classList.remove('tab-controls');
+          tabLegend.style.display = 'block';
+          tabControls.style.display = 'none';
+          // Show auth modal
+          showApiKeyModal();
+          return;
+        }
         legendTabBtn.classList.remove('active');
         legendTabBtn.classList.remove('tab-legend');
         controlsTabBtn.classList.add('active');
@@ -258,6 +271,8 @@
       apiKey = '';
       localStorage.removeItem('tracker_api_key');
       if (modal) modal.style.display = 'none';
+      // Force auth check on next Control Menu access
+      authCheckDisabled = false;
     };
     
     // Allow Enter key to submit
@@ -454,18 +469,18 @@
   // Initialize API key modal handlers when page loads
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function() {
-      initApiKeyModal();
-      // Show modal if auth is required and no key available
-      if (apiKeyRequired && !apiKey && !isLocalhost) {
-        showApiKeyModal();
+      if (apiKeyRequired) {
+        initApiKeyModal();
+        // DO NOT show modal here - only show when user tries to access Control Menu
+        // Modal will appear on 401 response when accessing protected endpoints
       }
     });
   } else {
     // Already loaded
-    initApiKeyModal();
-    // Show modal if auth is required and no key available
-    if (apiKeyRequired && !apiKey && !isLocalhost) {
-      showApiKeyModal();
+    if (apiKeyRequired) {
+      initApiKeyModal();
+      // DO NOT show modal here - only show when user tries to access Control Menu
+      // Modal will appear on 401 response when accessing protected endpoints
     }
   }
 
