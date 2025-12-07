@@ -112,11 +112,6 @@ movement_threshold = 100
 # Add your special nodes here
 # Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13'
 
-[security]
-# API Key Protection
-# All users can view the map and data
-# Password (API key) is required to access Control Menu (settings and configuration changes)
-
 [alerts]
 # Email alert settings for movement notifications
 # Enable/disable email alerts
