@@ -50,4 +50,5 @@ echo "Starting Buoy Tracker as user 'app'..."
 echo ""
 
 # Switch to app user and run the application
-exec su - app -c "$(printf '%s ' "$@")"
+# WORKDIR is /app, so run.py will be found
+exec su -s /bin/bash app -c "exec python3 run.py"
