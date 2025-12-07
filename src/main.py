@@ -326,7 +326,7 @@ def index() -> Response:
                           api_key_required=True,  # API key always required for Control Menu
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
-                          build_id=int(time.time()))))
+                          build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
