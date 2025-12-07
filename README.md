@@ -329,53 +329,18 @@ Lock down the user interface to prevent end users from modifying settings. This 
 
 ```ini
 [app_features]
-# show_controls_menu: true/false
-#   When true (default): Users see both "Legend" and "Controls" tabs in the settings menu
-#   When false: Users only see "Legend" tab; the "Controls" tab is hidden
-#
-# IMPORTANT: This is admin-controlled only - end users cannot override this setting
-#
-# When disabled (false), end users cannot modify:
-#   - Show/hide all nodes
-#   - Show/hide gateways and connections
-#   - Show/hide position trails
-#   - Show/hide nautical markers
-#   - Trail history hours
-#   - Low battery threshold
-#   - Movement threshold
-#   - API polling interval
-#
-# Use this to enforce consistent configuration across all users
-show_controls_menu = true
-
-# Other UI features (users can modify if show_controls_menu = true)
+# UI feature flags (users can modify these via Controls tab)
 show_all_nodes = false
-show_gateways = false
+show_gateways = true
 show_position_trails = true
 show_nautical_markers = true
 trail_history_hours = 168
 ```
 
-**Example: Lock Down Configuration for Public Display**
-
-If you're running Buoy Tracker on a public display or shared access deployment:
-
-```ini
-[app_features]
-show_controls_menu = false          # Hide controls from all users
-show_all_nodes = false              # Only show special nodes
-show_gateways = false               # Don't show gateways
-show_position_trails = true         # Show position trails
-show_nautical_markers = true        # Show chart markers
-trail_history_hours = 168           # Show full week of history
-```
-
-With this configuration:
-- ✅ Users see the map with your preconfigured settings
-- ❌ Users cannot access the "Controls" tab to modify anything
-- ❌ Settings are read-only - controlled by administrator only
-
-**To re-enable controls:** Set `show_controls_menu = true` in `tracker.config` and reload the configuration.
+**Access Model:**
+- ✅ All users can view the map and data
+- 🔐 Control Menu (settings modifications) requires password authentication
+- API key is configured in `secret.config` under `[webapp] api_key`
 
 
 
@@ -631,16 +596,15 @@ curl -X POST http://localhost:5102/api/test-alert-battery
 
 ### Authentication
 
-API endpoints use **optional authentication** based on the `require_api_key` setting in `tracker.config`:
+**Access Model:**
+- Read-only endpoints (map view, data access) are **always public** - no authentication required
+- Protected endpoints (Control Menu actions) require **API key authentication** via `Authorization: Bearer <api_key>` header
+- `/health` endpoint is always public (used by Docker healthcheck)
 
-- **Default (require_api_key=false)**: All endpoints protected by rate limiting only
-- **Optional (require_api_key=true)**: Endpoints require `Authorization: Bearer <api_key>` header
-- **Exception**: `/health` endpoint never requires authentication (used by Docker healthcheck)
-
-**When authentication is enabled:**
-- In development mode (`ENV=development`): localhost requests are exempted
-- In production mode: all requests require API key
-- API key is configured in `secret.config` under `[webapp] api_key`
+**Configuration:**
+- API key is stored in `secret.config` under `[webapp] api_key`
+- In development mode (`ENV=development`): localhost requests are automatically exempted from auth
+- In production mode: all protected endpoint requests require valid API key
 
 ### Core Endpoints
 
