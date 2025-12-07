@@ -30,10 +30,10 @@ RUN groupadd --system app && useradd --system --gid app --create-home --home-dir
 USER app
 
 VOLUME ["/app/config", "/app/data", "/app/logs"]
-EXPOSE 5102
+EXPOSE 5103
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:5102/health || exit 1
+  CMD curl -f http://localhost:5103/health || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python3", "run.py"]
