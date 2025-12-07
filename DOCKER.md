@@ -31,7 +31,7 @@ services:
     container_name: buoy-tracker
     restart: unless-stopped
     ports:
-      - 5102:5102
+      - 5103:5103
     volumes:
       - ./config:/app/config
       - ./data:/app/data
@@ -43,7 +43,7 @@ services:
       ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
     healthcheck:
-      test: [CMD, curl, -f, http://localhost:5102/health]
+      test: [CMD, curl, -f, http://localhost:5103/health]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -98,7 +98,7 @@ This file will be automatically loaded by docker-compose. Supported variables:
 docker compose restart
 ```
 
-Access the web interface at **http://localhost:5102**
+Access the web interface at **http://localhost:5103**
 
 ---
 
@@ -150,7 +150,7 @@ docker compose restart
 
 ## Ports
 
-- `5102` - Web interface and API
+- `5103` - Web interface and API
 
 ## Health Check
 
@@ -209,7 +209,7 @@ When disabled (default for production), all special node history is cleared on r
 docker logs buoy-tracker
 
 # Check if port is already in use
-lsof -i :5102
+lsof -i :5103
 ```
 
 ### MQTT connection issues
@@ -246,7 +246,7 @@ Quick Start:
 2. Create docker-compose.yml (see DOCKER.md Quick Start section)
 3. touch tracker.config && mkdir -p data logs
 4. docker compose up -d
-5. Open: http://localhost:5102
+5. Open: http://localhost:5103
 
 The container runs with sensible defaults. To customize:
 - Get tracker.config.template and copy to tracker.config, then edit
