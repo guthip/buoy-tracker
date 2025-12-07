@@ -385,7 +385,6 @@ def health_check() -> Response:
 
 
 @app.route('/api/recent/messages', methods=['GET'])
-@require_api_key
 @check_rate_limit
 def recent_messages() -> Response:
     try:
@@ -397,7 +396,6 @@ def recent_messages() -> Response:
 
 
 @app.route('/api/nodes', methods=['GET'])
-@require_api_key
 @check_rate_limit
 def get_nodes() -> Response:
     """Return all tracked nodes with their current status."""
@@ -410,7 +408,6 @@ def get_nodes() -> Response:
 
 
 @app.route('/api/special/history', methods=['GET'])
-@require_api_key
 @check_rate_limit
 def get_special_history() -> Response:
     from flask import request
@@ -430,7 +427,6 @@ def get_special_history() -> Response:
 
 
 @app.route('/api/signal/history', methods=['GET'])
-@require_api_key
 @check_rate_limit
 def get_signal_history() -> Response:
     """Get signal history (battery, RSSI, SNR) for a specific node."""

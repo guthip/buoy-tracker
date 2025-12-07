@@ -1747,38 +1747,46 @@
                             latlngs.push([pnt.lat, pnt.lon]);
                             
                             var markerOpts = {
-                              radius: 5,
+                              radius: 8,
                               fillColor: '#CCCCCC',
                               color: '#666',
                               weight: 2,
                               opacity: 0.8,
-                              fillOpacity: 0.4
+                              fillOpacity: 0.6
                             };
                             
                             // Special styling for first and last points
                             if (u === firstPointIndex) {
                               // Oldest point: green filled circle
                               markerOpts = {
-                                radius: 5,
+                                radius: 10,
                                 fillColor: '#4CAF50',
                                 color: '#4CAF50',
-                                weight: 1,
+                                weight: 2,
                                 opacity: 0.9,
                                 fillOpacity: 0.9
                               };
                             } else if (u === lastPointIndex) {
                               // Newest point: red filled circle
                               markerOpts = {
-                                radius: 5,
+                                radius: 10,
                                 fillColor: '#FF6B6B',
                                 color: '#FF6B6B',
-                                weight: 1,
+                                weight: 2,
                                 opacity: 0.9,
                                 fillOpacity: 0.9
                               };
                             }
                             
                             var historyMarker = L.circleMarker([pnt.lat, pnt.lon], markerOpts).addTo(map);
+                            // Add hover effect to make them more obvious
+                            historyMarker.on('mouseover', function() {
+                              this.setStyle({weight: 3, opacity: 1.0});
+                            });
+                            historyMarker.on('mouseout', function() {
+                              var isEndpoint = (u === firstPointIndex || u === lastPointIndex);
+                              this.setStyle({weight: isEndpoint ? 2 : 2, opacity: isEndpoint ? 0.9 : 0.8});
+                            });
                             
                             // Add popup with timestamp and signal info
                             var popupText = 'Pos #' + (u+1) + ' / ' + pts.length;
@@ -1791,6 +1799,24 @@
                             }
                             popupText += 'Lat: ' + pnt.lat.toFixed(6) + '<br>';
                             popupText += 'Lon: ' + pnt.lon.toFixed(6);
+                            
+                            // Calculate distance from this position to home location
+                            if (node.origin_lat != null && node.origin_lon != null) {
+                              var homeLatRad = (node.origin_lat * Math.PI) / 180;
+                              var homeLonRad = (node.origin_lon * Math.PI) / 180;
+                              var pntLatRad = (pnt.lat * Math.PI) / 180;
+                              var pntLonRad = (pnt.lon * Math.PI) / 180;
+                              var dlat = pntLatRad - homeLatRad;
+                              var dlon = pntLonRad - homeLonRad;
+                              var a = Math.sin(dlat / 2) * Math.sin(dlat / 2) +
+                                      Math.cos(homeLatRad) * Math.cos(pntLatRad) *
+                                      Math.sin(dlon / 2) * Math.sin(dlon / 2);
+                              var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                              var distKm = 6371 * c;  // Earth's radius in km
+                              var distM = Math.round(distKm * 1000);
+                              popupText += '<br>Distance to home: ' + distM + ' M';
+                            }
+                            
                             if (pnt.battery !== null && pnt.battery !== undefined) {
                               popupText += '<br>Battery: ' + Math.round(pnt.battery) + '%';
                             }
@@ -1804,8 +1830,42 @@
                             trail_markers[node.id].push(historyMarker);
                           }
                           
-                          // Draw polyline trail
-                          trails[node.id] = L.polyline(latlngs, {color:'#1976D2', weight:3, opacity:0.7}).addTo(map);
+                          // Draw polyline trail with color gradient: light blue (oldest) to dark blue (newest)
+                          // Create individual line segments with interpolated colors
+                          var lightBlue = '#ADD8E6';  // Light blue (oldest)
+                          var darkBlue = '#1976D2';   // Dark blue (newest)
+                          
+                          function interpolateColor(ratio) {
+                            // ratio: 0 = light blue (oldest), 1 = dark blue (newest)
+                            var r0 = parseInt(lightBlue.substr(1, 2), 16);
+                            var g0 = parseInt(lightBlue.substr(3, 2), 16);
+                            var b0 = parseInt(lightBlue.substr(5, 2), 16);
+                            var r1 = parseInt(darkBlue.substr(1, 2), 16);
+                            var g1 = parseInt(darkBlue.substr(3, 2), 16);
+                            var b1 = parseInt(darkBlue.substr(5, 2), 16);
+                            
+                            var r = Math.round(r0 + (r1 - r0) * ratio);
+                            var g = Math.round(g0 + (g1 - g0) * ratio);
+                            var b = Math.round(b0 + (b1 - b0) * ratio);
+                            
+                            return '#' + ('0' + r.toString(16)).slice(-2) + 
+                                        ('0' + g.toString(16)).slice(-2) + 
+                                        ('0' + b.toString(16)).slice(-2);
+                          }
+                          
+                          // Draw segments between consecutive points with gradient color
+                          trails[node.id] = L.featureGroup();
+                          for (var seg = 0; seg < latlngs.length - 1; seg++) {
+                            var ratio = seg / (latlngs.length - 2);  // 0 to 1 across all segments
+                            var segmentColor = interpolateColor(ratio);
+                            var segment = L.polyline([latlngs[seg], latlngs[seg + 1]], {
+                              color: segmentColor,
+                              weight: 3,
+                              opacity: 0.7
+                            }).addTo(map);
+                            trails[node.id].addLayer(segment);
+                          }
+                          trails[node.id].addTo(map);
                         }
                         // Trail data empty for this node
                       } catch(e){ 
