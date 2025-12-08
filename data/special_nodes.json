@@ -1,7 +1,7 @@
 {
   "3681533965": {
     "info": {
-      "channel": 0,
+      "channel": 31,
       "role": "CLIENT_MUTE",
       "latitude": 37.5635593,
       "longitude": -122.2182561,
@@ -11,30 +11,30 @@
       "long_name": "Sequoia YC Mark S  c00d",
       "short_name": "Sequoia",
       "hw_model": "RAK4631",
-      "last_seen": 1765147487.031175,
-      "rx_rssi": -131,
-      "rx_snr": -12.0,
+      "last_seen": 1765158629.4143722,
+      "rx_rssi": -112,
+      "rx_snr": -10.0,
       "distance_from_origin_m": 51.303864051788885,
       "moved_far": false,
       "best_gateway": {
-        "id": 382652512,
+        "id": 2688088084,
         "name": "Unknown",
         "lat": null,
         "lon": null,
-        "rssi": -98,
-        "snr": -13.25
+        "rssi": -99,
+        "snr": -10.25
       },
-      "best_gateway_rssi": -98,
+      "best_gateway_rssi": -99,
       "altitude": 0,
       "last_position_update": 1765145676.2336729,
       "telemetry": {
-        "time": 1765145768,
+        "time": 1765158614,
         "power_metrics": {
-          "ch3_voltage": 3.772,
-          "ch3_current": 0.1
+          "ch3_voltage": 3.748,
+          "ch3_current": 0.7
         }
       },
-      "battery": 67
+      "battery": 65
     },
     "position_history": [
       {
@@ -11159,6 +11159,116 @@
         "hw_model": "RAK4631",
         "long_name": "Sequoia YC Mark S  c00d",
         "short_name": "SYCS"
+      },
+      {
+        "timestamp": 1765148235.865835,
+        "packet_type": "TELEMETRY_APP",
+        "id": 416272037,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -74,
+        "rx_snr": 10.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
+        "battery_level": 101,
+        "voltage": 4.228,
+        "channel_utilization": 23.088333,
+        "air_util_tx": 0.022583332,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1765151054.780086,
+        "packet_type": "NODEINFO_APP",
+        "id": 2817604262,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -74,
+        "rx_snr": 10.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark S  c00d",
+        "short_name": "SYCS"
+      },
+      {
+        "timestamp": 1765152199.4610188,
+        "packet_type": "TELEMETRY_APP",
+        "id": 4145090215,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -99,
+        "rx_snr": -10.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
+        "battery_level": null,
+        "voltage": null,
+        "channel_utilization": null,
+        "air_util_tx": null,
+        "power_voltage": 3.76,
+        "power_current": 0.5
+      },
+      {
+        "timestamp": 1765154659.763948,
+        "packet_type": "TELEMETRY_APP",
+        "id": 790239913,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -90,
+        "rx_snr": 5.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!b2a7d1fc",
+        "battery_level": 101,
+        "voltage": 4.275,
+        "channel_utilization": 23.19,
+        "air_util_tx": 0.009000001,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1765158255.931613,
+        "packet_type": "NODEINFO_APP",
+        "id": 3603990187,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -74,
+        "rx_snr": 9.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2ebdbec",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark S  c00d",
+        "short_name": "SYCS"
+      },
+      {
+        "timestamp": 1765158624.291609,
+        "packet_type": "TELEMETRY_APP",
+        "id": 3145913004,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -86,
+        "rx_snr": 2.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!27ef7e24",
+        "battery_level": null,
+        "voltage": null,
+        "channel_utilization": null,
+        "air_util_tx": null,
+        "power_voltage": 3.748,
+        "power_current": 0.7
       }
     ],
     "gateways": {
@@ -11179,9 +11289,9 @@
         "name": "Unknown",
         "lat": null,
         "lon": null,
-        "rssi": -94,
-        "snr": -5.25,
-        "last_seen": 1765139453.6711402,
+        "rssi": -99,
+        "snr": -10.25,
+        "last_seen": 1765152199.461092,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3
@@ -11192,35 +11302,35 @@
     "info": {
       "channel_name": "MediumFast",
       "telemetry": {
-        "time": 1765147138,
+        "time": 1765153558,
         "device_metrics": {
           "battery_level": 101,
-          "voltage": 4.302,
-          "channel_utilization": 16.031666,
+          "voltage": 4.307,
+          "channel_utilization": 14.131667,
           "air_util_tx": 0.008583333,
-          "uptime_seconds": 1296682
+          "uptime_seconds": 1303103
         }
       },
-      "last_seen": 1765147854.130933,
+      "last_seen": 1765157351.324639,
       "battery": 100,
-      "rx_rssi": -74,
-      "rx_snr": 12.5,
-      "channel": 0,
+      "rx_rssi": -95,
+      "rx_snr": -4.25,
+      "channel": 31,
       "origin_lat": 37.58016666666666,
       "origin_lon": -122.21783333333333,
-      "distance_from_origin_m": 19.698003190256628,
+      "distance_from_origin_m": 36.298775289785375,
       "moved_far": false,
-      "latitude": 37.5803433,
-      "longitude": -122.2178163,
+      "latitude": 37.5804875,
+      "longitude": -122.2177573,
       "altitude": 0,
-      "last_position_update": 1765147854.130934,
+      "last_position_update": 1765154181.574441,
       "best_gateway": {
         "id": 382652512,
-        "name": "Unknown",
+        "name": "Pilsner",
         "lat": null,
         "lon": null,
         "rssi": -91,
-        "snr": -3.0
+        "snr": -4.75
       },
       "best_gateway_rssi": -91,
       "role": "CLIENT_MUTE",
@@ -22091,6 +22201,267 @@
         "battery": 100,
         "rssi": -74,
         "snr": 12.5
+      },
+      {
+        "ts": 1765154065.038775,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -90,
+        "snr": null
+      },
+      {
+        "ts": 1765154065.908146,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -75,
+        "snr": -6.75
+      },
+      {
+        "ts": 1765154065.9952278,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -8.75
+      },
+      {
+        "ts": 1765154066.681721,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -112,
+        "snr": -11.75
+      },
+      {
+        "ts": 1765154066.769168,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -110,
+        "snr": -10.5
+      },
+      {
+        "ts": 1765154066.8564212,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -93,
+        "snr": 4.25
+      },
+      {
+        "ts": 1765154068.165526,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": 1.75
+      },
+      {
+        "ts": 1765154068.25256,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -87,
+        "snr": -9.75
+      },
+      {
+        "ts": 1765154068.3396869,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": 3.25
+      },
+      {
+        "ts": 1765154068.4270332,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": -4.0
+      },
+      {
+        "ts": 1765154068.5142772,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -14.5
+      },
+      {
+        "ts": 1765154068.689392,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": 2.75
+      },
+      {
+        "ts": 1765154068.776709,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -83,
+        "snr": -12.5
+      },
+      {
+        "ts": 1765154068.8638878,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": -10.25
+      },
+      {
+        "ts": 1765154068.951434,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -107,
+        "snr": -11.75
+      },
+      {
+        "ts": 1765154069.038634,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -67,
+        "snr": 10.5
+      },
+      {
+        "ts": 1765154069.1259918,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": -8.25
+      },
+      {
+        "ts": 1765154069.2133172,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -99,
+        "snr": -13.5
+      },
+      {
+        "ts": 1765154069.3006358,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": -7.25
+      },
+      {
+        "ts": 1765154069.3879838,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 0.25
+      },
+      {
+        "ts": 1765154069.475486,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": 2.75
+      },
+      {
+        "ts": 1765154069.6949818,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": 5.0
+      },
+      {
+        "ts": 1765154069.7823539,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -130,
+        "snr": -12.0
+      },
+      {
+        "ts": 1765154069.8696918,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -117,
+        "snr": -13.25
+      },
+      {
+        "ts": 1765154070.002156,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -112,
+        "snr": -13.25
+      },
+      {
+        "ts": 1765154070.229582,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -12.25
+      },
+      {
+        "ts": 1765154087.208781,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -100,
+        "snr": -1.0
+      },
+      {
+        "ts": 1765154181.398478,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": -9.5
+      },
+      {
+        "ts": 1765154181.574443,
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 5.5
       }
     ],
     "packets": [
@@ -24034,17 +24405,103 @@
         "lat": 37.5803433,
         "lon": -122.2178163,
         "altitude": null
+      },
+      {
+        "timestamp": 1765150133.9588091,
+        "packet_type": "NODEINFO_APP",
+        "id": 1711591823,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -91,
+        "rx_snr": -4.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark E 5488",
+        "short_name": "SYCE"
+      },
+      {
+        "timestamp": 1765153559.819239,
+        "packet_type": "TELEMETRY_APP",
+        "id": 661579152,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -91,
+        "rx_snr": -2.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
+        "battery_level": 101,
+        "voltage": 4.307,
+        "channel_utilization": 14.131667,
+        "air_util_tx": 0.008583333,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1765153733.8791978,
+        "packet_type": "NODEINFO_APP",
+        "id": 1764491665,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -92,
+        "rx_snr": 0.25,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark E 5488",
+        "short_name": "SYCE"
+      },
+      {
+        "timestamp": 1765154064.9951239,
+        "packet_type": "POSITION_APP",
+        "id": 32217490,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -90,
+        "rx_snr": null,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
+        "lat": 37.5804875,
+        "lon": -122.2177573,
+        "altitude": null
+      },
+      {
+        "timestamp": 1765157333.926867,
+        "packet_type": "NODEINFO_APP",
+        "id": 940007827,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -91,
+        "rx_snr": -4.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!16ced060",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark E 5488",
+        "short_name": "SYCE"
       }
     ],
     "gateways": {
       "382652512": {
         "id": 382652512,
-        "name": "Unknown",
+        "name": "Pilsner",
         "lat": null,
         "lon": null,
         "rssi": -91,
-        "snr": -3.0,
-        "last_seen": 1765147650.378946,
+        "snr": -4.75,
+        "last_seen": 1765157333.926954,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3
@@ -24055,8 +24512,8 @@
         "lat": null,
         "lon": null,
         "rssi": -91,
-        "snr": -2.75,
-        "last_seen": 1765142934.147712,
+        "snr": -2.25,
+        "last_seen": 1765153559.81936,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3
@@ -24069,27 +24526,27 @@
       "channel_name": "MediumFast",
       "origin_lat": 37.532333333333334,
       "origin_lon": -122.17183333333334,
-      "distance_from_origin_m": 10.203083014116652,
+      "distance_from_origin_m": 25.229686914339545,
       "moved_far": false,
-      "latitude": 37.5323636,
-      "longitude": -122.1717241,
+      "latitude": 37.5325583,
+      "longitude": -122.1717961,
       "altitude": 0,
-      "last_seen": 1765147372.741995,
-      "last_position_update": 1765147372.741995,
+      "last_seen": 1765156211.855467,
+      "last_position_update": 1765153765.8099809,
       "rx_rssi": -109,
-      "rx_snr": 8.75,
+      "rx_snr": 9.75,
       "role": "CLIENT_MUTE",
       "long_name": "Sequoia YC Mark A b351",
       "short_name": "Sequoia",
       "hw_model": "RAK4631",
       "telemetry": {
-        "time": 1765146899,
+        "time": 1765153440,
         "device_metrics": {
           "battery_level": 101,
-          "voltage": 4.242,
-          "channel_utilization": 22.708334,
-          "air_util_tx": 0.01836111,
-          "uptime_seconds": 1290425
+          "voltage": 4.307,
+          "channel_utilization": 23.303333,
+          "air_util_tx": 0.008694444,
+          "uptime_seconds": 1296966
         }
       },
       "battery": 100
@@ -39538,6 +39995,285 @@
         "battery": 100,
         "rssi": -109,
         "snr": 8.75
+      },
+      {
+        "ts": 1765153755.264698,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": 5.25
+      },
+      {
+        "ts": 1765153755.3598888,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": 4.0
+      },
+      {
+        "ts": 1765153755.465076,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": -2.0
+      },
+      {
+        "ts": 1765153755.552138,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -13.0
+      },
+      {
+        "ts": 1765153755.639366,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -117,
+        "snr": -13.75
+      },
+      {
+        "ts": 1765153755.726243,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -110,
+        "snr": -10.5
+      },
+      {
+        "ts": 1765153755.813453,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": 4.75
+      },
+      {
+        "ts": 1765153755.901264,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -131,
+        "snr": -13.25
+      },
+      {
+        "ts": 1765153755.988304,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -86,
+        "snr": -6.75
+      },
+      {
+        "ts": 1765153756.327803,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -108,
+        "snr": 1.75
+      },
+      {
+        "ts": 1765153756.415019,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": 9.0
+      },
+      {
+        "ts": 1765153756.502014,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -89,
+        "snr": 5.0
+      },
+      {
+        "ts": 1765153756.808981,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -50,
+        "snr": 11.0
+      },
+      {
+        "ts": 1765153756.8962991,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -63,
+        "snr": 9.5
+      },
+      {
+        "ts": 1765153756.984769,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -83,
+        "snr": -12.5
+      },
+      {
+        "ts": 1765153757.343586,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -113,
+        "snr": -6.0
+      },
+      {
+        "ts": 1765153757.7571452,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -20,
+        "snr": 11.25
+      },
+      {
+        "ts": 1765153757.844558,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -81,
+        "snr": 4.75
+      },
+      {
+        "ts": 1765153757.933439,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -10.5
+      },
+      {
+        "ts": 1765153758.022252,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": -0.5
+      },
+      {
+        "ts": 1765153758.1107898,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 5.5
+      },
+      {
+        "ts": 1765153758.199286,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -83,
+        "snr": 8.75
+      },
+      {
+        "ts": 1765153758.287659,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -113,
+        "snr": -12.25
+      },
+      {
+        "ts": 1765153758.3812969,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -78,
+        "snr": 7.5
+      },
+      {
+        "ts": 1765153758.469082,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -2.25
+      },
+      {
+        "ts": 1765153758.555969,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 7.5
+      },
+      {
+        "ts": 1765153758.643685,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -90,
+        "snr": 2.75
+      },
+      {
+        "ts": 1765153758.732287,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -67,
+        "snr": 10.5
+      },
+      {
+        "ts": 1765153758.8208,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -111,
+        "snr": -6.25
+      },
+      {
+        "ts": 1765153758.909246,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -124,
+        "snr": -13.5
+      },
+      {
+        "ts": 1765153765.809982,
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -110,
+        "snr": 9.0
       }
     ],
     "packets": [
@@ -41237,6 +41973,75 @@
         "lat": 37.5323636,
         "lon": -122.1717241,
         "altitude": null
+      },
+      {
+        "timestamp": 1765148963.515706,
+        "packet_type": "NODEINFO_APP",
+        "id": 865347098,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 1,
+        "rx_rssi": -40,
+        "rx_snr": 10.5,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!3238dd24",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark A b351",
+        "short_name": "SYCA"
+      },
+      {
+        "timestamp": 1765153449.618311,
+        "packet_type": "TELEMETRY_APP",
+        "id": 814267932,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -73,
+        "rx_snr": 9.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a2ebdbec",
+        "battery_level": 101,
+        "voltage": 4.307,
+        "channel_utilization": 23.303333,
+        "air_util_tx": 0.008694444,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1765153756.735161,
+        "packet_type": "POSITION_APP",
+        "id": 2359996957,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -50,
+        "rx_snr": 11.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!fa6c6138",
+        "lat": 37.5325583,
+        "lon": -122.1717961,
+        "altitude": null
+      },
+      {
+        "timestamp": 1765156161.329977,
+        "packet_type": "NODEINFO_APP",
+        "id": 939899422,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 1,
+        "rx_rssi": -40,
+        "rx_snr": 10.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!3238dd24",
+        "role": "CLIENT_MUTE",
+        "hw_model": "RAK4631",
+        "long_name": "Sequoia YC Mark A b351",
+        "short_name": "SYCA"
       }
     ]
   },
@@ -41244,39 +42049,39 @@
     "info": {
       "channel_name": "MediumFast",
       "telemetry": {
-        "time": 1764698078,
+        "time": 1765157765,
         "device_metrics": {
           "battery_level": 101,
-          "voltage": 4.124,
-          "channel_utilization": 20.880001,
-          "air_util_tx": 0.027805556,
-          "uptime_seconds": 848250
+          "voltage": 4.298,
+          "channel_utilization": 12.865,
+          "air_util_tx": 0.013361111,
+          "uptime_seconds": 1307937
         }
       },
-      "last_seen": 1765145748.604019,
+      "last_seen": 1765158716.3055959,
       "battery": 100,
-      "rx_rssi": -98,
-      "rx_snr": -4.75,
+      "rx_rssi": -97,
+      "rx_snr": -0.75,
       "channel": 31,
       "role": "CLIENT_MUTE",
-      "latitude": 37.5702568,
-      "longitude": -122.202258,
+      "latitude": 37.5708068,
+      "longitude": -122.2025946,
       "origin_lat": 37.5705,
       "origin_lon": -122.20216666666667,
       "long_name": "Sequoia YC Mark X 0b0b",
       "short_name": "Sequoia",
       "hw_model": "RAK4631",
-      "distance_from_origin_m": 28.215202398219873,
+      "distance_from_origin_m": 50.85510407720281,
       "moved_far": false,
       "altitude": 0,
-      "last_position_update": 1765135223.365966,
+      "last_position_update": 1765158716.3055959,
       "best_gateway": {
         "id": 2688088084,
-        "name": "Herkimer-9/G2 f814",
+        "name": "Unknown",
         "lat": null,
         "lon": null,
         "rssi": -93,
-        "snr": -5.0
+        "snr": -10.0
       },
       "best_gateway_rssi": -93
     },
@@ -46896,6 +47701,456 @@
         "battery": 100,
         "rssi": -74,
         "snr": -5.5
+      },
+      {
+        "ts": 1765148754.389594,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -94,
+        "snr": -7.75
+      },
+      {
+        "ts": 1765148755.23085,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -8.0
+      },
+      {
+        "ts": 1765148755.648997,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -82,
+        "snr": 8.0
+      },
+      {
+        "ts": 1765148755.7373781,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 1.75
+      },
+      {
+        "ts": 1765148755.8251991,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": -7.75
+      },
+      {
+        "ts": 1765148755.912531,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -108,
+        "snr": -9.25
+      },
+      {
+        "ts": 1765148756.001249,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": -1.5
+      },
+      {
+        "ts": 1765148756.147254,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": null
+      },
+      {
+        "ts": 1765148756.23537,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -96,
+        "snr": 1.75
+      },
+      {
+        "ts": 1765148756.323576,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -93,
+        "snr": -7.0
+      },
+      {
+        "ts": 1765148756.411614,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": -4.25
+      },
+      {
+        "ts": 1765148756.500103,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": 3.0
+      },
+      {
+        "ts": 1765148756.588232,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -102,
+        "snr": 1.0
+      },
+      {
+        "ts": 1765148756.67639,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": -3.25
+      },
+      {
+        "ts": 1765148756.764836,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -78,
+        "snr": 9.0
+      },
+      {
+        "ts": 1765148756.853366,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -109,
+        "snr": -11.75
+      },
+      {
+        "ts": 1765148756.9416409,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -117,
+        "snr": -13.25
+      },
+      {
+        "ts": 1765148757.030442,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -95,
+        "snr": 2.75
+      },
+      {
+        "ts": 1765148757.118617,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -115,
+        "snr": -3.75
+      },
+      {
+        "ts": 1765148757.206762,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -106,
+        "snr": -12.0
+      },
+      {
+        "ts": 1765148757.295115,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -107,
+        "snr": -2.0
+      },
+      {
+        "ts": 1765148757.383609,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -10.75
+      },
+      {
+        "ts": 1765148757.471362,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -124,
+        "snr": -13.5
+      },
+      {
+        "ts": 1765148758.187115,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -12.5
+      },
+      {
+        "ts": 1765148759.4330082,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -9.25
+      },
+      {
+        "ts": 1765148759.522867,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -9.25
+      },
+      {
+        "ts": 1765148759.6577878,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -61,
+        "snr": 5.5
+      },
+      {
+        "ts": 1765148801.168988,
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -72,
+        "snr": 11.75
+      },
+      {
+        "ts": 1765154185.920565,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -93,
+        "snr": -10.0
+      },
+      {
+        "ts": 1765154186.143706,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -7.5
+      },
+      {
+        "ts": 1765154186.23288,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -121,
+        "snr": -14.75
+      },
+      {
+        "ts": 1765154186.724423,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -7.25
+      },
+      {
+        "ts": 1765154187.080949,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -101,
+        "snr": -2.0
+      },
+      {
+        "ts": 1765154187.17003,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -105,
+        "snr": -10.75
+      },
+      {
+        "ts": 1765154187.259077,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": -1.75
+      },
+      {
+        "ts": 1765154187.34823,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -107,
+        "snr": -10.5
+      },
+      {
+        "ts": 1765154187.4373372,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -74,
+        "snr": 10.0
+      },
+      {
+        "ts": 1765154187.5262809,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -88,
+        "snr": 6.25
+      },
+      {
+        "ts": 1765154187.615406,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -103,
+        "snr": -5.0
+      },
+      {
+        "ts": 1765154187.705251,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": 6.75
+      },
+      {
+        "ts": 1765154187.7948039,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -85,
+        "snr": -6.5
+      },
+      {
+        "ts": 1765154187.8842509,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -74,
+        "snr": 10.5
+      },
+      {
+        "ts": 1765154187.972418,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -104,
+        "snr": -1.75
+      },
+      {
+        "ts": 1765154188.060616,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -77,
+        "snr": -6.5
+      },
+      {
+        "ts": 1765154188.1488168,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -115,
+        "snr": -11.0
+      },
+      {
+        "ts": 1765154188.236715,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -112,
+        "snr": -8.0
+      },
+      {
+        "ts": 1765154188.324815,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -116,
+        "snr": -6.75
+      },
+      {
+        "ts": 1765154230.3205068,
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -73,
+        "snr": 14.25
+      },
+      {
+        "ts": 1765158715.7164679,
+        "lat": 37.5708068,
+        "lon": -122.2025946,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -98,
+        "snr": 6.75
+      },
+      {
+        "ts": 1765158716.3055968,
+        "lat": 37.5708068,
+        "lon": -122.2025946,
+        "alt": 0,
+        "battery": 100,
+        "rssi": -97,
+        "snr": -0.75
       }
     ],
     "packets": [
@@ -48576,17 +49831,103 @@
         "air_util_tx": 0.027805556,
         "power_voltage": null,
         "power_current": null
+      },
+      {
+        "timestamp": 1765148754.342417,
+        "packet_type": "POSITION_APP",
+        "id": 3123507141,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -94,
+        "rx_snr": -7.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
+        "lat": 37.5704761,
+        "lon": -122.2020231,
+        "altitude": null
+      },
+      {
+        "timestamp": 1765151341.469684,
+        "packet_type": "TELEMETRY_APP",
+        "id": 27964359,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -93,
+        "rx_snr": -5.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
+        "battery_level": 101,
+        "voltage": 4.161,
+        "channel_utilization": 20.375,
+        "air_util_tx": 0.013361111,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1765154185.8758552,
+        "packet_type": "POSITION_APP",
+        "id": 416127945,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 3,
+        "rx_rssi": -93,
+        "rx_snr": -10.0,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!a038f814",
+        "lat": 37.5707366,
+        "lon": -122.2021803,
+        "altitude": null
+      },
+      {
+        "timestamp": 1765157761.5131211,
+        "packet_type": "TELEMETRY_APP",
+        "id": 2353422283,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": null,
+        "rx_rssi": -16,
+        "rx_snr": 11.5,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!75f18044",
+        "battery_level": 101,
+        "voltage": 4.298,
+        "channel_utilization": 12.865,
+        "air_util_tx": 0.013361111,
+        "power_voltage": null,
+        "power_current": null
+      },
+      {
+        "timestamp": 1765158715.620887,
+        "packet_type": "POSITION_APP",
+        "id": 2743789516,
+        "channel": 31,
+        "channel_name": "MediumFast",
+        "portnum_name": "Unknown",
+        "hop_start": 3,
+        "hop_limit": 2,
+        "rx_rssi": -98,
+        "rx_snr": 6.75,
+        "mqtt_topic": "msh/US/bayarea/2/e/MediumFast/!087bbf60",
+        "lat": 37.5708068,
+        "lon": -122.2025946,
+        "altitude": null
       }
     ],
     "gateways": {
       "2688088084": {
         "id": 2688088084,
-        "name": "Herkimer-9/G2 f814",
+        "name": "Unknown",
         "lat": null,
         "lon": null,
         "rssi": -93,
-        "snr": -5.0,
-        "last_seen": 1765135221.009152,
+        "snr": -10.0,
+        "last_seen": 1765154185.8758678,
         "confidence": "direct",
         "hop_start": 3,
         "hop_limit": 3
