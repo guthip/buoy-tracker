@@ -778,12 +778,185 @@ time curl http://localhost:5102/api/status > /dev/null
 
 ---
 
+## Appendix E: Quality Assurance & Continuous Integration
+
+### E.1 Pre-Commit Validation
+
+**Location:** `.git/hooks/pre-commit`
+
+**What it does:**
+- ✓ Validates Python syntax for all source files
+- ✓ Backs up `special_nodes.json` before commit
+
+**Automatic workflow:**
+```bash
+git add src/mqtt_handler.py
+git commit -m "Fix MQTT bug"
+# Pre-commit hook runs automatically - prevents syntax errors from being committed
+```
+
+**Skip validation (not recommended):**
+```bash
+git commit --no-verify -m "Skip validation"
+```
+
+### E.2 Build Validation Script
+
+**Location:** `validate_and_build.sh` (local only, not in GitHub or Docker)
+
+**What it does:**
+1. ✓ Checks Python syntax for all files
+2. ✓ Detects undefined function calls and common errors
+3. ✓ Runs unit tests
+4. ✓ Builds and pushes Docker images (multi-platform: amd64, arm64)
+
+**When to use:**
+Before any production deployment
+
+**Usage:**
+```bash
+./validate_and_build.sh
+```
+
+**Example output:**
+```
+==========================================
+  Buoy Tracker Build Validation
+==========================================
+
+📋 Step 1: Python Syntax Validation
+   Checking all Python files...
+   ✓ All Python files valid
+
+📋 Step 2: Undefined Function Detection
+   Scanning for common undefined patterns...
+   ✓ No undefined function calls detected
+
+📋 Step 3: Unit Tests
+   Running pytest...
+   ✓ Tests passed (12)
+
+📋 Step 4: Docker Build & Push
+   Building for platforms: amd64, arm64
+   ✓ Docker build and push successful
+
+==========================================
+✓ All validation checks passed!
+==========================================
+```
+
+### E.3 GitHub Actions Continuous Integration
+
+**Location:** `.github/workflows/quality-check.yml`
+
+**What it does:**
+- ✓ Runs on every push to `main` branch
+- ✓ Runs on all pull requests
+- ✓ Validates Python syntax
+- ✓ Checks for undefined functions
+- ✓ Runs unit tests
+- ✓ Reports results in GitHub
+
+**View results:**
+1. Go to GitHub repo → "Actions" tab
+2. Click on workflow run
+3. View detailed results
+
+### E.4 Quality Assurance Workflow
+
+#### For Development
+```bash
+# 1. Make code changes
+# 2. Commit (pre-commit hook runs automatically)
+git add .
+git commit -m "Feature: add new thing"
+
+# 3. Push to GitHub (GitHub Actions runs automatically)
+git push origin main
+```
+
+#### For Deployment
+```bash
+# 1. Ensure all tests pass locally
+python3 -m pytest tests/ -v
+
+# 2. Run full validation and deploy
+./validate_and_build.sh
+
+# 3. Verify GitHub Actions passed in GitHub UI
+```
+
+### E.5 Common Quality Issues & Solutions
+
+**Syntax errors not caught?**
+```bash
+# Manually run syntax check
+python3 -m py_compile src/*.py tests/*.py
+
+# More detailed errors
+python3 -m pylint src/*.py --disable=all --enable=undefined-variable
+```
+
+**Tests failing?**
+```bash
+# Run with verbose output
+python3 -m pytest tests/ -v --tb=long
+
+# Run specific test
+python3 -m pytest tests/test_main.py::test_something -v
+```
+
+**Docker build failed locally?**
+- GitHub Actions runs in clean Ubuntu environment
+- May differ from macOS/Windows
+- Test in Ubuntu container if needed:
+```bash
+docker run -it ubuntu:latest bash
+apt-get update && apt-get install -y python3 python3-pip
+# Run validation inside container
+```
+
+### E.6 Preventing Common Bugs
+
+**Issue:** Undefined function calls (e.g., `reconnect_mqtt()` not defined)
+
+**Prevention:**
+1. Pre-commit hook catches syntax errors
+2. Build script detects common undefined patterns
+3. GitHub Actions validates on every push
+
+**Solution if found:**
+```bash
+# Manually check
+grep -r "undefined_function_name" src/*.py
+
+# Run validation
+python3 -m py_compile src/*.py
+```
+
+### E.7 Best Practices
+
+✅ **DO:**
+- Run `./validate_and_build.sh` before final deployment
+- Check GitHub Actions results before considering deploy complete
+- Add new checks when new issues are discovered
+- Fix all issues found by pre-commit before pushing
+
+❌ **DON'T:**
+- Skip pre-commit checks regularly
+- Commit code that fails syntax validation
+- Use `--no-verify` without good reason
+- Deploy without all checks passing
+
+---
+
 ## Document Control
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
-| 1.0 | 2025-12-02 | Hans | Initial deployment plan for v0.92 |
+| 1.0 | 2025-12-02 | Hans | Initial deployment plan for v0.92 with QA infrastructure |
 
 ---
 
 **For questions or clarifications, contact the Release Manager**
+

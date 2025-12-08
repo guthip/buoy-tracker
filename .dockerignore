@@ -48,6 +48,9 @@ create_deployment_bundle.sh
 verify_deployment.sh
 .server.pid
 
+# Build validation script (local development tool only)
+validate_and_build.sh
+
 # Docker Hub setup documentation (local/internal only)
 DOCKER_HUB_SETUP.md
 MESHTASTIC_SIGNAL_METRICS.md
