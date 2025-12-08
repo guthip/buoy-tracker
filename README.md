@@ -107,7 +107,7 @@ mkdir -p config data logs
 
 2. Download docker-compose configuration from GitHub:
 ```bash
-curl -o docker-compose.yml https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.hub.yml
+curl -o docker-compose.yml https://raw.githubusercontent.com/guthip/buoy-tracker/main/docker-compose.yml
 ```
 
 3. Start the service (first run will auto-initialize config files):
