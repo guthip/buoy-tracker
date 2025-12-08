@@ -92,7 +92,7 @@ nano secret.config
 python3 run.py
 ```
 
-The web interface will be available at `http://localhost:5102`
+The web interface will be available at `http://localhost:5103`
 
 ### Docker Deployment (Recommended)
 
@@ -126,7 +126,7 @@ nano config/secret.config   # Credentials (if needed)
 docker compose restart
 ```
 
-Access the web interface at **http://localhost:5102**
+Access the web interface at **http://localhost:5103**
 
 **How it works:**
 - Downloads pre-built image from Docker Hub (`dokwerker8891/buoy-tracker:latest`)
@@ -171,7 +171,7 @@ docker compose up -d
 docker compose logs -f
 ```
 
-Access the web interface at **http://localhost:5102**
+Access the web interface at **http://localhost:5103**
 
 **Volume Structure** (persists between container restarts):
 - `./config/` → Configuration files (tracker.config, secret.config)
@@ -189,7 +189,7 @@ Access the web interface at **http://localhost:5102**
 After editing files in `./config/`:
 1. **Without restart** (recommended):
    ```bash
-   curl -X POST http://localhost:5102/api/config/reload
+   curl -X POST http://localhost:5103/api/config/reload
    ```
 2. **With restart** (if reload doesn't work):
    ```bash
@@ -468,7 +468,7 @@ Linux servers have `sendmail` or `postfix` running by default. Use **localhost:2
 enabled = true
 alert_cooldown = 1
 
-tracker_url = http://your-server-address:5102
+tracker_url = http://your-server-address:5103
 email_from = noreply@example.com
 
 # SMTP Configuration for localhost:25 (sendmail/postfix)
@@ -508,7 +508,7 @@ macOS and Windows don't have sendmail/postfix running by default. Use an externa
 enabled = true
 alert_cooldown = 1
 
-tracker_url = http://localhost:5102
+tracker_url = http://localhost:5103
 email_from = noreply@example.com
 
 # Override SMTP settings for external provider
@@ -583,13 +583,13 @@ Test your email configuration with these endpoints:
 
 ```bash
 # Test configuration
-curl -X POST http://localhost:5102/api/test-alert
+curl -X POST http://localhost:5103/api/test-alert
 
 # Test movement alert  
-curl -X POST http://localhost:5102/api/test-alert-movement
+curl -X POST http://localhost:5103/api/test-alert-movement
 
 # Test battery alert
-curl -X POST http://localhost:5102/api/test-alert-battery
+curl -X POST http://localhost:5103/api/test-alert-battery
 ```
 
 ## API Reference
