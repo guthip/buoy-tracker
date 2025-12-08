@@ -1525,6 +1525,9 @@ def _on_mqtt_disconnect(client_obj, userdata, disconnect_flags, reason_code, pro
     global last_packet_time, client
     logger.warning(f'MQTT connection lost: {reason_code} ({disconnect_flags})')
     
+    # Clear the client reference so reconnection can work
+    client = None
+    
     # Check if it's a failure (not a clean disconnect)
     try:
         is_failure = reason_code.is_failure if isinstance(reason_code.is_failure, bool) else reason_code.is_failure()
