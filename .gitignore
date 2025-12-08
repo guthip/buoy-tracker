@@ -104,3 +104,4 @@ kill_server.sh
 # Security files (internal, not for public release)
 SECURITY.md
 build_output.txt
+data/special_nodes.json
