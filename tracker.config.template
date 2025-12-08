@@ -119,7 +119,7 @@ enabled = false
 # Minimum time between alerts for same node (in hours) - prevents spam
 alert_cooldown = 1
 # URL to tracker (optional - auto-generated from webapp host/port if not set)
-# tracker_url = http://example.com:5102
+# tracker_url = http://example.com:5103
 
 # Email settings
 # Sender address - typically noreply@yourdomain.org

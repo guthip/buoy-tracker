@@ -294,7 +294,7 @@ password = large4cats
 ```ini
 [webapp]
 host = 127.0.0.1
-port = 5102
+port = 5103
 # Map center point. Supports both decimal and degrees-minutes formats:
 # Decimal: default_center = 37.7749,-122.4194
 # Degrees-minutes: default_center = N37° 33.81', W122° 13.13'

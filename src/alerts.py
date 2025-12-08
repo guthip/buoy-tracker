@@ -88,7 +88,7 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
             f"DETECTION TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             f"ALERT DETAILS:\n  Distance from home: {int(distance_m)} meters\n  Safe zone threshold: {config.SPECIAL_MOVEMENT_THRESHOLD_METERS} meters\n\n"
             f"TELEMETRY:\n  Battery Level: {battery}%\n\n"
-            f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5102')}\n\n"
+            f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
             f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN}s (next alert after this time)"
         )
 
@@ -147,7 +147,7 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
             f"Buoy: {special_label}\n\n"
             f"DETECTION TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
             f"ALERT DETAILS:\n  Current battery: {battery_level}%\n\n"
-            f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5102')}\n\n"
+            f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
             f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN / 3600:.1f} hours between alerts"
         )
 

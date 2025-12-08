@@ -296,7 +296,7 @@ _alert_cooldown_hours = config.getint('alerts', 'alert_cooldown', fallback=1)
 ALERT_COOLDOWN = _alert_cooldown_hours * 3600
 
 # Tracker URL for email alerts - REQUIRED for production
-# Set this to the public URL where your tracker is accessible (e.g., http://example.com:5102)
+# Set this to the public URL where your tracker is accessible (e.g., http://example.com:5103)
 # If not set, defaults to localhost (only works for local testing)
 _tracker_url = config.get('alerts', 'tracker_url', fallback='')
 if _tracker_url:

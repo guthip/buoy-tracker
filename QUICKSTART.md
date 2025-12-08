@@ -22,7 +22,7 @@ mkdir -p logs
 # 4. Start the application (runs from repo with docker-compose.yml and Dockerfile)
 docker compose up -d
 
-# 5. Access at http://localhost:5102
+# 5. Access at http://localhost:5103
 ```
 
 **That's it!** The app is pre-configured with defaults and runs immediately.
@@ -50,7 +50,7 @@ nano secret.config
 python3 run.py
 ```
 
-Access at `http://localhost:5102`
+Access at `http://localhost:5103`
 
 ## Next Steps
 
