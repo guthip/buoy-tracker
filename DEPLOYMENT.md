@@ -1,7 +1,7 @@
-# Deployment Guide v0.93
+# Deployment Guide v0.95
 
-**Release Date:** December 7, 2025  
-**Version:** 0.93  
+**Release Date:** December 9, 2025  
+**Version:** 0.95  
 **Status:** Ready for Deployment  
 **Risk Level:** Low (security & bug fixes, no breaking changes)
 
@@ -26,7 +26,7 @@ grep "^ARG APP_VERSION=" Dockerfile
 
 ## Executive Summary
 
-Version 0.93 includes security improvements to the authorization modal system and fixes to MQTT reconnection logic. The release includes comprehensive quality assurance infrastructure (pre-commit hooks, build validation, GitHub Actions CI).
+Version 0.95 includes subpath deployment support for non-root installations, automated version consistency checking, and comprehensive local testing infrastructure. All previous releases included security improvements to the authorization modal system and MQTT reconnection logic.
 
 **Key Improvements:**
 - ✅ Authorization modal security fixes (modal only appears on Control Menu access)
@@ -89,8 +89,8 @@ Use this checklist to verify everything is working before deployment.
 
 ### Version Synchronization
 
-- [ ] **tracker.config** - version = 0.93
-- [ ] **tracker.config.template** - version = 0.93
+- [ ] **tracker.config** - version = 0.95
+- [ ] **tracker.config.template** - version = 0.95
 - [ ] **CHANGELOG.md** - v0.93 entry present with changes
 - [ ] **DOCKER.md** - Port references updated to 5103
 - [ ] **SECURITY.md** - v0.93 compatibility verified

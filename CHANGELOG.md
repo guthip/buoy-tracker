@@ -2,6 +2,8 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-09] - v0.95 Release: Subpath Deployment & Version Control Improvements
+
 ## [2025-12-02] - v0.92 Release: Quality-Based Gateway Filtering & Performance Optimization
 
 ### Added
