@@ -7,6 +7,23 @@
 
 ---
 
+## Quick Reference: Release & Deploy
+
+**TL;DR** - Just run this:
+```bash
+./validate_and_build.sh
+```
+
+The script validates everything and builds/pushes Docker images automatically. Version is read from `tracker.config.template` (source of truth).
+
+**Important:** Before running, verify all version numbers match:
+```bash
+grep "^version = " tracker.config.template tracker.config.local tracker.config.remote
+grep "^ARG APP_VERSION=" Dockerfile
+```
+
+---
+
 ## Executive Summary
 
 Version 0.93 includes security improvements to the authorization modal system and fixes to MQTT reconnection logic. The release includes comprehensive quality assurance infrastructure (pre-commit hooks, build validation, GitHub Actions CI).
@@ -17,6 +34,7 @@ Version 0.93 includes security improvements to the authorization modal system an
 - ✅ Docker permission issues resolved
 - ✅ Quality assurance infrastructure operational
 - ✅ Multi-platform Docker images (amd64, arm64)
+- ✅ Automated version consistency checking
 
 ---
 
@@ -121,25 +139,56 @@ Use this checklist to verify everything is working before deployment.
 - [ ] Push tag: `git push origin v0.93`
 - [ ] Verify tag appears on GitHub
 
-#### 3. Docker Build Verification
+#### 3. Automated Build Process
+
+**Use the build validation script:**
 ```bash
-# Local build
+./validate_and_build.sh
+```
+
+This script automatically:
+1. ✅ Verifies version consistency across all files
+   - tracker.config.template
+   - tracker.config.local
+   - tracker.config.remote
+   - Dockerfile (ARG APP_VERSION)
+2. ✅ Validates Python syntax in all files
+3. ✅ Detects undefined function calls
+4. ✅ Runs unit tests
+5. ✅ Builds and pushes multi-platform Docker images (amd64, arm64)
+
+**Before running, ensure:**
+- All versions in config files and Dockerfile match
+- All changes are committed to git
+- You have Docker buildx configured for multi-platform builds
+- You are logged in to Docker Hub (`docker login`)
+
+The script will prompt before pushing. It extracts the version from `tracker.config.template` (source of truth).
+
+#### 4. Manual Build Verification (if script fails)
+```bash
+# Check version consistency
+grep "^version = " tracker.config.template tracker.config.local tracker.config.remote
+grep "^ARG APP_VERSION=" Dockerfile
+
+# Local build test
 docker build -t dokwerker8891/buoy-tracker:0.93 .
 
-# Multi-platform build (requires buildx)
+# Multi-platform build and push
 docker buildx build --platform linux/amd64,linux/arm64 \
   -t dokwerker8891/buoy-tracker:0.93 \
   -t dokwerker8891/buoy-tracker:latest \
   --push .
 ```
 
+- [ ] All version strings match before building
 - [ ] Local build succeeds without errors or warnings
 - [ ] Image builds in < 10 minutes
 - [ ] Image size reasonable (~300-400MB)
 - [ ] Multi-platform push succeeds
 - [ ] Both amd64 and arm64 manifests created
 
-#### 4. Docker Hub Verification
+#### 5. Docker Hub Verification
 - [ ] Wait 2-3 minutes for image processing
 - [ ] Visit: https://hub.docker.com/r/dokwerker8891/buoy-tracker
 - [ ] Verify v0.93 tag visible

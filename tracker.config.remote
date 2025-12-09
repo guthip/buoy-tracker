@@ -78,7 +78,7 @@ low_battery_threshold = 25
 [app_features]
 # Web interface display options (set to true/false)
 show_all_nodes = false
-show_gateways = true
+show_gateways = false
 show_position_trails = true
 show_nautical_markers = true
 # Trail history display (in hours)
