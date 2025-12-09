@@ -295,6 +295,19 @@ password = large4cats
 [webapp]
 host = 127.0.0.1
 port = 5103
+
+# URL prefix for subpath deployments (OPTIONAL)
+# Use this if you're deploying behind a reverse proxy at a subpath
+# Examples:
+#   Root deployment (https://example.com/): url_prefix = (leave empty or omit)
+#   Subpath deployment (https://example.com/buoy-tracker/): url_prefix = /buoy-tracker
+#   Alternative format also works: url_prefix = buoy-tracker
+# Notes:
+#   - Trailing slashes are automatically removed
+#   - All routes (/, /health, /api/*, /docs/*) will be prefixed
+#   - Browser will automatically request /buoy-tracker/health, /buoy-tracker/api/nodes, etc.
+url_prefix = 
+
 # Map center point. Supports both decimal and degrees-minutes formats:
 # Decimal: default_center = 37.7749,-122.4194
 # Degrees-minutes: default_center = N37° 33.81', W122° 13.13'
@@ -381,6 +394,95 @@ api_polling_interval = 120  # Very conservative, minimal server load
 - No need to manually adjust multiple settings
 - Prevents users from setting aggressive polling with restrictive rate limits
 - One config value controls both behavior
+
+## Reverse Proxy & Subpath Deployment
+
+Deploy Buoy Tracker behind a reverse proxy (nginx, Apache, etc.) at any subpath. This is useful for:
+- **Shared servers**: Run multiple apps on one domain
+- **Subdirectory hosting**: Host at `example.com/buoy-tracker/` instead of subdomain
+- **HTTPS termination**: Let reverse proxy handle SSL/TLS
+- **Load balancing**: Distribute traffic across multiple instances
+
+### Configuration
+
+Edit `tracker.config`:
+
+```ini
+[webapp]
+port = 5103
+url_prefix = /buoy-tracker
+```
+
+The app will automatically:
+- Register all routes at `/buoy-tracker/*`
+- Tell the browser to request `/buoy-tracker/health`, `/buoy-tracker/api/nodes`, etc.
+- Prepend the prefix to all API calls in the web interface
+
+### Nginx Example
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name example.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    # Buoy Tracker at /buoy-tracker/
+    location /buoy-tracker/ {
+        proxy_pass http://localhost:5103/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # WebSocket support (for future real-time features)
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+**Key Points:**
+- Set `url_prefix = /buoy-tracker` in `tracker.config`
+- Nginx location path must end with `/`
+- `proxy_pass` to Flask app port (e.g., `http://localhost:5103/`)
+- Don't add the prefix to the proxy_pass URL—Flask handles that via blueprint registration
+- App is accessible at `https://example.com/buoy-tracker/`
+
+### Apache Example
+
+```apache
+<VirtualHost *:443>
+    ServerName example.com
+    SSLEngine on
+    SSLCertificateFile /path/to/cert.pem
+    SSLCertificateKeyFile /path/to/key.pem
+    
+    # Buoy Tracker at /buoy-tracker/
+    <Location /buoy-tracker/>
+        ProxyPass http://localhost:5103/
+        ProxyPassReverse http://localhost:5103/
+        ProxyPreserveHost On
+        
+        # WebSocket support
+        RewriteEngine On
+        RewriteCond %{HTTP:Upgrade} websocket [NC]
+        RewriteCond %{HTTP:Connection} upgrade [NC]
+        RewriteRule ^/buoy-tracker/(.*) "ws://localhost:5103/$1" [P,L]
+    </Location>
+</VirtualHost>
+```
+
+**Troubleshooting:**
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| 404 on all API calls | `url_prefix` not set in config | Set `url_prefix = /buoy-tracker` in `[webapp]` section |
+| Routes work but styles/JS broken | Prefix only applied to Flask routes, not static files | Ensure reverse proxy serves `/static/` from root Flask app |
+| CORS errors | Missing headers | Verify reverse proxy forwards `X-Forwarded-*` headers |
+| Connection lost immediately | Flask can't detect reverse proxy | Ensure `X-Forwarded-For` header is passed through |
 
 ### Special Nodes
 
