@@ -312,6 +312,9 @@ def _record_gateway_connection(special_node_id, gateway_node_id, json_data, conf
         should_update = True
     
     if should_update:
+        # Ensure node exists in nodes_data before updating
+        if special_node_id not in nodes_data:
+            nodes_data[special_node_id] = {}
         # This is the strongest gateway so far
         nodes_data[special_node_id]["best_gateway"] = {
             "id": gateway_node_id,
