@@ -63,6 +63,10 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 # Configure socket reuse for faster restarts
 app.config['ENV_SOCKET_REUSE'] = True
 
+# Create a Blueprint for all API and app routes to support URL prefix for subpath deployments
+from flask import Blueprint
+api_bp = Blueprint('buoy_tracker', __name__, url_prefix=config.URL_PREFIX or None)
+
 # ============================================================================
 # Constants
 # ============================================================================
@@ -293,15 +297,15 @@ def _() -> None:
 
 
 # Handle CORS preflight requests for API endpoints only
-@app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
-@app.route('/api/<path:path>', methods=['OPTIONS'])
-@app.route('/health', methods=['OPTIONS'])
+@api_bp.route('/', defaults={'path': ''}, methods=['OPTIONS'])
+@api_bp.route('/api/<path:path>', methods=['OPTIONS'])
+@api_bp.route('/health', methods=['OPTIONS'])
 def handle_options(path: str = '') -> Tuple[str, int]:
     """Handle CORS preflight OPTIONS requests."""
     return '', 204
 
 
-@app.route('/', methods=['GET'])
+@api_bp.route('/', methods=['GET'])
 def index() -> Response:
     """Serve the main map page."""
     from flask import make_response
@@ -326,6 +330,7 @@ def index() -> Response:
                           api_key_required=True,  # API key always required for Control Menu
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
+                          url_prefix=config.URL_PREFIX,  # Pass URL prefix for subpath deployments
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -334,7 +339,7 @@ def index() -> Response:
     return response
 
 
-@app.route('/health', methods=['GET'])
+@api_bp.route('/health', methods=['GET'])
 @check_rate_limit
 def health_check() -> Response:
     """Health check endpoint with status and configuration."""
@@ -370,7 +375,7 @@ def health_check() -> Response:
 # /api/status merged into /health endpoint - see health_check() above
 
 
-@app.route('/api/recent/messages', methods=['GET'])
+@api_bp.route('/api/recent/messages', methods=['GET'])
 @check_rate_limit
 def recent_messages() -> Response:
     try:
@@ -381,7 +386,7 @@ def recent_messages() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/nodes', methods=['GET'])
+@api_bp.route('/api/nodes', methods=['GET'])
 @check_rate_limit
 def get_nodes() -> Response:
     """Return all tracked nodes with their current status."""
@@ -393,7 +398,7 @@ def get_nodes() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/special/history', methods=['GET'])
+@api_bp.route('/api/special/history', methods=['GET'])
 @check_rate_limit
 def get_special_history() -> Response:
     from flask import request
@@ -412,7 +417,7 @@ def get_special_history() -> Response:
 
 
 
-@app.route('/api/signal/history', methods=['GET'])
+@api_bp.route('/api/signal/history', methods=['GET'])
 @check_rate_limit
 def get_signal_history() -> Response:
     """Get signal history (battery, RSSI, SNR) for a specific node."""
@@ -429,7 +434,7 @@ def get_signal_history() -> Response:
         logger.exception('Failed to get signal history')
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/config/movement-threshold', methods=['POST'])
+@api_bp.route('/api/config/movement-threshold', methods=['POST'])
 @require_api_key
 @check_rate_limit
 def update_movement_threshold() -> Response:
@@ -448,7 +453,7 @@ def update_movement_threshold() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/docs/<filename>', methods=['GET'])
+@api_bp.route('/docs/<filename>', methods=['GET'])
 def serve_docs(filename: str) -> Tuple[str, int, Dict[str, str]]:
     """Serve documentation files (LICENSE, ATTRIBUTION.md)."""
     # Whitelist allowed files for security
@@ -492,7 +497,13 @@ def serve_docs(filename: str) -> Tuple[str, int, Dict[str, str]]:
     return jsonify({'error': 'File not found'}), 404
 
 
+# Register blueprint with the Flask app
+app.register_blueprint(api_bp)
+if config.URL_PREFIX:
+    logger.info(f'App routes registered at {config.URL_PREFIX}')
+
+
 if __name__ == '__main__':
-    logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}')
+    logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}' + (f' at {config.URL_PREFIX}' if config.URL_PREFIX else ''))
     start_mqtt_on_startup()
     app.run(debug=False, host=config.WEBAPP_HOST, port=config.WEBAPP_PORT, threaded=True)

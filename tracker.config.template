@@ -30,6 +30,15 @@ encryption_key = AQ==
 host = 0.0.0.0
 port = 5103
 
+# URL prefix for subpath deployments (optional)
+# Use this if the app is deployed at a subpath (e.g., behind a reverse proxy at /buoy-tracker/)
+# Examples:
+#   Root deployment (https://example.com/): leave empty or omit this line
+#   Subpath deployment (https://example.com/buoy-tracker/): url_prefix = /buoy-tracker
+#   Alternative format also works: url_prefix = buoy-tracker
+# Note: Trailing slashes are automatically removed
+url_prefix = 
+
 # Map settings
 # Center point for the map. Format: "latitude,longitude" or "N/S/E/Wdeg° min', N/S/E/Wdeg° min'"
 # Decimal: 37.5528,-122.1947

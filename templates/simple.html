@@ -224,7 +224,7 @@
         }
     </style>
 </head>
-<body data-status-refresh="{{ status_refresh }}" data-node-refresh="{{ node_refresh }}" data-default-lat="{{ default_lat }}" data-default-lon="{{ default_lon }}" data-default-zoom="{{ default_zoom }}" data-move-threshold="{{ special_move_threshold }}" data-api-key-required="{{ api_key_required|lower }}" data-api-key="{{ api_key or '' }}" data-is-localhost="{{ is_localhost|lower }}" style="--special-highlight-color: {{ special_highlight_color }};">
+<body data-status-refresh="{{ status_refresh }}" data-node-refresh="{{ node_refresh }}" data-default-lat="{{ default_lat }}" data-default-lon="{{ default_lon }}" data-default-zoom="{{ default_zoom }}" data-move-threshold="{{ special_move_threshold }}" data-api-key-required="{{ api_key_required|lower }}" data-api-key="{{ api_key or '' }}" data-is-localhost="{{ is_localhost|lower }}" data-url-prefix="{{ url_prefix or '' }}" style="--special-highlight-color: {{ special_highlight_color }};">
     <!-- API Key Entry Modal (for remote/worldwide access) -->
     <div id="api-key-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; align-items:center; justify-content:center; padding:20px;">
         <div style="background:white; padding:40px 25px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); max-width:500px; width:100%;">

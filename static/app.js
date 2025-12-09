@@ -199,6 +199,7 @@
   var apiKeyRequired = document.body.dataset.apiKeyRequired === 'true';
   var isLocalhost = document.body.dataset.isLocalhost === 'true';
   var apiKey = document.body.dataset.apiKey || '';
+  var urlPrefix = document.body.dataset.urlPrefix || '';  // URL prefix for subpath deployments (e.g., '/buoy-tracker')
   var modalShownRecently = false; // Prevent rapid modal re-displays
   var authCheckDisabled = false; // Disable 401 checks briefly after login attempt
   
@@ -305,6 +306,11 @@
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback) {
     try {
+      // Prepend URL prefix for subpath deployments
+      if (urlPrefix && !url.startsWith(urlPrefix)) {
+        url = urlPrefix + '/' + url.replace(/^\//, '');
+      }
+      
       // Add cache-busting parameter with truly random value
       if (method === 'GET') {
         var separator = (url.indexOf('?') === -1) ? '?' : '&';
@@ -507,7 +513,13 @@
       console.error('[FEATURES] /health request timed out after 15s');
     }, 15000); // 15 second timeout for slow connections
     
-    return fetch('/health', { signal: controller.signal })
+    var healthUrl = '/health';
+    // Prepend URL prefix for subpath deployments
+    if (urlPrefix) {
+      healthUrl = urlPrefix + '/health';
+    }
+    
+    return fetch(healthUrl, { signal: controller.signal })
       .then(r => {
         clearTimeout(timeoutId);
         if (!r.ok) {
