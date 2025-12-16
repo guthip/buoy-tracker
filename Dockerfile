@@ -24,10 +24,11 @@ COPY . /app
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Create non-root user and docker group for host access
+# Create docker group (GID 999) and non-root user
 # GID 999 matches typical docker group on Debian/Ubuntu hosts
-RUN groupadd --system app && \
-    groupadd -g 999 docker && \
+# Create docker group first, then app group, so docker gets GID 999
+RUN groupadd -g 999 docker && \
+    groupadd --system app && \
     useradd --system --gid app --create-home --home-dir /home/app app && \
     usermod -a -G docker app
 
