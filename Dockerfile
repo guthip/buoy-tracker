@@ -1,5 +1,5 @@
 # Dockerfile for Buoy Tracker
-ARG APP_VERSION=0.96
+ARG APP_VERSION=0.97
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -24,8 +24,12 @@ COPY . /app
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Create non-root user
-RUN groupadd --system app && useradd --system --gid app --create-home --home-dir /home/app app
+# Create non-root user and docker group for host access
+# GID 999 matches typical docker group on Debian/Ubuntu hosts
+RUN groupadd --system app && \
+    groupadd -g 999 docker && \
+    useradd --system --gid app --create-home --home-dir /home/app app && \
+    usermod -a -G docker app
 
 # Create config/data/logs directories and set them world-writable
 # Entrypoint runs as root and needs to write to these

@@ -2,7 +2,22 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
-## [2025-12-15] - Docker File Permissions & Ownership Fixes + Test Alert API
+## [2025-12-16] - v0.97 Bug Fix: Container Startup Crash
+
+### Fixed
+- **Critical: Container crash-loop due to missing docker group**
+  - Added `docker` group (GID 999) creation in Dockerfile
+  - Fixes `chown: invalid group: 'app:docker'` error
+  - Container now starts successfully with proper file ownership
+  - Works out-of-the-box on standard Ubuntu/Debian Docker installations
+
+### Technical Details
+- The v0.96 entrypoint referenced `app:docker` but the docker group didn't exist inside the container
+- This caused the container to crash on startup before the application could run
+- Solution: Create docker group with GID 999 in Dockerfile (matches typical host docker group)
+- This preserves the intended behavior: host users in docker group can access container files
+
+## [2025-12-15] - v0.96 Docker File Permissions & Ownership Fixes + Test Alert API
 
 ### Added
 - **Test Alert API Endpoint** (`/api/test-alert`)
