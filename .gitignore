@@ -76,6 +76,7 @@ tracker.config.mijnwolk
 tracker.config.syc
 secret.config
 secret.config.mijnwolk
+secret.config.syc
 special_nodes.json
 data/special_nodes.json
 

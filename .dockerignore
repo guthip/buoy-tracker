@@ -66,6 +66,7 @@ tracker.config.mijnwolk
 tracker.config.syc
 secret.config
 secret.config.mijnwolk
+secret.config.syc
 .env
 .env.template
 
