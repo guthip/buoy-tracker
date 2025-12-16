@@ -98,6 +98,7 @@ buoy-tracker-deployment-config_*.tar.gz
 create_deployment_bundle.sh
 
 # Build validation script (local development tool only)
+validate_and_build.sh
 
 # Server management scripts (local development only)
 start_server.sh
