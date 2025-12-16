@@ -763,7 +763,11 @@ def _save_special_nodes_data(force=False):
         with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False, suffix='.tmp') as tmp:
             json.dump(data, tmp, indent=2)
             tmp_path = tmp.name
-        
+
+        # Set file permissions to 640 (rw-r-----) before rename
+        # tempfile creates files with 600 by default, ignoring umask
+        os.chmod(tmp_path, 0o640)
+
         # Atomic rename (overwrites destination on POSIX systems)
         Path(tmp_path).replace(path)
         

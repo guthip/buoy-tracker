@@ -719,9 +719,32 @@ curl -X POST http://localhost:5103/api/test-alert-battery
 - **`GET /api/special/history?node_id=<id>&hours=<hours>`** - Position history for a node
 - **`GET /api/signal/history?node_id=<id>`** - Battery/RSSI/SNR history for a node
 
-### Admin Endpoints
+### Admin Endpoints (Protected - Require Authentication)
 
-- **`POST /api/config/movement-threshold`** - Update movement threshold for special nodes (requires auth when enabled)
+- **`POST /api/config/movement-threshold`** - Update movement threshold for special nodes
+  - Body: `{"threshold": 100}` (distance in meters)
+  - Returns: `{"success": true, "threshold": 100}`
+
+- **`POST /api/test-alert`** - Send test alert email to verify email configuration
+  - Body: `{"type": "movement"}` or `{"type": "battery"}` (optional, defaults to "movement")
+  - Returns: `{"success": true, "message": "Test movement alert sent"}`
+  - Requires: Email alerts enabled in tracker.config (`[alerts] enabled = true`)
+  - Use cases: Verify SMTP configuration, test email delivery, check alert formatting
+
+**Example:**
+```bash
+# Test movement alert
+curl -X POST https://your-domain.com/api/test-alert \
+  -H "Authorization: Bearer YourPasswordHere" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "movement"}'
+
+# Test battery alert
+curl -X POST https://your-domain.com/api/test-alert \
+  -H "Authorization: Bearer YourPasswordHere" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "battery"}'
+```
 
 ## Project Structure
 

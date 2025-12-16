@@ -69,8 +69,13 @@ ssl/
 # Local configuration (sensitive)
 
 # tracker.config is NOT included in the repo or Docker images; only tracker.config.template is public
+# All deployment-specific configs are excluded (only .template files are tracked)
 tracker.config
+tracker.config.local
+tracker.config.mijnwolk
+tracker.config.syc
 secret.config
+secret.config.mijnwolk
 special_nodes.json
 data/special_nodes.json
 

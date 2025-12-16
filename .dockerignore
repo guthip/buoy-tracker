@@ -59,8 +59,13 @@ effort_assessment.md
 
 # Configuration files (must be created from templates during deployment)
 # Both tracker.config and secret.config should NOT be in the image
+# All deployment-specific configs are excluded (only .template files are included)
 tracker.config
+tracker.config.local
+tracker.config.mijnwolk
+tracker.config.syc
 secret.config
+secret.config.mijnwolk
 .env
 .env.template
 

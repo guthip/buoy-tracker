@@ -14,8 +14,9 @@ if __name__ == '__main__':
     sys.path.insert(0, str(Path(__file__).parent.parent))
     import src.mqtt_handler as mqtt_handler
     import src.config as config
+    import src.alerts as alerts
 else:
-    from . import mqtt_handler, config
+    from . import mqtt_handler, config, alerts
 import time
 from collections import defaultdict
 
@@ -450,6 +451,40 @@ def update_movement_threshold() -> Response:
         return jsonify({'success': True, 'threshold': threshold})
     except Exception as e:
         logger.exception('Failed to update movement threshold')
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/api/test-alert', methods=['POST'])
+@require_api_key
+@check_rate_limit
+def test_alert() -> Response:
+    """Send a test alert email to verify email configuration."""
+    try:
+        # Check if alerts are enabled
+        if not hasattr(config, 'ALERT_ENABLED') or not config.ALERT_ENABLED:
+            return jsonify({'error': 'Email alerts are disabled in tracker.config'}), 400
+
+        # Get alert type from request (default to movement)
+        # Use force=True to parse JSON even without Content-Type header
+        data = request.get_json(force=True, silent=True) or {}
+        alert_type = data.get('type', 'movement')
+
+        # Create test node data
+        test_node_id = 999999999
+        test_node_data = {
+            'long_name': 'Test Node',
+            'battery_level': 85
+        }
+
+        # Send test alert based on type
+        if alert_type == 'battery':
+            alerts.send_battery_alert(test_node_id, test_node_data, battery_level=45)
+            return jsonify({'success': True, 'message': 'Test battery alert sent'})
+        else:
+            alerts.send_movement_alert(test_node_id, test_node_data, distance_m=250)
+            return jsonify({'success': True, 'message': 'Test movement alert sent'})
+
+    except Exception as e:
+        logger.exception('Failed to send test alert')
         return jsonify({'error': str(e)}), 500
 
 

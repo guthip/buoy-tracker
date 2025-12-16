@@ -2,6 +2,36 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-15] - Docker File Permissions & Ownership Fixes + Test Alert API
+
+### Added
+- **Test Alert API Endpoint** (`/api/test-alert`)
+  - Password-protected endpoint to send test alert emails
+  - Supports both movement and battery alert types
+  - Verifies SMTP configuration and email delivery
+  - Comprehensive security tests (authentication, rate limiting, injection protection)
+  - Documented in README with usage examples
+
+### Fixed
+- **File Permissions for Host Access**
+  - Fixed `special_nodes.json` created with 600 permissions (unreadable by host user)
+  - Added explicit `os.chmod(tmp_path, 0o640)` after tempfile creation in `mqtt_handler.py`
+  - Ensures group-readable files for host users in docker group
+
+- **Directory Ownership for Docker Group Access**
+  - Changed ownership from `app:app` to `app:docker` in `entrypoint.sh`
+  - Updated directory permissions from 755 to 775 for group write access
+  - Updated config file permissions from 644 to 664 for group write access
+  - Allows host users in docker group to read logs, backup data, and browse files
+  - Removes lock symbols in GUI file managers on Linux hosts
+
+### Impact
+- Test alert endpoint enables production email verification without manual node manipulation
+- Host users can now read container-generated files without sudo
+- Backups and log viewing work seamlessly for users in docker group
+- No impact on application security or network-facing attack surface
+- Improves deployment experience for self-hosted installations
+
 ## [2025-12-09] - v0.95 Release: Subpath Deployment & Version Control Improvements
 
 ## [2025-12-02] - v0.92 Release: Quality-Based Gateway Filtering & Performance Optimization

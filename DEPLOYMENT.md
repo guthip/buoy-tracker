@@ -1,9 +1,9 @@
-# Deployment Guide v0.95
+# Deployment Guide v0.96
 
-**Release Date:** December 9, 2025  
-**Version:** 0.95  
-**Status:** Ready for Deployment  
-**Risk Level:** Low (security & bug fixes, no breaking changes)
+**Release Date:** December 15, 2025
+**Version:** 0.96
+**Status:** Ready for Deployment
+**Risk Level:** Low (file permissions & ownership fixes, no breaking changes)
 
 ---
 
@@ -26,7 +26,7 @@ grep "^ARG APP_VERSION=" Dockerfile
 
 ## Executive Summary
 
-Version 0.95 includes subpath deployment support for non-root installations, automated version consistency checking, and comprehensive local testing infrastructure. All previous releases included security improvements to the authorization modal system and MQTT reconnection logic.
+Version 0.96 includes Docker file permission and ownership fixes to enable host user access for backups, log viewing, and file management. Previous releases (0.95) included subpath deployment support, automated version consistency checking, and security improvements to the authorization modal system.
 
 **Key Improvements:**
 - ✅ Authorization modal security fixes (modal only appears on Control Menu access)
@@ -89,8 +89,8 @@ Use this checklist to verify everything is working before deployment.
 
 ### Version Synchronization
 
-- [ ] **tracker.config** - version = 0.95
-- [ ] **tracker.config.template** - version = 0.95
+- [ ] **tracker.config** - version = 0.96
+- [ ] **tracker.config.template** - version = 0.96
 - [ ] **CHANGELOG.md** - v0.93 entry present with changes
 - [ ] **DOCKER.md** - Port references updated to 5103
 - [ ] **SECURITY.md** - v0.93 compatibility verified

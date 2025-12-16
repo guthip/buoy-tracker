@@ -4,7 +4,7 @@
 
 [app]
 title = Buoy Tracker
-version = 0.95
+version = 0.96
 
 [mqtt]
 # MQTT broker settings
