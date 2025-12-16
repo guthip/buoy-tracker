@@ -100,6 +100,9 @@ create_deployment_bundle.sh
 # Build validation script (local development tool only)
 validate_and_build.sh
 
+# Local testing scripts (local development tool only)
+test_subpath.sh
+
 # Server management scripts (local development only)
 start_server.sh
 start_clean_server.sh
