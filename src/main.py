@@ -64,9 +64,11 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 # Configure socket reuse for faster restarts
 app.config['ENV_SOCKET_REUSE'] = True
 
-# Create a Blueprint for all API and app routes to support URL prefix for subpath deployments
+# Create a Blueprint for all API and app routes
+# Note: url_prefix is NOT set here when behind a reverse proxy that strips the prefix
+# The URL_PREFIX config is only used for JavaScript in the browser
 from flask import Blueprint
-api_bp = Blueprint('buoy_tracker', __name__, url_prefix=config.URL_PREFIX or None)
+api_bp = Blueprint('buoy_tracker', __name__, url_prefix=None)
 
 # ============================================================================
 # Constants
