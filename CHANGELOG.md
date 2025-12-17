@@ -2,6 +2,22 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-16] - v0.97d Bug Fix: MQTT Connection Return Value
+
+### Fixed
+- **MQTT Connection Logging Issue**
+  - Added `return True` to `connect_mqtt()` function in `mqtt_handler.py`
+  - Eliminates misleading "connect_mqtt() returned False" error message
+  - MQTT connection was working correctly, but returned `None` instead of `True`
+  - Improves log clarity for monitoring and debugging
+
+### Technical Details
+- The `connect_mqtt()` function starts the MQTT connection in a background thread successfully
+- The calling code in `main.py` checks the return value to log success/failure
+- Previously returned `None` (implicit), which evaluates to `False` in Python
+- Now explicitly returns `True` when thread starts and when client already exists
+- This was a cosmetic logging issue - MQTT functionality was not affected
+
 ## [2025-12-16] - v0.97 Bug Fix: Container Startup Crash
 
 ### Fixed

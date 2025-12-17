@@ -1714,7 +1714,7 @@ def connect_mqtt():
     # Don't create multiple connections
     if client is not None:
         logger.debug('MQTT client already exists, skipping connection')
-        return
+        return True
     
     def _do_connect():
         """Perform the MQTT connection in background thread."""
@@ -1801,6 +1801,9 @@ def connect_mqtt():
     thread = threading.Thread(target=_do_connect, daemon=True)
     thread.start()
     logger.info('MQTT connection thread started')
+
+    # Return True to indicate connection thread was started successfully
+    return True
 
 
 def disconnect_mqtt():

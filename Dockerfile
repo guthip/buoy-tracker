@@ -1,5 +1,5 @@
 # Dockerfile for Buoy Tracker
-ARG APP_VERSION=0.97
+ARG APP_VERSION=0.97d
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -26,9 +26,10 @@ RUN chmod +x /entrypoint.sh
 
 # Create docker group (GID 999) and non-root user
 # GID 999 matches typical docker group on Debian/Ubuntu hosts
-# Create docker group first, then app group, so docker gets GID 999
+# IMPORTANT: Create docker group first to reserve GID 999, then create app group
+# without --system to avoid GID conflicts
 RUN groupadd -g 999 docker && \
-    groupadd --system app && \
+    groupadd app && \
     useradd --system --gid app --create-home --home-dir /home/app app && \
     usermod -a -G docker app
 
