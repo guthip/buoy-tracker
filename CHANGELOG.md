@@ -2,6 +2,30 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-17] - v0.97f Performance Fix: Excessive Disk Writes
+
+### Fixed
+- **Critical Performance Issue: Unnecessary File Writes**
+  - Fixed `special_nodes.json` being written for EVERY packet on the network
+  - Now only writes when special nodes send packets (as intended)
+  - Reduces disk I/O from hundreds of writes per hour to only a few per hour
+  - Prevents excessive wear on SD cards and SSDs
+  - Dramatically improves performance on busy Meshtastic networks
+
+### Technical Details
+- The packet tracking functions (`_track_special_node_packet`) already checked if node was special and returned early for non-special nodes
+- However, `_save_special_nodes_data()` was being called unconditionally after tracking
+- This caused a file write for every POSITION, NODEINFO, TELEMETRY, and MAP_REPORT packet from ANY node
+- On SF Bay Area network with 200+ active nodes, this meant 200-500 unnecessary writes per hour
+- Fixed by wrapping both tracking and save calls in `if _is_special_node(node_id):` check
+- Now writes only occur when actual special node packets are received
+
+### Impact
+- **Before**: File written every few seconds (for every packet on network)
+- **After**: File written only when special nodes send updates (every few minutes)
+- Massive reduction in disk I/O, especially on busy networks
+- Critical fix for Raspberry Pi deployments with SD cards
+
 ## [2025-12-16] - v0.97e Bug Fix: Reverse Proxy Deployment
 
 ### Fixed

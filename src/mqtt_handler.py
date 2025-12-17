@@ -898,10 +898,11 @@ def on_nodeinfo(json_data):
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
                     _save_special_nodes_data()
-            
-            # Track packet FIRST, before any other processing
-            _track_special_node_packet(node_id, 'NODEINFO_APP', json_data)
-            _save_special_nodes_data()  # Save packet immediately
+
+            # Track packet FIRST, before any other processing (only for special nodes)
+            if _is_special_node(node_id):
+                _track_special_node_packet(node_id, 'NODEINFO_APP', json_data)
+                _save_special_nodes_data()  # Save packet immediately
         
         # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
@@ -1027,10 +1028,11 @@ def on_position(json_data):
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
                     _save_special_nodes_data()
-            
-            # Track packet FIRST, before any other processing
-            _track_special_node_packet(node_id, 'POSITION_APP', json_data)
-            _save_special_nodes_data()  # Save packet immediately
+
+            # Track packet FIRST, before any other processing (only for special nodes)
+            if _is_special_node(node_id):
+                _track_special_node_packet(node_id, 'POSITION_APP', json_data)
+                _save_special_nodes_data()  # Save packet immediately
         
         # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
@@ -1181,10 +1183,11 @@ def on_telemetry(json_data):
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
                     _save_special_nodes_data()
-            
-            # Track packet FIRST, before any other processing
-            _track_special_node_packet(node_id, 'TELEMETRY_APP', json_data)
-            _save_special_nodes_data()  # Save packet immediately
+
+            # Track packet FIRST, before any other processing (only for special nodes)
+            if _is_special_node(node_id):
+                _track_special_node_packet(node_id, 'TELEMETRY_APP', json_data)
+                _save_special_nodes_data()  # Save packet immediately
         
         # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
@@ -1371,8 +1374,9 @@ def on_mapreport(json_data):
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
                     _save_special_nodes_data()
-            _track_special_node_packet(node_id, 'MAP_REPORT_APP', json_data)
-            _save_special_nodes_data()  # Save packet history after tracking
+                # Track packet (only for special nodes)
+                _track_special_node_packet(node_id, 'MAP_REPORT_APP', json_data)
+                _save_special_nodes_data()  # Save packet history after tracking
         
         if node_id and isinstance(payload, dict):
             if node_id not in nodes_data:
