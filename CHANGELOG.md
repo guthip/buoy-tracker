@@ -2,6 +2,30 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-16] - v0.97e Bug Fix: Reverse Proxy Deployment
+
+### Fixed
+- **Reverse Proxy URL Prefix Issue**
+  - Decoupled Flask Blueprint routes from JavaScript URL prefix
+  - Flask now serves routes without prefix (compatible with ProxyPass prefix stripping)
+  - JavaScript still uses url_prefix config to construct correct browser URLs
+  - Fixes double-prefix issue when deployed behind Apache/nginx reverse proxy
+  - Example: Apache proxies `/buoy-tracker/*` to `container:5103/*` now works correctly
+
+### Technical Details
+- Previously, Flask Blueprint used `url_prefix` from config, causing double-prefix with reverse proxies
+- Flask Blueprint now always uses `url_prefix=None` (serves routes at root)
+- The `url_prefix` config setting is now ONLY used by JavaScript in the browser
+- This allows reverse proxy to strip the path prefix before forwarding to the container
+- JavaScript correctly prepends the prefix for browser requests
+- Fixes deployment at sequoiayc.org/buoy-tracker and similar subpath deployments
+
+### Deployment Note
+For reverse proxy deployments:
+1. Configure reverse proxy to strip prefix (e.g., `/buoy-tracker/*` → `container:5103/*`)
+2. Set `url_prefix = /buoy-tracker` in tracker.config (for JavaScript only)
+3. Flask will serve routes at root for the reverse proxy to forward
+
 ## [2025-12-16] - v0.97d Bug Fix: MQTT Connection Return Value
 
 ### Fixed
