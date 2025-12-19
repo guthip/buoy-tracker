@@ -746,11 +746,12 @@
 
 
 
-  function buildSignalHistogramSVG(historyPoints) {
+  function buildSignalHistogramSVG(historyPoints, hasPowerSensor) {
     /**
      * Build an SVG line chart showing battery voltage, RSSI, and SNR over time.
      * Only plots the max (highest) RSSI and SNR per minute to reduce clutter.
      * historyPoints: array of {ts, battery, rssi, snr}
+     * hasPowerSensor: if true, battery field contains voltage (V), otherwise percentage (%)
      * Returns SVG string with hover tooltips
      */
     if (!historyPoints || historyPoints.length === 0) {
@@ -868,7 +869,15 @@
       
       // Build tooltip with each metric on a new line
       var tooltipLines = [];
-      if (p.battery != null) tooltipLines.push('Batt: ' + Math.round(p.battery) + '%');
+      if (p.battery != null) {
+        if (hasPowerSensor) {
+          // For power sensor nodes, battery field contains voltage
+          tooltipLines.push('Voltage: ' + p.battery.toFixed(2) + 'V');
+        } else {
+          // For other nodes, battery field contains percentage
+          tooltipLines.push('Batt: ' + Math.round(p.battery) + '%');
+        }
+      }
       if (p.rssi != null) tooltipLines.push('RSSI: ' + p.rssi + 'dBm');
       if (p.snr != null) tooltipLines.push('SNR: ' + (Math.round(p.snr * 10) / 10) + 'dB');
       if (p.count > 1) tooltipLines.push('(' + p.count + ' samples)');
@@ -879,9 +888,16 @@
       // Large hover area rectangle (invisible, for better hover detection)
       svg += '<rect cx="' + x + '" cy="' + (padding + plotHeight / 2) + '" x="' + (x - 8) + '" y="' + (padding - 5) + '" width="16" height="' + (plotHeight + 10) + '" fill="transparent" style="cursor:pointer;" class="histogram-hover" data-tooltip="' + tooltipText.replace(/"/g, '&quot;') + '"/>';
       
-      // Battery point
+      // Battery/Voltage point
       if (p.battery != null) {
-        var batY = scaleY(p.battery, 0, 100);
+        var batY;
+        if (hasPowerSensor) {
+          // Scale voltage: 2.8V to 4.3V range
+          batY = scaleY(p.battery, 2.8, 4.3);
+        } else {
+          // Scale battery percentage: 0% to 100%
+          batY = scaleY(p.battery, 0, 100);
+        }
         svg += '<circle cx="' + x + '" cy="' + batY + '" r="3" fill="#4CAF50" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
       }
       
@@ -899,7 +915,8 @@
     }
     
     // Legend
-    svg += '<text x="' + padding + '" y="' + (height - 5) + '" fill="#4CAF50" font-weight="bold" font-size="12px">● Batt</text>';
+    var battLabel = hasPowerSensor ? '● Voltage' : '● Batt';
+    svg += '<text x="' + padding + '" y="' + (height - 5) + '" fill="#4CAF50" font-weight="bold" font-size="12px">' + battLabel + '</text>';
     svg += '<text x="' + (padding + 70) + '" y="' + (height - 5) + '" fill="#2196F3" font-weight="bold" font-size="12px">● RSSI</text>';
     svg += '<text x="' + (padding + 140) + '" y="' + (height - 5) + '" fill="#9C27B0" font-weight="bold" font-size="12px">● SNR</text>';
     
@@ -2453,7 +2470,10 @@
       })
       .then(function(data) {
         if (data.points && data.points.length > 0) {
-          var svg = buildSignalHistogramSVG(data.points);
+          // Find the node to check if it has a power sensor
+          var node = currentNodesData.find(function(n) { return n.id === nodeId; });
+          var hasPowerSensor = node ? node.has_power_sensor : false;
+          var svg = buildSignalHistogramSVG(data.points, hasPowerSensor);
           container.innerHTML = svg;
           attachHistogramTooltips(container);
         } else {
