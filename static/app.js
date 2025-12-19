@@ -136,9 +136,19 @@
           appFeatures.trail_history_hours = Number(e.target.value);
           updateNodes();
         };
-        document.getElementById('lowBatteryInput').oninput = function(e) {
-          appFeatures.low_battery_threshold = Number(e.target.value);
-          updateNodes();
+        document.getElementById('lowBatteryInput').onchange = function(e) {
+          var newThreshold = parseInt(e.target.value);
+          if (newThreshold > 0 && newThreshold <= 100) {
+            makeApiRequest('POST', 'api/config/battery-threshold', function(xhr) {
+              if (xhr.status === 200) {
+                appFeatures.low_battery_threshold = newThreshold;
+                updateNodes();
+              } else {
+                console.error('Failed to update battery threshold');
+                initSettingsInputs();
+              }
+            }, JSON.stringify({threshold: newThreshold}));
+          }
         };
         document.getElementById('movementThresholdInput').onchange = function(e) {
           var newThreshold = parseFloat(e.target.value);
@@ -304,28 +314,33 @@
   var movedAlertShown = {}; // track one-time alerts per node id
   
   // Helper function to make authenticated API requests
-  function makeApiRequest(method, url, callback) {
+  function makeApiRequest(method, url, callback, body) {
     try {
       // Prepend URL prefix for subpath deployments
       if (urlPrefix && !url.startsWith(urlPrefix)) {
         url = urlPrefix + '/' + url.replace(/^\//, '');
       }
-      
+
       // Add cache-busting parameter with truly random value
       if (method === 'GET') {
         var separator = (url.indexOf('?') === -1) ? '?' : '&';
         url += separator + '_t=' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
       }
-      
+
       var xhr = new XMLHttpRequest();
       xhr.timeout = 15000; // 15 second timeout for slow connections (was 5s)
       xhr.open(method, url, true);
-      
+
       // Aggressive no-cache headers
       xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate, max-age=0');
       xhr.setRequestHeader('Pragma', 'no-cache');
       xhr.setRequestHeader('Expires', '-1');
-      
+
+      // Set Content-Type for POST requests with body
+      if (method === 'POST' && body) {
+        xhr.setRequestHeader('Content-Type', 'application/json');
+      }
+
       // Add API key header if authentication is required
       if (apiKeyRequired && apiKey) {
         xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
@@ -426,8 +441,8 @@
         window.connectionLost = true;
           showConnectionBanner();
       };
-      
-      xhr.send();
+
+      xhr.send(body || null);
     } catch(e) {
       console.error('API request error:', e);
       window.connectionLost = true;

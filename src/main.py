@@ -455,6 +455,24 @@ def update_movement_threshold() -> Response:
         logger.exception('Failed to update movement threshold')
         return jsonify({'error': str(e)}), 500
 
+@api_bp.route('/api/config/battery-threshold', methods=['POST'])
+@require_api_key
+@check_rate_limit
+def update_battery_threshold() -> Response:
+    """Update the low battery threshold in memory."""
+    try:
+        data = request.get_json()
+        threshold = int(data.get('threshold', 25))
+        if threshold <= 0 or threshold > 100:
+            return jsonify({'error': 'threshold must be between 1 and 100'}), 400
+        # Update in memory
+        config.LOW_BATTERY_THRESHOLD = threshold
+        logger.info(f'Low battery threshold updated to {threshold}%')
+        return jsonify({'success': True, 'threshold': threshold})
+    except Exception as e:
+        logger.exception('Failed to update battery threshold')
+        return jsonify({'error': str(e)}), 500
+
 @api_bp.route('/api/test-alert', methods=['POST'])
 @require_api_key
 @check_rate_limit
