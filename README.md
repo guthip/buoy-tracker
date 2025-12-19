@@ -2,6 +2,8 @@
 
 A real-time web interface for tracking Meshtastic mesh network nodes on a live map.
 
+**Live Demo:** [https://buoy-tracker.sequoiayc.org](https://buoy-tracker.sequoiayc.org)
+
 ## The Problem
 
 Racing buoys anchored in tidal waters face a critical risk: mooring chains wear out and break, causing buoys to break free and drift with the tide and wind. Once adrift, expensive buoys are difficult to recover—and AirTags on the buoys only work within Bluetooth range.
@@ -681,17 +683,33 @@ Then leave `smtp_username` and `smtp_password` blank in `tracker.config`.
 
 ### Testing
 
-Test your email configuration with these endpoints:
+Test your email configuration using the `/api/test-alert` endpoint.
 
+**For Local/Development Environment:**
+
+If you have **NO api_key** set in `secret.config` (development mode):
 ```bash
-# Test configuration
-curl -X POST http://localhost:5103/api/test-alert
+curl -X POST http://localhost:5103/api/test-alert \
+  -H "Content-Type: application/json" \
+  -d '{"type": "movement"}'
+```
 
-# Test movement alert  
-curl -X POST http://localhost:5103/api/test-alert-movement
+If you **DO have an api_key** in `secret.config` (most common):
+```bash
+curl -X POST http://localhost:5103/api/test-alert \
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "movement"}'
+```
 
-# Test battery alert
-curl -X POST http://localhost:5103/api/test-alert-battery
+**Valid alert types:** `"movement"`, `"battery"`, `"offline"`
+
+**For Production/Remote Environment:**
+```bash
+curl -X POST https://your-domain.com/api/test-alert \
+  -H "Authorization: Bearer YourPasswordHere" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "movement"}'
 ```
 
 ## API Reference
@@ -726,24 +744,30 @@ curl -X POST http://localhost:5103/api/test-alert-battery
   - Returns: `{"success": true, "threshold": 100}`
 
 - **`POST /api/test-alert`** - Send test alert email to verify email configuration
-  - Body: `{"type": "movement"}` or `{"type": "battery"}` (optional, defaults to "movement")
+  - Body: `{"type": "movement"}`, `{"type": "battery"}`, or `{"type": "offline"}` (optional, defaults to "movement")
   - Returns: `{"success": true, "message": "Test movement alert sent"}`
   - Requires: Email alerts enabled in tracker.config (`[alerts] enabled = true`)
+  - Authentication: Required if `api_key` is set in `secret.config` (bypassed on localhost if `ENV=development`)
   - Use cases: Verify SMTP configuration, test email delivery, check alert formatting
 
-**Example:**
+**Examples:**
 ```bash
-# Test movement alert
+# Production/Remote - Always requires Authorization header
 curl -X POST https://your-domain.com/api/test-alert \
   -H "Authorization: Bearer YourPasswordHere" \
   -H "Content-Type: application/json" \
   -d '{"type": "movement"}'
 
-# Test battery alert
-curl -X POST https://your-domain.com/api/test-alert \
-  -H "Authorization: Bearer YourPasswordHere" \
+# Localhost with api_key configured - Still requires Authorization
+curl -X POST http://localhost:5103/api/test-alert \
+  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
   -H "Content-Type: application/json" \
   -d '{"type": "battery"}'
+
+# Localhost without api_key in secret.config - No auth needed
+curl -X POST http://localhost:5103/api/test-alert \
+  -H "Content-Type: application/json" \
+  -d '{"type": "offline"}'
 ```
 
 ## Project Structure

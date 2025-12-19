@@ -65,6 +65,7 @@ tracker.config
 tracker.config.local
 tracker.config.mijnwolk
 tracker.config.syc
+*.marton
 secret.config
 secret.config.mijnwolk
 secret.config.syc
