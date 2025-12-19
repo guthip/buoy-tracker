@@ -110,7 +110,11 @@ movement_threshold = 100
 #   (1) node_id
 #   (2) node_id = label
 #   (3) node_id = label,home_lat,home_lon
+#   (4) node_id = label,home_lat,home_lon,has_power_sensor
 # Home location and label are optional - if provided, they will be shown before receiving packets
+# has_power_sensor: Set to 'true' for nodes with INA260/INA219 power monitoring (more accurate voltage)
+#   - Nodes with power sensors show voltage instead of battery % in displays
+#   - Battery alerts use voltage thresholds instead of percentage
 # Coordinates support two formats:
 #   - Decimal degrees: 37.5637125,-122.2189855
 #   - Degrees-minutes: N37° 33.81', W122° 13.13'
@@ -118,8 +122,9 @@ movement_threshold = 100
 #   Format 1 (auto-discover): 3681533965
 #   Format 2 (with label): 3681533965 = SYCS
 #   Format 3 (with label and location): 3681533965 = SYCS,N37° 33.81',W122° 13.13'
+#   Format 4 (with power sensor): 3681533965 = SYCS,N37° 33.81',W122° 13.13',true
 # Add your special nodes here
-# Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13'
+# Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13',true
 
 [alerts]
 # Email alert settings for movement notifications

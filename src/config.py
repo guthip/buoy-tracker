@@ -223,18 +223,20 @@ if config.has_section('special_nodes'):
         if not key.isdigit():
             continue
         try:
-            # Parse three flexible formats:
+            # Parse four flexible formats:
             # (1) node_id (value is empty)
             # (2) node_id = label (value is label)
             # (3) node_id = label,home_lat,home_lon (value is comma-separated)
+            # (4) node_id = label,home_lat,home_lon,has_power_sensor
 
             node_id = int(key)
             label = None
             home_lat = None
             home_lon = None
+            has_power_sensor = False
 
             if value and value.strip():
-                # Has value - could be format 2 or 3
+                # Has value - could be format 2, 3, or 4
                 # Remove any inline comments
                 value_clean = value.split('#')[0].strip()
 
@@ -251,6 +253,10 @@ if config.has_section('special_nodes'):
                         except (ValueError, IndexError) as e:
                             logger.warning(f"Invalid coordinates for node {node_id} ({label}): {e}. Will use first position as origin.")
 
+                    # Optional power sensor flag in part 4
+                    if len(parts) >= 4:
+                        has_power_sensor = parts[3].lower() in ('true', '1', 'yes')
+
             # Check for duplicate node IDs
             if node_id in seen_node_ids:
                 logger.error(f"DUPLICATE special node ID {node_id} found in '{key}' and '{seen_node_ids[node_id]}' - second entry will be ignored!")
@@ -261,10 +267,11 @@ if config.has_section('special_nodes'):
                 'symbol': SPECIAL_NODE_SYMBOL,  # Use default symbol for all
                 'label': label,
                 'home_lat': home_lat,
-                'home_lon': home_lon
+                'home_lon': home_lon,
+                'has_power_sensor': has_power_sensor
             }
         except (ValueError, IndexError) as e:
-            logger.warning(f"Skipping invalid special_nodes entry '{key} = {value}': {e}. Expected formats: (1) node_id, (2) node_id = label, (3) node_id = label,latitude,longitude")
+            logger.warning(f"Skipping invalid special_nodes entry '{key} = {value}': {e}. Expected formats: (1) node_id, (2) node_id = label, (3) node_id = label,latitude,longitude, (4) node_id = label,latitude,longitude,has_power_sensor")
 
 # List of special node IDs for easy checking
 SPECIAL_NODE_IDS = list(SPECIAL_NODES.keys())
