@@ -1344,7 +1344,13 @@ def on_telemetry(json_data):
                             found_recent['rssi'] = rssi
                         if snr is not None and (found_recent.get('snr') is None or snr > found_recent['snr']):
                             found_recent['snr'] = snr
-                        logger.debug(f'Updated telemetry history for {node_id}: battery={found_recent["battery"]}%, rssi={found_recent["rssi"]}, snr={found_recent["snr"]}')
+                        # Update battery/voltage if it wasn't available before
+                        if found_recent.get('battery') is None:
+                            if _has_power_sensor(node_id):
+                                found_recent['battery'] = _get_node_voltage(node_id)
+                            else:
+                                found_recent['battery'] = nodes_data[node_id].get("battery")
+                        logger.debug(f'Updated telemetry history for {node_id}: battery={found_recent["battery"]}, rssi={found_recent["rssi"]}, snr={found_recent["snr"]}')
                     else:
                         # Create new entry
                         # For nodes with power sensors, store voltage instead of battery %
