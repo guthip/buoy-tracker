@@ -72,6 +72,37 @@ def _is_special_node(node_id):
     """Check if a node_id is in the special nodes list."""
     return node_id in config.SPECIAL_NODES
 
+def _has_power_sensor(node_id):
+    """Check if a node has external power monitoring hardware (INA260/INA219)."""
+    if node_id not in config.SPECIAL_NODES:
+        return False
+    return config.SPECIAL_NODES[node_id].get('has_power_sensor', False)
+
+def _get_node_voltage(node_id):
+    """
+    Get battery voltage for a node.
+    For nodes with power sensors, returns ch3_voltage from power_metrics.
+    For other nodes, returns voltage from device_metrics.
+    Returns None if no voltage available.
+    """
+    if node_id not in nodes_data:
+        return None
+
+    telemetry = nodes_data[node_id].get('telemetry', {})
+    if not isinstance(telemetry, dict):
+        return None
+
+    # For nodes with power sensors, prefer power_metrics.ch3_voltage
+    if _has_power_sensor(node_id):
+        power_metrics = telemetry.get('power_metrics', {})
+        voltage = power_metrics.get('ch3_voltage') or power_metrics.get('ch1_voltage')
+        if voltage is not None:
+            return voltage
+
+    # Fall back to device_metrics voltage
+    device_metrics = telemetry.get('device_metrics', {})
+    return device_metrics.get('voltage')
+
 # Track best packets by ID for deduplication
 _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_index}}}
 
@@ -1119,12 +1150,18 @@ def on_position(json_data):
                 # Only add to history if we haven't seen this rxTime before
                 if rx_time is not None and rx_time not in special_node_position_timestamps[node_id]:
                     _ensure_history_struct(node_id)
+                    # For nodes with power sensors, store voltage instead of battery %
+                    if _has_power_sensor(node_id):
+                        battery_value = _get_node_voltage(node_id)
+                    else:
+                        battery_value = nodes_data[node_id].get("battery")
+
                     entry = {
                         "ts": time.time(),
                         "lat": lat,
                         "lon": lon,
                         "alt": alt,
-                        "battery": nodes_data[node_id].get("battery"),
+                        "battery": battery_value,  # voltage for power sensor nodes, % for others
                         "rssi": json_data.get("rx_rssi"),
                         "snr": json_data.get("rx_snr")
                     }
@@ -1139,12 +1176,18 @@ def on_position(json_data):
                 else:
                     # No rxTime available, add anyway (shouldn't happen but be safe)
                     _ensure_history_struct(node_id)
+                    # For nodes with power sensors, store voltage instead of battery %
+                    if _has_power_sensor(node_id):
+                        battery_value = _get_node_voltage(node_id)
+                    else:
+                        battery_value = nodes_data[node_id].get("battery")
+
                     entry = {
                         "ts": time.time(),
                         "lat": lat,
                         "lon": lon,
                         "alt": alt,
-                        "battery": nodes_data[node_id].get("battery"),
+                        "battery": battery_value,  # voltage for power sensor nodes, % for others
                         "rssi": json_data.get("rx_rssi"),
                         "snr": json_data.get("rx_snr")
                     }
@@ -1304,12 +1347,18 @@ def on_telemetry(json_data):
                         logger.debug(f'Updated telemetry history for {node_id}: battery={found_recent["battery"]}%, rssi={found_recent["rssi"]}, snr={found_recent["snr"]}')
                     else:
                         # Create new entry
+                        # For nodes with power sensors, store voltage instead of battery %
+                        if _has_power_sensor(node_id):
+                            battery_value = _get_node_voltage(node_id)
+                        else:
+                            battery_value = nodes_data[node_id].get("battery")
+
                         entry = {
                             "ts": current_ts,
                             "lat": lat,
                             "lon": lon,
                             "alt": alt,
-                            "battery": nodes_data[node_id].get("battery"),
+                            "battery": battery_value,  # voltage for power sensor nodes, % for others
                             "rssi": rssi,
                             "snr": snr
                         }
@@ -1320,11 +1369,20 @@ def on_telemetry(json_data):
             
             # Check for battery alert if this is a special node
             if _is_special_node(node_id):
-                battery_level = nodes_data[node_id].get("battery")
-                if battery_level is not None and battery_level < config.LOW_BATTERY_THRESHOLD:
-                    from . import alerts
-                    node_data = nodes_data[node_id]
-                    alerts.send_battery_alert(node_id, node_data, battery_level)
+                # For nodes with power sensors, use voltage threshold (< 3.5V = low)
+                # For other nodes, use battery percentage threshold
+                if _has_power_sensor(node_id):
+                    voltage = _get_node_voltage(node_id)
+                    if voltage is not None and voltage < 3.5:
+                        from . import alerts
+                        node_data = nodes_data[node_id]
+                        alerts.send_battery_alert(node_id, node_data, voltage)
+                else:
+                    battery_level = nodes_data[node_id].get("battery")
+                    if battery_level is not None and battery_level < config.LOW_BATTERY_THRESHOLD:
+                        from . import alerts
+                        node_data = nodes_data[node_id]
+                        alerts.send_battery_alert(node_id, node_data, battery_level)
             
             # Save node data if it's a special node
             if _is_special_node(node_id):
@@ -1968,6 +2026,7 @@ def get_nodes():
             "origin_lon": origin_lon,
             "status": status,
             "is_special": is_special,
+            "has_power_sensor": _has_power_sensor(node_id) if is_special else False,
             "stale": stale,
             "has_fix": (data.get("latitude") is not None and data.get("longitude") is not None),
             "special_symbol": special_symbol,
