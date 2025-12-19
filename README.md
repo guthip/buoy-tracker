@@ -25,6 +25,12 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
 
 ## Features
 
+### Basic Interface
+![Basic Window](screenshots/basic%20window.png)
+
+### Full-Featured Interface
+![Full Featured Window](screenshots/full%20featured%20window.png)
+
 - **Real-time Node Tracking**: Live MQTT feed of mesh node positions
 - **Interactive Map**: Leaflet-based map with color-coded status markers
 - **Responsive Design**: Works seamlessly on desktop and mobile devices
