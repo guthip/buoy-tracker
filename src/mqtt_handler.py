@@ -80,10 +80,16 @@ def _has_power_sensor(node_id):
 
 def _get_node_voltage(node_id):
     """
-    Get battery voltage for a node.
-    For nodes with power sensors, returns ch3_voltage from power_metrics.
-    For other nodes, returns voltage from device_metrics.
-    Returns None if no voltage available.
+    Get battery voltage for a node based on configured voltage_channel.
+
+    For power sensor nodes (INA260/INA219):
+    - ONLY use power_metrics (ch3_voltage for battery, ch1_voltage for input)
+    - IGNORE device_metrics voltage/battery_level (meaningless ~100% reading)
+
+    For regular nodes:
+    - Use device_metrics voltage
+
+    Returns None if configured voltage source is not available.
     """
     if node_id not in nodes_data:
         return None
@@ -92,16 +98,27 @@ def _get_node_voltage(node_id):
     if not isinstance(telemetry, dict):
         return None
 
-    # For nodes with power sensors, prefer power_metrics.ch3_voltage
-    if _has_power_sensor(node_id):
-        power_metrics = telemetry.get('power_metrics', {})
-        voltage = power_metrics.get('ch3_voltage') or power_metrics.get('ch1_voltage')
-        if voltage is not None:
-            return voltage
+    # Get voltage channel from config (defaults to 'ch3_voltage' for power sensors, 'device_voltage' for others)
+    voltage_channel = 'device_voltage'  # Default for non-special nodes
+    if node_id in config.SPECIAL_NODES:
+        voltage_channel = config.SPECIAL_NODES[node_id].get('voltage_channel', 'device_voltage')
 
-    # Fall back to device_metrics voltage
-    device_metrics = telemetry.get('device_metrics', {})
-    return device_metrics.get('voltage')
+    # Get voltage from the configured channel ONLY
+    # No fallbacks - if the configured source isn't available, return None
+    if voltage_channel == 'device_voltage':
+        device_metrics = telemetry.get('device_metrics', {})
+        return device_metrics.get('voltage')
+    elif voltage_channel == 'ch3_voltage':
+        # Power sensor battery voltage - ignore device_metrics completely
+        power_metrics = telemetry.get('power_metrics', {})
+        return power_metrics.get('ch3_voltage')
+    elif voltage_channel == 'ch1_voltage':
+        # Power sensor input voltage - ignore device_metrics completely
+        power_metrics = telemetry.get('power_metrics', {})
+        return power_metrics.get('ch1_voltage')
+    else:
+        # Unknown channel, return None
+        return None
 
 # Track best packets by ID for deduplication
 _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_index}}}
@@ -298,20 +315,20 @@ def _record_gateway_connection(special_node_id, gateway_node_id, json_data, conf
     if special_node_id not in special_node_gateways:
         special_node_gateways[special_node_id] = {}
     
-    # Get gateway info from nodes_data
-    gateway_info = nodes_data.get(gateway_node_id, {})
-    
     # Mark this node as a gateway (it received a packet from a special node)
     if gateway_node_id not in nodes_data:
         nodes_data[gateway_node_id] = {}
     nodes_data[gateway_node_id]["is_gateway"] = True
     node_is_gateway[gateway_node_id] = True
     logger.debug(f"Node {gateway_node_id} marked as gateway (received from special node {special_node_id}, confidence={confidence})")
-    
+
+    # Get gateway info from nodes_data AFTER ensuring it exists
+    gateway_info = nodes_data.get(gateway_node_id, {})
+
     # Use field names that match frontend expectations (app.js line 1394-1397)
     connection_info = {
         "id": gateway_node_id,
-        "name": gateway_info.get("long_name") or "Unknown",
+        "name": gateway_info.get("long_name") or gateway_info.get("longName") or "Unknown",
         "lat": gateway_info.get("latitude"),
         "lon": gateway_info.get("longitude"),
         "rssi": json_data.get("rx_rssi"),
@@ -1025,7 +1042,15 @@ def on_nodeinfo(json_data):
                 nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
             
             logger.info(f'Updated nodeinfo for {node_id}: {nodes_data[node_id]["long_name"]}')
-            
+
+            # If this node is a gateway, update its name in all gateway connections
+            updated_name = nodes_data[node_id].get("long_name")
+            if updated_name and updated_name != "Unknown":
+                for special_id, gw_dict in special_node_gateways.items():
+                    if node_id in gw_dict:
+                        gw_dict[node_id]["name"] = updated_name
+                        logger.debug(f'Updated gateway name in connection: {node_id} -> {updated_name}')
+
             # Save node data if it's a special node
             if _is_special_node(node_id):
                 _save_special_nodes_data()
@@ -1244,8 +1269,29 @@ def on_telemetry(json_data):
             
             # Store channel name from topic
             nodes_data[node_id]["channel_name"] = channel_name
-            
-            nodes_data[node_id]["telemetry"] = payload
+
+            # Merge telemetry data to preserve power_metrics across multiple packets
+            # Power sensor nodes send device_metrics and power_metrics in separate packets
+            # We need to preserve both instead of overwriting
+            if "telemetry" not in nodes_data[node_id]:
+                nodes_data[node_id]["telemetry"] = {}
+
+            # Update timestamp
+            if "time" in payload:
+                nodes_data[node_id]["telemetry"]["time"] = payload["time"]
+
+            # Merge device_metrics if present
+            if "device_metrics" in payload:
+                if "device_metrics" not in nodes_data[node_id]["telemetry"]:
+                    nodes_data[node_id]["telemetry"]["device_metrics"] = {}
+                nodes_data[node_id]["telemetry"]["device_metrics"].update(payload["device_metrics"])
+
+            # Merge power_metrics if present (preserve across packets)
+            if "power_metrics" in payload:
+                if "power_metrics" not in nodes_data[node_id]["telemetry"]:
+                    nodes_data[node_id]["telemetry"]["power_metrics"] = {}
+                nodes_data[node_id]["telemetry"]["power_metrics"].update(payload["power_metrics"])
+
             nodes_data[node_id]["last_seen"] = time.time()
             # flexible battery extraction
             battery = None
@@ -1595,26 +1641,41 @@ def _on_mqtt_disconnect(client_obj, userdata, disconnect_flags, reason_code, pro
     """
     MQTT disconnect callback - called when broker connection is lost.
     Logs the disconnection for debugging and monitoring.
-    Attempts to reconnect after a brief delay.
+    Attempts to reconnect with exponential backoff retry.
     """
     global last_packet_time, client
     logger.warning(f'MQTT connection lost: {reason_code} ({disconnect_flags})')
-    
+
     # Clear the client reference so reconnection can work
     client = None
-    
+
     # Check if it's a failure (not a clean disconnect)
     try:
         is_failure = reason_code.is_failure if isinstance(reason_code.is_failure, bool) else reason_code.is_failure()
     except (AttributeError, TypeError):
         is_failure = True
-    
+
     if is_failure:
         logger.warning(f'Connection failed with reason: {reason_code}')
-        # Attempt reconnection after a short delay
-        logger.info('Attempting to reconnect to MQTT broker in 5 seconds...')
-        threading.Timer(5.0, lambda: connect_mqtt()).start()
-    
+        # Start reconnection with retry logic in background thread - NEVER give up
+        def reconnect_with_retry():
+            """Attempt reconnection with exponential backoff. Never gives up."""
+            attempt = 0
+            while True:
+                try:
+                    # Exponential backoff with max delay of 5 minutes
+                    delay = min(5 * (2 ** min(attempt, 6)), 300)  # Cap at 2^6 = 64, so max delay is 5 min
+                    logger.info(f'Reconnect attempt {attempt + 1} in {delay}s...')
+                    time.sleep(delay)
+                    connect_mqtt()
+                    logger.info('✅ Reconnection successful')
+                    break  # Exit loop on success
+                except Exception as e:
+                    logger.warning(f'Reconnect attempt {attempt + 1} failed: {e}')
+                    attempt += 1
+
+        threading.Thread(target=reconnect_with_retry, daemon=True, name='MQTT-Reconnect').start()
+
     # Reset packet tracking on disconnect
     last_packet_time = 0
 
@@ -1663,9 +1724,9 @@ def _on_mqtt_message(client_obj, userdata, msg):
         json_packet['channel_name'] = channel_name
         json_packet['mqtt_topic'] = msg.topic  # Store the MQTT topic for gateway extraction
         if 'from' not in json_packet:
-            json_packet['from'] = mp.from_
+            json_packet['from'] = getattr(mp, 'from')
         if 'to' not in json_packet:
-            json_packet['to'] = mp.to
+            json_packet['to'] = getattr(mp, 'to')
         if 'channel' not in json_packet:
             json_packet['channel'] = mp.channel
         
@@ -2015,9 +2076,27 @@ def get_nodes():
             if origin_lon is None:
                 origin_lon = special_info.get('home_lon')
         
+        # Get node name - prefer current data over potentially stale gateway connections
+        node_name = data.get("long_name") or data.get("longName")
+
+        # If we don't have a name from node's own data, check gateway connections
+        # But only if the current name is missing or "Unknown"
+        if not node_name or node_name == "Unknown":
+            # Check if this node appears in any special node's gateway connections
+            for gw_dict in special_node_gateways.values():
+                if node_id in gw_dict:
+                    gateway_name = gw_dict[node_id].get("name")
+                    if gateway_name and gateway_name != "Unknown":
+                        node_name = gateway_name
+                        break
+
+        # Final fallback
+        if not node_name:
+            node_name = "Unknown"
+
         node_info = {
             "id": node_id,
-            "name": data.get("long_name") or data.get("longName") or "Unknown",
+            "name": node_name,
             "short": data.get("short_name") or data.get("shortName") or "?",
             "lat": data.get("latitude"),
             "lon": data.get("longitude"),
@@ -2049,13 +2128,13 @@ def get_nodes():
             "distance_from_origin_m": data.get("distance_from_origin_m"),
         }
         
-        # Extract voltage from telemetry (snake_case from protobuf)
+        # Extract voltage using helper function (uses configured voltage_channel)
+        node_info["voltage"] = _get_node_voltage(node_id)
+
+        # Extract power current for power sensor nodes
         telemetry = data.get("telemetry", {})
         if isinstance(telemetry, dict):
             power_metrics = telemetry.get("power_metrics", {})
-            device_metrics = telemetry.get("device_metrics", {})
-            # Prefer ch3_voltage from power_metrics, fall back to voltage from device_metrics
-            node_info["voltage"] = power_metrics.get("ch3_voltage") or power_metrics.get("ch1_voltage") or device_metrics.get("voltage")
             node_info["power_current"] = power_metrics.get("ch3_current")
         
         # Check for low battery
@@ -2277,8 +2356,11 @@ def get_special_history(node_id: int, hours: int = None):
         # Deduplicate to one per data_limit_time window for slow-moving special nodes
         return _deduplicate_by_hour(filtered)
     
-    # Fallback: load from disk if in-memory cache is empty
-    # This handles the case where server was started cleanly (enable_persistence=false)
+    # Fallback: load from disk if in-memory cache is empty AND persistence is enabled
+    # If enable_persistence=false, return empty list (fresh start)
+    if not _should_persist():
+        return []
+
     try:
         path = Path(config.SPECIAL_HISTORY_PERSIST_PATH).parent / 'special_nodes.json'
         if path.exists():

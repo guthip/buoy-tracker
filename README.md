@@ -503,18 +503,25 @@ persist_path = data/special_history.json
 stale_after_hours = 12
 special_symbol = ⭐
 
-# Format: node_id = label,home_lat,home_lon
+# Format: node_id = label,home_lat,home_lon,has_power_sensor,voltage_channel
+#   - label: Display name for the node
+#   - home_lat, home_lon: Expected location (optional - if omitted, first position becomes origin)
+#   - has_power_sensor: 'true' for nodes with INA260/INA219 power sensor (shows voltage instead of battery %)
+#   - voltage_channel: Which voltage to use (optional - defaults: 'ch3_voltage' for power sensors, 'device_voltage' for others)
+#       * 'ch3_voltage' = Battery voltage (INA260 channel 3)
+#       * 'ch1_voltage' = Input voltage (INA260 channel 1, e.g., solar/USB)
+#       * 'device_voltage' = Device reported voltage
 # Coordinates support two formats:
-# 1. Decimal degrees: 37.5637125,-122.2189855
-# 2. Degrees-minutes: N37° 33.81', W122° 13.13'
+#   - Decimal degrees: 37.5637125,-122.2189855
+#   - Degrees-minutes: N37° 33.81', W122° 13.13'
 
 # Examples with decimal format
-3681533965 = SYCS,37.5637125,-122.2189855
+3681533965 = SYCS,37.5637125,-122.2189855,true
 492590216 = SYCE,37.5806826,-122.2175423
 
 # Examples with degrees-minutes format
-3681533965 = SYCS, N37° 33.81', W122° 13.13'
-2512106321 = SYCA, N37° 31.94', W122° 10.31'
+3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch3_voltage
+2512106321 = SYCA,N37° 31.94',W122° 10.31'
 ```
 
 **Coordinate Formats**:
@@ -530,10 +537,13 @@ If you omit home coordinates in the config, the system automatically learns the 
 ```ini
 [special_nodes]
 # With coordinates (fixed origin for movement tracking)
-3681533965 = SYCS, N37° 33.81', W122° 13.13'
+3681533965 = SYCS,N37° 33.81',W122° 13.13',true
 
 # Without coordinates (learns from first GPS position received)
 492590216 = SYCE
+
+# Label only (no location, no power sensor)
+2512106321 = SYCA
 ```
 Once a position is learned, movement alerts are triggered relative to that first position. The origin updates if you later add home coordinates to the config.
 

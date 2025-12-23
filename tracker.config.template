@@ -104,27 +104,30 @@ special_symbol = ⭐
 
 [special_nodes]
 # Highlight specific nodes with custom symbols and home positions
-# Movement threshold: distance in meters beyond which alerts trigger
+# Movement threshold: radius in meters beyond which movement alerts trigger
 movement_threshold = 100
-# Format options:
-#   (1) node_id
-#   (2) node_id = label
-#   (3) node_id = label,home_lat,home_lon
-#   (4) node_id = label,home_lat,home_lon,has_power_sensor
-# Home location and label are optional - if provided, they will be shown before receiving packets
-# has_power_sensor: Set to 'true' for nodes with INA260/INA219 power monitoring (more accurate voltage)
-#   - Nodes with power sensors show voltage instead of battery % in displays
-#   - Battery alerts use voltage thresholds instead of percentage
-# Coordinates support two formats:
+#
+# Format: node_id = label,home_lat,home_lon,has_power_sensor,voltage_channel
+#   - label: Display name for the node
+#   - home_lat, home_lon: Expected location (optional - if omitted, first position becomes origin)
+#   - has_power_sensor: 'true' for nodes with INA260/INA219 power sensor (shows voltage instead of battery %)
+#   - voltage_channel: Which voltage to use (optional - defaults: 'ch3_voltage' for power sensors, 'device_voltage' for others)
+#       * 'ch3_voltage' = Battery voltage (INA260 channel 3)
+#       * 'ch1_voltage' = Input voltage (INA260 channel 1, e.g., solar/USB)
+#       * 'device_voltage' = Device reported voltage
+#
+# Coordinate formats supported:
 #   - Decimal degrees: 37.5637125,-122.2189855
 #   - Degrees-minutes: N37° 33.81', W122° 13.13'
+#
 # Examples:
-#   Format 1 (auto-discover): 3681533965
-#   Format 2 (with label): 3681533965 = SYCS
-#   Format 3 (with label and location): 3681533965 = SYCS,N37° 33.81',W122° 13.13'
-#   Format 4 (with power sensor): 3681533965 = SYCS,N37° 33.81',W122° 13.13',true
+#   3681533965 = SYCS                                        (label only, auto-discover location)
+#   3681533965 = SYCS,N37° 33.81',W122° 13.13'               (with home location)
+#   3681533965 = SYCS,N37° 33.81',W122° 13.13',true          (with INA260 sensor, defaults to ch3_voltage)
+#   3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch1_voltage  (with sensor, monitor input voltage)
+#
 # Add your special nodes here
-# Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13',true
+# Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch3_voltage
 
 [alerts]
 # Email alert settings for movement notifications

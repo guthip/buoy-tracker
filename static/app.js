@@ -312,7 +312,25 @@
   window.map = null; // Will be set when map initializes
   var gatewayConnections = {}; // persistent historical gateway connections per node: {nodeId: Set of gateway IDs}
   var movedAlertShown = {}; // track one-time alerts per node id
-  
+
+  // Battery voltage/percentage conversion functions
+  // LiPo/Li-ion typical voltage curve: 4.2V (100%) to 3.0V (0%)
+  function voltageToPercentage(voltage) {
+    if (voltage == null) return null;
+    if (voltage >= 4.2) return 100;
+    if (voltage <= 3.0) return 0;
+    // Linear approximation between 3.0V and 4.2V
+    return Math.round(((voltage - 3.0) / (4.2 - 3.0)) * 100);
+  }
+
+  function percentageToVoltage(percentage) {
+    if (percentage == null) return null;
+    if (percentage >= 100) return 4.2;
+    if (percentage <= 0) return 3.0;
+    // Linear approximation between 0% and 100%
+    return 3.0 + (percentage / 100) * (4.2 - 3.0);
+  }
+
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback, body) {
     try {
@@ -839,7 +857,14 @@
       
       // Battery (green line)
       if (p.battery != null) {
-        var batY = scaleY(p.battery, 0, 100);
+        var batY;
+        if (hasPowerSensor) {
+          // Scale voltage: 2.8V to 4.3V range
+          batY = scaleY(p.battery, 2.8, 4.3);
+        } else {
+          // Scale battery percentage: 0% to 100%
+          batY = scaleY(p.battery, 0, 100);
+        }
         batteryPoints += (i === 0 ? 'M' : 'L') + x + ',' + batY + ' ';
       }
       
@@ -870,12 +895,19 @@
       // Build tooltip with each metric on a new line
       var tooltipLines = [];
       if (p.battery != null) {
+        var displayVoltage, displayBat;
         if (hasPowerSensor) {
           // For power sensor nodes, battery field contains voltage
-          tooltipLines.push('Voltage: ' + p.battery.toFixed(2) + 'V');
+          displayVoltage = p.battery;
+          displayBat = voltageToPercentage(displayVoltage);
         } else {
           // For other nodes, battery field contains percentage
-          tooltipLines.push('Batt: ' + Math.round(p.battery) + '%');
+          displayBat = Math.round(p.battery);
+          displayVoltage = p.voltage != null ? p.voltage : percentageToVoltage(displayBat);
+        }
+        // Always show both voltage and percentage
+        if (displayVoltage != null && displayBat != null) {
+          tooltipLines.push('Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)');
         }
       }
       if (p.rssi != null) tooltipLines.push('RSSI: ' + p.rssi + 'dBm');
@@ -1101,7 +1133,23 @@
       + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + solStr + '</div></div>'
       + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Battery Voltage"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
       + (batteryColor==='green'?'#4CAF50':batteryColor==='yellow'?'#FFEB3B':batteryColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + (voltage!==null?voltage.toFixed(2)+'V':'?') + '</div></div>';
+      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;line-height:1.2;">'
+      + (function() {
+          var displayVoltage = voltage;
+          var displayBat = bat;
+          // Calculate missing values
+          if (displayVoltage === null && displayBat !== null) {
+            displayVoltage = percentageToVoltage(displayBat);
+          } else if (displayBat === null && displayVoltage !== null) {
+            displayBat = voltageToPercentage(displayVoltage);
+          }
+          // Show both voltage and percentage
+          if (displayVoltage !== null && displayBat !== null) {
+            return displayVoltage.toFixed(2) + 'V<br>' + displayBat + '%';
+          }
+          return '?';
+        })()
+      + '</div></div>';
     
     // Only add RSSI and SNR indicators if show_gateways is enabled
     if (appFeatures.show_gateways) {
@@ -1350,20 +1398,25 @@
               var nodeIdHex = '!' + node.id.toString(16).padStart(8, '0');
               popup += '<br>ID: ' + node.id + ' (' + nodeIdHex + ')';
               
-              // Battery info with voltage if available
-              // For special nodes, prefer improved voltage if available (same as card)
-              if (node.is_special && node.improved_voltage != null) {
-                popup += '<br>Battery: ' + node.improved_voltage.toFixed(2) + 'V (' + bat2 + '%)';
-                if (node.battery_low) {
-                  popup += ' ⚠️ LOW';
-                }
-              } else if (node.voltage != null) {
-                popup += '<br>Battery: ' + node.voltage.toFixed(2) + 'V (' + bat2 + '%)';
+              // Battery/Voltage info
+              // Always show both voltage and percentage, calculating missing values
+              var displayVoltage = (node.is_special && node.improved_voltage != null) ? node.improved_voltage : node.voltage;
+              var displayBat = bat2;
+
+              // Calculate missing values
+              if (displayVoltage === null && displayBat !== null) {
+                displayVoltage = percentageToVoltage(displayBat);
+              } else if (displayBat === null && displayVoltage !== null) {
+                displayBat = voltageToPercentage(displayVoltage);
+              }
+
+              if (displayVoltage !== null && displayBat !== null) {
+                popup += '<br>Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)';
                 if (node.battery_low) {
                   popup += ' ⚠️ LOW';
                 }
               } else {
-                popup += '<br>Bat: ' + bat2 + '%';
+                popup += '<br>Battery: ?';
               }
               
               // Channel
@@ -1877,7 +1930,20 @@
                             }
                             
                             if (pnt.battery !== null && pnt.battery !== undefined) {
-                              popupText += '<br>Battery: ' + Math.round(pnt.battery) + '%';
+                              var displayVoltage, displayBat;
+                              if (node.has_power_sensor) {
+                                // For power sensor nodes, battery field contains voltage
+                                displayVoltage = pnt.battery;
+                                displayBat = voltageToPercentage(displayVoltage);
+                              } else {
+                                // For other nodes, battery field contains percentage
+                                displayBat = Math.round(pnt.battery);
+                                displayVoltage = pnt.voltage != null ? pnt.voltage : percentageToVoltage(displayBat);
+                              }
+                              // Always show both voltage and percentage
+                              if (displayVoltage != null && displayBat != null) {
+                                popupText += '<br>Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)';
+                              }
                             }
                             if (pnt.rssi !== null && pnt.rssi !== undefined) {
                               popupText += '<br>RSSI: ' + pnt.rssi + ' dBm';
@@ -2473,7 +2539,40 @@
           // Find the node to check if it has a power sensor
           var node = currentNodesData.find(function(n) { return n.id === nodeId; });
           var hasPowerSensor = node ? node.has_power_sensor : false;
-          var svg = buildSignalHistogramSVG(data.points, hasPowerSensor);
+
+          // For power sensor nodes: use current voltage from node data
+          // For regular nodes: fill null battery values with current battery
+          var displayData = data.points;
+          if (hasPowerSensor && node && node.voltage != null) {
+            // Replace all battery values with current voltage for power sensor nodes
+            displayData = data.points.map(function(point) {
+              return {
+                ts: point.ts,
+                lat: point.lat,
+                lon: point.lon,
+                alt: point.alt,
+                battery: node.voltage,  // Use current voltage for power sensor nodes (no batteryPct)
+                rssi: point.rssi,
+                snr: point.snr
+              };
+            });
+          } else if (!hasPowerSensor && node && node.battery != null) {
+            // Fill null battery values with current battery for regular nodes
+            displayData = data.points.map(function(point) {
+              return {
+                ts: point.ts,
+                lat: point.lat,
+                lon: point.lon,
+                alt: point.alt,
+                battery: point.battery != null ? point.battery : node.battery,
+                voltage: node.voltage,  // Add voltage for regular nodes
+                rssi: point.rssi,
+                snr: point.snr
+              };
+            });
+          }
+
+          var svg = buildSignalHistogramSVG(displayData, hasPowerSensor);
           container.innerHTML = svg;
           attachHistogramTooltips(container);
         } else {

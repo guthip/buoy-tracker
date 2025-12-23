@@ -223,20 +223,22 @@ if config.has_section('special_nodes'):
         if not key.isdigit():
             continue
         try:
-            # Parse four flexible formats:
+            # Parse five flexible formats:
             # (1) node_id (value is empty)
             # (2) node_id = label (value is label)
             # (3) node_id = label,home_lat,home_lon (value is comma-separated)
             # (4) node_id = label,home_lat,home_lon,has_power_sensor
+            # (5) node_id = label,home_lat,home_lon,has_power_sensor,voltage_channel
 
             node_id = int(key)
             label = None
             home_lat = None
             home_lon = None
             has_power_sensor = False
+            voltage_channel = None
 
             if value and value.strip():
-                # Has value - could be format 2, 3, or 4
+                # Has value - could be format 2, 3, 4, or 5
                 # Remove any inline comments
                 value_clean = value.split('#')[0].strip()
 
@@ -257,6 +259,14 @@ if config.has_section('special_nodes'):
                     if len(parts) >= 4:
                         has_power_sensor = parts[3].lower() in ('true', '1', 'yes')
 
+                    # Optional voltage_channel in part 5
+                    if len(parts) >= 5:
+                        voltage_channel = parts[4] if parts[4] else None
+
+            # Set default voltage_channel based on has_power_sensor if not explicitly specified
+            if voltage_channel is None:
+                voltage_channel = 'ch3_voltage' if has_power_sensor else 'device_voltage'
+
             # Check for duplicate node IDs
             if node_id in seen_node_ids:
                 logger.error(f"DUPLICATE special node ID {node_id} found in '{key}' and '{seen_node_ids[node_id]}' - second entry will be ignored!")
@@ -268,10 +278,11 @@ if config.has_section('special_nodes'):
                 'label': label,
                 'home_lat': home_lat,
                 'home_lon': home_lon,
-                'has_power_sensor': has_power_sensor
+                'has_power_sensor': has_power_sensor,
+                'voltage_channel': voltage_channel
             }
         except (ValueError, IndexError) as e:
-            logger.warning(f"Skipping invalid special_nodes entry '{key} = {value}': {e}. Expected formats: (1) node_id, (2) node_id = label, (3) node_id = label,latitude,longitude, (4) node_id = label,latitude,longitude,has_power_sensor")
+            logger.warning(f"Skipping invalid special_nodes entry '{key} = {value}': {e}. Expected formats: (1) node_id, (2) node_id = label, (3) node_id = label,latitude,longitude, (4) node_id = label,latitude,longitude,has_power_sensor, (5) node_id = label,latitude,longitude,has_power_sensor,voltage_channel")
 
 # List of special node IDs for easy checking
 SPECIAL_NODE_IDS = list(SPECIAL_NODES.keys())

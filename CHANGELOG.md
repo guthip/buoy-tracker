@@ -2,6 +2,97 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-22] - Battery Display Consistency & Bug Fixes
+
+### Fixed
+- **MQTT Protocol Error: `AttributeError: from_`**
+  - Fixed incorrect access to reserved keyword `from` in protobuf messages
+  - Changed `mp.from_` to `getattr(mp, 'from')` to avoid Python reserved word collision
+  - Also updated `mp.to` access for consistency
+  - Prevents MQTT message handler crashes when processing packets
+
+- **Gateway Node Names Missing in Cards**
+  - Fixed gateway nodes showing only node ID instead of name in cards
+  - Gateway names now properly propagated from NODE_INFO packets to all gateway connections
+  - Added code to update gateway connection names when NODE_INFO received
+  - Ensures consistency between gateway line popups and node cards
+
+- **Histogram Battery Line Incorrect for Power Sensor Nodes**
+  - Fixed battery voltage line being drawn at ~0V for power sensor nodes
+  - Battery line now correctly scaled 2.8V-4.3V range (matching the dots)
+  - Was scaling 3.82V on 0-100 scale, causing line to appear at bottom
+  - Histogram now shows correct voltage trends for INA260/INA219 equipped nodes
+
+### Changed
+- **Consistent Battery Display Across All Locations**
+  - All display locations now show BOTH voltage AND percentage for all nodes
+  - Added voltage-to-percentage conversion functions (3.0V=0%, 4.2V=100% linear)
+  - Missing value is calculated automatically for consistent display
+  - Updated locations:
+    - Card display: Shows "3.82V<br>64%" format
+    - Map popup: Shows "Battery: 3.82V (64%)" format
+    - Histogram tooltip: Shows "Battery: 3.82V (64%)" format
+    - Position trail popup: Shows "Battery: 3.82V (64%)" format
+  - For power sensor nodes: Voltage from data, percentage calculated
+  - For regular nodes: Percentage from data, voltage calculated (or uses actual if available)
+
+- **Alert Email Timezone Clarity**
+  - Movement alert emails now explicitly show "UTC" after timestamp
+  - Battery alert emails now explicitly show "UTC" after timestamp
+  - Format: `DETECTION TIME: 2025-12-22 15:30:45 UTC`
+  - Eliminates confusion about alert timing
+
+### Technical Details
+- Battery conversion uses linear approximation for LiPo/Li-ion voltage curve
+- Voltage range: 3.0V (0%) to 4.2V (100%)
+- Gateway name updates propagate immediately upon NODE_INFO receipt
+- All battery displays now consistent regardless of node type
+
+## [2025-12-19] - MQTT Reconnection Fix & Voltage Channel Configuration
+
+### Fixed
+- **Critical: MQTT Reconnection Failure**
+  - Fixed bug where single failed reconnection attempt would leave system dead for hours
+  - Previous behavior: After MQTT disconnect, one retry attempt at 5 seconds - if that failed, system gave up
+  - New behavior: Infinite retry with exponential backoff (5s, 10s, 20s, 40s... up to max 5 minutes)
+  - System now never gives up trying to reconnect - will persist until connection restored
+  - Resolves issue where network outages required manual intervention to recover
+- **INA260 Power Sensor Voltage Display**
+  - Nodes with INA260 sensors now show correct voltage channel (battery vs input)
+  - Previously, OR fallback could show input voltage instead of battery voltage
+  - Example: SYCS now correctly shows ~3.88V battery instead of ~4.26V input voltage
+
+### Added
+- **Configurable Voltage Source Selection**
+  - New `voltage_channel` parameter (5th field) in special nodes configuration
+  - Allows explicit selection of which voltage reading to display and store
+  - Options: `ch3_voltage` (battery), `ch1_voltage` (input/solar), `device_voltage` (device reported)
+  - Defaults: `ch3_voltage` for power sensor nodes, `device_voltage` for standard nodes
+  - Configuration example: `3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch3_voltage`
+
+### Changed
+- **Voltage Selection Logic**
+  - Removed automatic fallback logic (`ch3_voltage or ch1_voltage`)
+  - Now uses explicit configuration to select voltage source
+  - Prevents incorrect voltage display when multiple voltage readings available
+  - History storage uses configured voltage channel consistently
+  - Power sensor nodes ignore device_metrics voltage/battery (meaningless ~100% readings)
+- **Telemetry Data Handling**
+  - Changed from replacing entire telemetry object to merging data
+  - Preserves power_metrics across multiple TELEMETRY packets
+  - Critical for INA260 nodes that send device_metrics and power_metrics separately
+- **MQTT Reconnection Strategy**
+  - Changed from single retry to infinite retry loop
+  - Exponential backoff capped at 5 minutes between attempts
+  - Reconnection thread runs until success, never gives up
+
+### Documentation
+- Updated all `tracker.config` files with cleaner, more consistent format
+- Removed redundant "Format #" numbering in documentation
+- Added clear explanation of `has_power_sensor` and `voltage_channel` parameters
+- Updated README.md with new configuration examples
+- Fixed trail popup display to show voltage for power sensor nodes instead of battery percentage
+
 ## [2025-12-17] - v0.97f Performance Fix: Excessive Disk Writes
 
 ### Fixed
@@ -286,6 +377,11 @@ For reverse proxy deployments:
   - Modified `get_nodes()` API to return `gateway_connections` array instead of single `best_gateway`
   - Each gateway connection includes: id, name, lat, lon, rssi, snr, last_seen timestamp
   
+- **Persistence Configuration Bug**
+  - Fixed enable_persistence=false not being fully respected
+  - Issue: Disk fallback always loaded old data even when persistence was disabled
+  - Fix: Added check to return empty list when persistence disabled in history API endpoint
+  - Impact: System now truly starts fresh when enable_persistence=false
 - **Frontend Gateway Line Rendering**
   - Updated `app.js` to consume `gateway_connections` array from backend
   - Draws lines to ALL discovered gateway connections, not just the current one
