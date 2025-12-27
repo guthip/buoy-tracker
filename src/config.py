@@ -113,6 +113,7 @@ APP_VERSION = config.get('app', 'version', fallback='0.1')
 MQTT_BROKER = config.get('mqtt', 'broker', fallback='mqtt.bayme.sh')
 MQTT_PORT = config.getint('mqtt', 'port', fallback=1883)
 MQTT_ROOT_TOPIC = config.get('mqtt', 'root_topic', fallback='msh/US/bayarea/2/e/')
+MQTT_CHANNEL_NAME = config.get('mqtt', 'channel_name', fallback='MediumFast')
 # SECURITY: Try environment variables first, fallback to config file
 # This allows production deployments to keep secrets out of version control
 MQTT_USERNAME = os.getenv('MQTT_USERNAME') or config.get('mqtt', 'username', fallback='meshdev')
@@ -198,7 +199,6 @@ API_KEY = config.get('webapp', 'api_key', fallback=None)
 
 # Debug Configuration
 LOG_LEVEL = config.get('debug', 'log_level', fallback='INFO')
-RECENT_MESSAGE_BUFFER_SIZE = config.getint('debug', 'recent_message_buffer_size', fallback=200)
 
 # Battery Configuration
 LOW_BATTERY_THRESHOLD = config.getint('battery', 'low_battery_threshold', fallback=50)

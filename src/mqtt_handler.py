@@ -29,22 +29,22 @@ logger = logging.getLogger(__name__)
 
 # MQTT client
 client = None
+mqtt_was_connected = False  # Track if we were previously connected (to detect reconnections)
 
 # Dictionary to store node data: {node_id: {name, long_name, position, telemetry, last_seen}}
 nodes_data = {}
-# Ring buffer for recent raw messages for debugging
-recent_messages = deque(maxlen=config.RECENT_MESSAGE_BUFFER_SIZE)
 # Track if we've received any messages (more reliable than client.is_connected())
 message_received = False
 packets_received = False  # Track when we've received actual MQTT packets with data
 last_message_time = 0
 last_packet_time = 0  # Timestamp of last received MQTT packet (for detecting stale connections)
-PACKET_STALENESS_THRESHOLD = 300  # 5 minutes - if no packet in this time, consider connection stale
+
+# Staleness thresholds - different for all-nodes vs special-nodes-only mode
+PACKET_STALENESS_THRESHOLD_ALL_NODES = 300      # 5 minutes - when subscribed to all nodes
+PACKET_STALENESS_THRESHOLD_SPECIAL_ONLY = 3600  # 60 minutes - when subscribed to special nodes only
 
 # Special nodes history: node_id -> deque of {ts, lat, lon, alt}
 special_history = {}
-_last_history_save = -9999999  # No longer used - removed throttling
-_last_gateway_pruning = -9999999  # Initialize to far past so gateway pruning can run on first save  # Track when gateway pruning last ran
 
 # Store MQTT topic per node to extract channel name
 node_topics = {}
@@ -64,9 +64,17 @@ node_is_gateway = {}  # node_id -> bool (True if node is a gateway)
 # Tracks which gateways received packets from which special nodes
 special_node_gateways = {}
 
-def _should_persist():
-    """Check if persistence is enabled in config."""
-    return getattr(config, 'ENABLE_PERSISTENCE', True)
+# Gateway reliability cache: gateway_id -> {score, detection_count, avg_rssi, last_updated}
+# Updated when gateway connections change, used by get_nodes() for O(1) lookup
+gateway_reliability_cache = {}
+
+# Gateway node IDs cache: set of all node IDs that appear in any special node's gateways
+# Updated when gateway connections change, used by get_nodes() for O(1) is_gateway check
+all_gateway_node_ids = set()
+
+# Gateway info cache: gateway_id -> {name, lat, lon, rssi, snr, last_seen}
+# Stores most recent gateway info across all special nodes for quick lookup
+gateway_info_cache = {}
 
 def _is_special_node(node_id):
     """Check if a node_id is in the special nodes list."""
@@ -119,6 +127,168 @@ def _get_node_voltage(node_id):
     else:
         # Unknown channel, return None
         return None
+
+def _estimate_battery_from_voltage(voltage):
+    """
+    Estimate battery percentage from voltage using linear approximation.
+    LiPo/Li-ion cells: ~2.8V = 0%, ~4.25V = 100%
+
+    Args:
+        voltage: Battery voltage in volts
+
+    Returns:
+        Battery percentage (0-100) or None if voltage is None
+    """
+    if voltage is None or not isinstance(voltage, (int, float)):
+        return None
+
+    if voltage >= 4.25:
+        return 100
+    elif voltage <= 2.8:
+        return 0
+    else:
+        # Linear approximation: map 2.8V-4.25V to 0-100%
+        battery = int(((voltage - 2.8) / (4.25 - 2.8)) * 100)
+        return max(0, min(100, battery))  # Clamp to 0-100
+
+def _get_battery_value_for_history(node_id):
+    """
+    Get battery value for history storage.
+    For power sensor nodes: returns voltage in volts
+    For regular nodes: returns battery percentage
+
+    Args:
+        node_id: Node ID to get battery value for
+
+    Returns:
+        Battery value (voltage or percentage) or None
+    """
+    if _has_power_sensor(node_id):
+        return _get_node_voltage(node_id)
+    else:
+        return nodes_data[node_id].get("battery")
+
+def _find_recent_history_entry(node_id, current_ts, window_seconds=2):
+    """
+    Find the most recent history entry within a time window.
+
+    Args:
+        node_id: Node ID to search history for
+        current_ts: Current timestamp
+        window_seconds: Time window in seconds (default: 2)
+
+    Returns:
+        Most recent history entry dict if found within window, else None
+    """
+    if node_id not in special_history or len(special_history[node_id]) == 0:
+        return None
+
+    most_recent = special_history[node_id][-1]
+    if abs(most_recent['ts'] - current_ts) < window_seconds:
+        return most_recent
+    return None
+
+def _update_history_entry(entry, rssi, snr, battery_value):
+    """
+    Update an existing history entry with best signal values.
+    Only updates if new value is better (higher) than existing.
+
+    Args:
+        entry: History entry dict to update
+        rssi: New RSSI value (or None)
+        snr: New SNR value (or None)
+        battery_value: New battery value (or None)
+    """
+    # Update RSSI if better
+    if rssi is not None and (entry.get('rssi') is None or rssi > entry['rssi']):
+        entry['rssi'] = rssi
+
+    # Update SNR if better
+    if snr is not None and (entry.get('snr') is None or snr > entry['snr']):
+        entry['snr'] = snr
+
+    # Update battery if it wasn't available before
+    if entry.get('battery') is None and battery_value is not None:
+        entry['battery'] = battery_value
+
+def _add_telemetry_to_history(node_id, json_data):
+    """
+    Add or update telemetry data in special node history.
+    Creates new history entry or updates existing one if within 2-second window.
+
+    Args:
+        node_id: Node ID to add history for
+        json_data: Full MQTT packet data
+    """
+    # Guard clause: Not a special node? Skip.
+    if not _is_special_node(node_id):
+        return
+
+    # Guard clause: No valid position? Skip.
+    lat = nodes_data[node_id].get("lat")
+    lon = nodes_data[node_id].get("lon")
+    if lat is None or lon is None or (lat == 0 and lon == 0):
+        return
+
+    # Ensure history structure exists
+    _ensure_history_struct(node_id)
+
+    # Extract telemetry values
+    current_ts = time.time()
+    battery_value = _get_battery_value_for_history(node_id)
+    rssi = json_data.get("rx_rssi")
+    snr = json_data.get("rx_snr")
+
+    # Check if we have a recent entry to update
+    recent_entry = _find_recent_history_entry(node_id, current_ts)
+
+    if recent_entry:
+        # Update existing entry with best values
+        _update_history_entry(recent_entry, rssi, snr, battery_value)
+        logger.debug(f'Updated telemetry history for {node_id}: battery={recent_entry["battery"]}, rssi={recent_entry["rssi"]}, snr={recent_entry["snr"]}')
+    else:
+        # Create new history entry
+        entry = {
+            "ts": current_ts,
+            "lat": lat,
+            "lon": lon,
+            "alt": nodes_data[node_id].get("alt", 0),
+            "battery": battery_value,  # voltage for power sensor nodes, % for others
+            "rssi": rssi,
+            "snr": snr
+        }
+        special_history[node_id].append(entry)
+        logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}, rssi={entry["rssi"]}, snr={entry["snr"]}')
+
+    # Prune old history entries
+    _prune_history(node_id, now_ts=current_ts)
+
+def _check_battery_alert(node_id):
+    """
+    Check if battery alert should be sent for a special node.
+    Uses voltage threshold for power sensor nodes, percentage for others.
+
+    Args:
+        node_id: Node ID to check
+    """
+    # Only check alerts for special nodes
+    if not _is_special_node(node_id):
+        return
+
+    # Power sensor nodes: use voltage threshold (< 3.5V = low)
+    if _has_power_sensor(node_id):
+        voltage = _get_node_voltage(node_id)
+        if voltage is not None and voltage < 3.5:
+            from . import alerts
+            node_data = nodes_data[node_id]
+            alerts.send_battery_alert(node_id, node_data, voltage)
+    else:
+        # Regular nodes: use battery percentage threshold
+        battery_level = nodes_data[node_id].get("battery")
+        if battery_level is not None and battery_level < config.LOW_BATTERY_THRESHOLD:
+            from . import alerts
+            node_data = nodes_data[node_id]
+            alerts.send_battery_alert(node_id, node_data, battery_level)
 
 # Track best packets by ID for deduplication
 _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_index}}}
@@ -377,6 +547,9 @@ def _record_gateway_connection(special_node_id, gateway_node_id, json_data, conf
     else:
         logger.debug(f"Gateway connection: {special_node_id} → {gateway_node_id} ({connection_info['name']}) RSSI={incoming_rssi} (not best)")
 
+    # Update gateway reliability cache for this gateway
+    _update_gateway_reliability_cache_for_gateway(gateway_node_id)
+
 def _extract_gateway_from_packet(special_node_id, json_data):
     """
     Extract first-hop receiver node ID from MQTT topic in packets from a special node.
@@ -496,6 +669,49 @@ def _calculate_gateway_reliability_score(gateway_detections):
         "confidence_level": confidence_level
     }
 
+def _update_gateway_reliability_cache_for_gateway(gateway_id):
+    """
+    Update cached reliability score and info for a specific gateway.
+    Called when gateway connection data changes.
+
+    Args:
+        gateway_id: The gateway node ID to update cache for
+    """
+    global gateway_reliability_cache, all_gateway_node_ids, gateway_info_cache
+
+    # Collect all detections of this gateway across all special nodes
+    # Also find the most recent gateway info
+    all_detections = []
+    most_recent_info = None
+    for special_id, connections in special_node_gateways.items():
+        if gateway_id in connections:
+            gw_info = connections[gateway_id]
+            all_detections.append(gw_info)
+            # Keep the most recently seen gateway info
+            if most_recent_info is None or gw_info.get("last_seen", 0) > most_recent_info.get("last_seen", 0):
+                most_recent_info = gw_info
+
+    # Calculate reliability score
+    reliability = _calculate_gateway_reliability_score(all_detections)
+
+    # Cache the reliability result
+    gateway_reliability_cache[gateway_id] = {
+        "score": reliability["score"],
+        "detection_count": reliability["detection_count"],
+        "avg_rssi": reliability["avg_rssi"],
+        "confidence_level": reliability.get("confidence_level"),
+        "last_updated": time.time()
+    }
+
+    # Cache the most recent gateway info
+    if most_recent_info:
+        gateway_info_cache[gateway_id] = most_recent_info
+
+    # Update gateway node IDs set
+    all_gateway_node_ids.add(gateway_id)
+
+    logger.debug(f"Updated gateway reliability cache for {gateway_id}: score={reliability['score']}, detections={reliability['detection_count']}")
+
 
 def _prune_history(node_id, now_ts=None):
     """Prune old position history entries for a special node."""
@@ -525,346 +741,80 @@ def _haversine_m(lat1, lon1, lat2, lon2):
     except Exception:
         return None
 
-def _load_special_nodes_data():
+def _extract_node_name_from_payload(payload):
     """
-    Load unified special node data from single JSON file.
-    Structure: {node_id: {info: {...}, position_history: [...], packets: [...]}}
+    Extract node name from nodeinfo payload (handles various formats).
+
+    Args:
+        payload: Nodeinfo payload (dict or string)
+
+    Returns:
+        str: Extracted name or None
     """
-    logger.info("===== Loading unified special nodes data =====")
-    path = Path(config.SPECIAL_HISTORY_PERSIST_PATH).parent / 'special_nodes.json'
-    
-    # Try new unified file first
-    if path.exists():
+    # dict-like payloads
+    if isinstance(payload, dict):
+        # Try common name fields first
+        for k in ("longName", "longname", "long_name", "name", "deviceName", "displayName"):
+            v = payload.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        # Search nested values for a likely name
+        for v in payload.values():
+            if isinstance(v, str) and len(v.strip()) > 1 and any(c.isalpha() for c in v):
+                return v.strip()
+        return None
+
+    # string payloads: try JSON decode, fallback to simple parse
+    if isinstance(payload, str):
         try:
-            with path.open('r') as f:
-                data = json.load(f)
-            
-            loaded_nodes = 0
-            total_history = 0
-            total_packets = 0
-            
-            for k, node_data in data.items():
-                try:
-                    node_id = int(k)
-                    if not _is_special_node(node_id):
-                        continue
-                    
-                    # Load position history
-                    if 'position_history' in node_data:
-                        dq = deque()
-                        for e in node_data['position_history']:
-                            if all(x in e for x in ('ts', 'lat', 'lon')):
-                                dq.append({
-                                    'ts': float(e['ts']),
-                                    'lat': float(e['lat']),
-                                    'lon': float(e['lon']),
-                                    'alt': e.get('alt'),
-                                    'battery': e.get('battery'),
-                                    'rssi': e.get('rssi'),
-                                    'snr': e.get('snr')
-                                })
-                        special_history[node_id] = dq
-                        total_history += len(dq)
-                    
-                    # Load node info
-                    if 'info' in node_data and isinstance(node_data['info'], dict):
-                        nodes_data[node_id] = node_data['info']
-                        
-                        # Recalculate origin and movement based on CURRENT config
-                        special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
-                        home_lat = special_node_config.get('home_lat')
-                        home_lon = special_node_config.get('home_lon')
-                        
-                        if home_lat is not None and home_lon is not None:
-                            nodes_data[node_id]["origin_lat"] = home_lat
-                            nodes_data[node_id]["origin_lon"] = home_lon
-                            
-                            lat = nodes_data[node_id].get("latitude")
-                            lon = nodes_data[node_id].get("longitude")
-                            if lat is not None and lon is not None:
-                                dist = _haversine_m(home_lat, home_lon, lat, lon)
-                                nodes_data[node_id]["distance_from_origin_m"] = dist
-                                nodes_data[node_id]["moved_far"] = bool(dist >= getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0))
-                        
-                        # Restore channel if present
-                        if 'channel_name' in node_data['info']:
-                            special_node_channels[node_id] = node_data['info']['channel_name']
-                        
-                        # Restore last_position_update from history if missing
-                        if nodes_data[node_id].get("last_position_update") is None:
-                            if node_id in special_history and len(special_history[node_id]) > 0:
-                                most_recent = max(special_history[node_id], key=lambda x: x['ts'])
-                                nodes_data[node_id]["last_position_update"] = most_recent['ts']
-                                logger.info(f"Restored last_position_update for node {node_id} from history: {most_recent['ts']}")
-                        
-                        # Estimate battery from voltage if needed
-                        if nodes_data[node_id].get("battery") is None:
-                            voltage = None
-                            telemetry = nodes_data[node_id].get("telemetry", {})
-                            if telemetry:
-                                power_metrics = telemetry.get('power_metrics', {})
-                                voltage = power_metrics.get('ch3_voltage') or power_metrics.get('ch1_voltage')
-                            if voltage and isinstance(voltage, (int, float)):
-                                # Use realistic lithium cell range (2.8V-4.25V)
-                                if voltage >= 4.25:
-                                    battery = 100
-                                elif voltage <= 2.8:
-                                    battery = 0
-                                else:
-                                    battery = int(((voltage - 2.8) / (4.25 - 2.8)) * 100)
-                                    battery = max(0, min(100, battery))
-                                nodes_data[node_id]["battery"] = battery
-                    
-                    # Load ALL packets (no limit)
-                    if 'packets' in node_data and isinstance(node_data['packets'], list):
-                        special_node_packets[node_id] = node_data['packets']
-                        total_packets += len(node_data['packets'])
-                        
-                        if node_data['packets']:
-                            special_node_last_packet[node_id] = node_data['packets'][-1].get('timestamp', 0)
-                    
-                    # Load gateway connections
-                    if 'gateways' in node_data and isinstance(node_data['gateways'], dict):
-                        # Convert string keys to int keys for consistency with runtime gateway detection
-                        gateways_with_int_keys = {}
-                        for gateway_id_str, gw_info in node_data['gateways'].items():
-                            gw_id_int = int(gateway_id_str)
-                            gateways_with_int_keys[gw_id_int] = gw_info
-                            node_is_gateway[gw_id_int] = True
-                            # Create nodes_data entry for gateway so it appears in get_nodes()
-                            if gw_id_int not in nodes_data:
-                                nodes_data[gw_id_int] = {}
-                            nodes_data[gw_id_int]["is_gateway"] = True
-                            # Store gateway connection info in nodes_data for display
-                            if isinstance(gw_info, dict):
-                                nodes_data[gw_id_int]["rx_rssi"] = gw_info.get("rssi")
-                                nodes_data[gw_id_int]["rx_snr"] = gw_info.get("snr")
-                                nodes_data[gw_id_int]["last_seen"] = gw_info.get("last_seen", time.time())
-                            logger.debug(f"Restored gateway {gateway_id_str} for special node {node_id}")
-                        special_node_gateways[node_id] = gateways_with_int_keys
-                    
-                    loaded_nodes += 1
-                    
-                except Exception as e:
-                    logger.warning(f"Error loading data for node {k}: {e}")
-                    continue
-            
-            logger.info(f"✅ Loaded unified data: {loaded_nodes} nodes, {total_history} history points, {total_packets} packets")
-            return
-            
-        except Exception as e:
-            logger.error(f"❌ Failed to load unified special nodes data from {path}")
-            logger.error(f"   Error: {type(e).__name__}: {e}")
-            if isinstance(e, json.JSONDecodeError):
-                logger.error(f"   JSON error at line {e.lineno}, column {e.colno}")
-                try:
-                    with path.open('r') as f:
-                        lines = f.readlines()
-                        if e.lineno - 1 < len(lines):
-                            logger.error(f"   Line {e.lineno}: {lines[e.lineno - 1].rstrip()}")
-                except:
-                    pass
-            logger.warning(f"   Starting fresh with empty data")
-            # Continue with empty data structures
-            logger.info("Starting with empty data - unified file will be created on first save")
-
-def _save_special_nodes_data(force=False):
-    """
-    Save unified special node data to single JSON file.
-    Structure: {node_id: {info: {...}, position_history: [...], packets: [...]}}
-    Applies retention cleanup to prevent file size explosion:
-    - Position history: 7 days
-    - Packets: 7 days  
-    - Gateways: quality-based (7 days for high reliability, 1 day for low)
-    Gateway pruning evaluation runs once per hour to avoid recalculation overhead.
-    """
-    global _last_gateway_pruning
-    now_ts = time.time()
-    
-    # Determine if we should run gateway pruning (once per hour)
-    run_gateway_pruning = force or (now_ts - _last_gateway_pruning) >= 3600
-    
-    logger.debug(f"_save_special_nodes_data called (force={force}, run_pruning={run_gateway_pruning})")
-    
-    try:
-        path = Path(config.SPECIAL_HISTORY_PERSIST_PATH).parent / 'special_nodes.json'
-        path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # 7-day retention: cutoff timestamp for old packets
-        retention_days = 7
-        cutoff_time = now_ts - (retention_days * 24 * 3600)
-        
-        data = {}
-        total_removed = 0
-        
-        for node_id in config.SPECIAL_NODE_IDS:
-            node_data = {}
-            
-            # Save node info
-            if node_id in nodes_data:
-                node_data['info'] = nodes_data[node_id]
-            elif node_id in special_node_channels:
-                node_data['info'] = {'channel_name': special_node_channels[node_id]}
-            
-            # Save position history with retention cleanup
-            if node_id in special_history:
-                history_list = list(special_history[node_id])
-                before_count = len(history_list)
-                # Keep only recent position history
-                recent_history = [h for h in history_list if h.get('ts', 0) >= cutoff_time]
-                node_data['position_history'] = recent_history
-                removed = before_count - len(recent_history)
-                if removed > 0:
-                    total_removed += removed
-                    # Update in-memory structure
-                    special_history[node_id] = deque(recent_history, maxlen=10000)
-            
-            # Save packets with 7-day retention
-            if node_id in special_node_packets:
-                before_count = len(special_node_packets[node_id])
-                # Keep only packets from last 7 days
-                recent_packets = [p for p in special_node_packets[node_id] if p.get('timestamp', 0) >= cutoff_time]
-                node_data['packets'] = recent_packets
-                removed = before_count - len(recent_packets)
-                if removed > 0:
-                    total_removed += removed
-                    # Update in-memory structure
-                    special_node_packets[node_id] = recent_packets
-            
-            # Save gateway connections with QUALITY-BASED retention
-            # High reliability (score 70+): 7 days
-            # Medium reliability (score 50-69): 3 days
-            # Low reliability (score < 50): 1 day
-            # NOTE: Pruning only runs hourly to avoid frequent recalculation
-            if node_id in special_node_gateways and special_node_gateways[node_id]:
-                gateways = special_node_gateways[node_id]
-                recent_gateways = {}
-                
-                if run_gateway_pruning:
-                    # Full pruning: evaluate retention for all gateways
-                    for gw_id, gw_info in gateways.items():
-                        last_seen = gw_info.get('last_seen', 0)
-                        reliability_score = gw_info.get('reliability_score', 0)
-                        
-                        # Determine retention period based on reliability score
-                        if reliability_score >= 70:
-                            # High reliability: keep for 7 days
-                            retention_seconds = 7 * 24 * 3600
-                        elif reliability_score >= 50:
-                            # Medium reliability: keep for 3 days
-                            retention_seconds = 3 * 24 * 3600
-                        else:
-                            # Low reliability: keep for 1 day
-                            retention_seconds = 1 * 24 * 3600
-                        
-                        tier_cutoff = now_ts - retention_seconds
-                        
-                        # Keep gateway if still within its retention window
-                        if last_seen >= tier_cutoff:
-                            recent_gateways[gw_id] = gw_info
-                    
-                    if recent_gateways:
-                        node_data['gateways'] = recent_gateways
-                    
-                    # Clean up in-memory structure (remove aged out gateways)
-                    if len(recent_gateways) < len(gateways):
-                        aged_out = set(gateways.keys()) - set(recent_gateways.keys())
-                        # Clear is_gateway flag for nodes that no longer have active connections
-                        for aged_gw_id in aged_out:
-                            # Check if this gateway still has connections from OTHER special nodes
-                            has_other_connections = False
-                            for other_special_id, other_gateways in special_node_gateways.items():
-                                if other_special_id != node_id and aged_gw_id in other_gateways:
-                                    gw_info_other = other_gateways[aged_gw_id]
-                                    last_seen_other = gw_info_other.get('last_seen', 0)
-                                    reliability_score_other = gw_info_other.get('reliability_score', 0)
-                                    
-                                    # Check if it's within its retention window in the OTHER node's context
-                                    if reliability_score_other >= 70:
-                                        retention_seconds = 7 * 24 * 3600
-                                    elif reliability_score_other >= 50:
-                                        retention_seconds = 3 * 24 * 3600
-                                    else:
-                                        retention_seconds = 1 * 24 * 3600
-                                    
-                                    tier_cutoff = now_ts - retention_seconds
-                                    if last_seen_other >= tier_cutoff:
-                                        has_other_connections = True
-                                        break
-                            
-                            # Only clear is_gateway if no other active connections exist
-                            if not has_other_connections:
-                                if aged_gw_id in nodes_data and 'is_gateway' in nodes_data[aged_gw_id]:
-                                    del nodes_data[aged_gw_id]['is_gateway']
-                        
-                        # Update in-memory structure
-                        special_node_gateways[node_id] = recent_gateways
-                else:
-                    # Between pruning intervals: just save all current gateways
-                    node_data['gateways'] = gateways
-            
-            if node_data:  # Only save if we have some data
-                data[str(node_id)] = node_data
-        
-        # Atomic write: write to temp file first, then rename to prevent corruption on crash
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False, suffix='.tmp') as tmp:
-            json.dump(data, tmp, indent=2)
-            tmp_path = tmp.name
-
-        # Set file permissions to 640 (rw-r-----) before rename
-        # tempfile creates files with 600 by default, ignoring umask
-        os.chmod(tmp_path, 0o640)
-
-        # Atomic rename (overwrites destination on POSIX systems)
-        Path(tmp_path).replace(path)
-        
-        # Update pruning timer if we just ran pruning
-        if run_gateway_pruning:
-            _last_gateway_pruning = now_ts
-        
-        # Count totals for logging
-        total_history = sum(len(node_data.get('position_history', [])) for node_data in data.values())
-        total_packets = sum(len(node_data.get('packets', [])) for node_data in data.values())
-        total_gateways = sum(len(node_data.get('gateways', {})) for node_data in data.values())
-        if total_removed > 0:
-            logger.info(f"✅ Saved unified data: {len(data)} nodes, {total_history} history points, {total_packets} packets, {total_gateways} gateways (removed {total_removed} old entries)")
-        else:
-            logger.debug(f"✅ Saved unified data: {len(data)} nodes, {total_history} history points, {total_packets} packets, {total_gateways} gateways")
-        
-    except Exception as e:
-        logger.warning(f"Failed to save unified special nodes data: {e}")
-
-# Load any existing data on import using unified loader
-if _should_persist():
-    _load_special_nodes_data()
-
-
-def add_recent(json_data):
-    try:
-        global message_received, packets_received, last_message_time
-        message_received = True
-        packets_received = True  # We've received an actual MQTT packet
-        last_message_time = time.time()
-        # store a lightweight copy with timestamp
-        recent_messages.appendleft({
-            "ts": time.time(),
-            "msg": json_data
-        })
-    except Exception:
-        # be defensive: ignore any non-serializable parts
-        try:
-            recent_messages.appendleft({"ts": time.time(), "msg": str(json_data)})
+            parsed = json.loads(payload)
+            return _extract_node_name_from_payload(parsed)  # Recurse with parsed dict
         except Exception:
-            pass
+            # try common delimiter
+            if ":" in payload:
+                return payload.split(":", 1)[1].strip()
+            return payload.strip()
+    return None
+
+def _load_gateways_from_saved_data(node_id, gateways_dict):
+    """
+    Load gateway connections for a special node from saved data.
+    Updates special_node_gateways, node_is_gateway, and nodes_data.
+
+    Args:
+        node_id: The special node ID
+        gateways_dict: Dictionary of gateway data from saved file
+    """
+    if not isinstance(gateways_dict, dict):
+        return
+
+    # Convert string keys to int keys for consistency with runtime gateway detection
+    gateways_with_int_keys = {}
+    for gateway_id_str, gw_info in gateways_dict.items():
+        gw_id_int = int(gateway_id_str)
+        gateways_with_int_keys[gw_id_int] = gw_info
+        node_is_gateway[gw_id_int] = True
+
+        # Create nodes_data entry for gateway so it appears in get_nodes()
+        if gw_id_int not in nodes_data:
+            nodes_data[gw_id_int] = {}
+        nodes_data[gw_id_int]["is_gateway"] = True
+
+        # Store gateway connection info in nodes_data for display
+        if isinstance(gw_info, dict):
+            nodes_data[gw_id_int]["rx_rssi"] = gw_info.get("rssi")
+            nodes_data[gw_id_int]["rx_snr"] = gw_info.get("snr")
+            nodes_data[gw_id_int]["last_seen"] = gw_info.get("last_seen", time.time())
+
+        logger.debug(f"Restored gateway {gateway_id_str} for special node {node_id}")
+
+    special_node_gateways[node_id] = gateways_with_int_keys
+
+    # Update gateway caches for all loaded gateways
+    for gw_id in gateways_with_int_keys.keys():
+        _update_gateway_reliability_cache_for_gateway(gw_id)
 
 
-def get_recent_messages(limit=100):
-    """Return recent messages as a list (most-recent first)."""
-    out = []
-    for item in list(recent_messages)[:limit]:
-        out.append({"ts": item["ts"], "msg": item["msg"]})
-    return out
 
 
 def _extract_modem_preset(obj):
@@ -915,8 +865,78 @@ def _extract_channel_from_topic(node_id):
                     return channel
     except Exception as e:
         logger.debug(f"Error extracting channel from topic {topic}: {e}")
-    
+
     return "Unknown"
+
+
+def _initialize_special_node_home_position(node_id):
+    """
+    Initialize special node position from configured home location if not yet set.
+
+    For special nodes without a GPS fix yet, this sets their initial position
+    to their configured home coordinates.
+
+    Args:
+        node_id: Special node ID to initialize
+    """
+    if "latitude" not in nodes_data[node_id] or nodes_data[node_id].get("latitude") is None:
+        special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
+        home_lat = special_node_config.get('home_lat')
+        home_lon = special_node_config.get('home_lon')
+        if home_lat is not None and home_lon is not None:
+            nodes_data[node_id]["latitude"] = home_lat
+            nodes_data[node_id]["longitude"] = home_lon
+            nodes_data[node_id]["origin_lat"] = home_lat
+            nodes_data[node_id]["origin_lon"] = home_lon
+            logger.debug(f'Initialized {node_id} position from home: {home_lat:.4f}, {home_lon:.4f}')
+
+
+def _update_gateway_names_in_connections(node_id, updated_name):
+    """
+    Update gateway name in all special node gateway connections.
+
+    When a gateway sends its NODE_INFO, propagate the name to all
+    special nodes that have this gateway in their connections.
+
+    Args:
+        node_id: Gateway node ID
+        updated_name: Updated name for the gateway
+    """
+    if not updated_name or updated_name == "Unknown":
+        return
+
+    for special_id, gw_dict in special_node_gateways.items():
+        if node_id in gw_dict:
+            gw_dict[node_id]["name"] = updated_name
+            logger.debug(f'Updated gateway name in connection: {node_id} -> {updated_name}')
+
+
+def _store_node_names(node_id, payload, extracted_name):
+    """
+    Store node name information (long_name, short_name, hw_model) in nodes_data.
+
+    Args:
+        node_id: Node ID to update
+        payload: Decoded payload (dict or other)
+        extracted_name: Name extracted from payload using _extract_node_name_from_payload()
+    """
+    short = None
+    if extracted_name:
+        # produce a short name if not explicit
+        if " " in extracted_name:
+            short = extracted_name.split()[0]
+        else:
+            short = extracted_name[:8]
+
+    # Safely extract fields from payload (might be dict or string)
+    if isinstance(payload, dict):
+        nodes_data[node_id]["long_name"] = extracted_name or payload.get("long_name") or "Unknown"
+        nodes_data[node_id]["short_name"] = short or payload.get("short_name") or "?"
+        nodes_data[node_id]["hw_model"] = payload.get("hw_model") or "Unknown"
+    else:
+        nodes_data[node_id]["long_name"] = extracted_name or "Unknown"
+        nodes_data[node_id]["short_name"] = short or "?"
+        nodes_data[node_id]["hw_model"] = "Unknown"
 
 
 def on_nodeinfo(json_data):
@@ -927,36 +947,27 @@ def on_nodeinfo(json_data):
     
     try:
         logger.debug(f'on_nodeinfo callback fired - processing message')
-        add_recent(json_data)
         node_id = json_data.get("from")
         channel = json_data.get("channel")
-        
-        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
-        # This ensures we never lose packet data due to processing errors
-        if node_id:
-            # Try to get channel_name from our extracted topic mapping first
-            channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
-            # Fallback to what the library provides (usually "Unknown")
-            if channel_name == "Unknown":
-                channel_name = json_data.get("channel_name", "Unknown")
-            
-            if _is_special_node(node_id):
-                special_node_last_packet[node_id] = time.time()
-                # Update channel name if different
-                if special_node_channels.get(node_id) != channel_name:
-                    special_node_channels[node_id] = channel_name
-                    _save_special_nodes_data()
-
-            # Track packet FIRST, before any other processing (only for special nodes)
-            if _is_special_node(node_id):
-                _track_special_node_packet(node_id, 'NODEINFO_APP', json_data)
-                _save_special_nodes_data()  # Save packet immediately
-        
-        # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
+
+        # Extract channel name once
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
         if channel_name == "Unknown":
             channel_name = json_data.get("channel_name", "Unknown")
+
+        # Check if special node once
+        is_special = _is_special_node(node_id) if node_id else False
+
+        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
+        # This ensures we never lose packet data due to processing errors
+        if is_special:
+            special_node_last_packet[node_id] = time.time()
+            # Update channel name if different
+            if special_node_channels.get(node_id) != channel_name:
+                special_node_channels[node_id] = channel_name
+            # Track packet FIRST, before any other processing
+            _track_special_node_packet(node_id, 'NODEINFO_APP', json_data)
         
         role = payload.get("role") if isinstance(payload, dict) else None
         
@@ -970,17 +981,8 @@ def on_nodeinfo(json_data):
                 nodes_data[node_id]["role"] = role
             
             # For special nodes: initialize position from home if not yet set
-            if _is_special_node(node_id):
-                if "latitude" not in nodes_data[node_id] or nodes_data[node_id].get("latitude") is None:
-                    special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
-                    home_lat = special_node_config.get('home_lat')
-                    home_lon = special_node_config.get('home_lon')
-                    if home_lat is not None and home_lon is not None:
-                        nodes_data[node_id]["latitude"] = home_lat
-                        nodes_data[node_id]["longitude"] = home_lon
-                        nodes_data[node_id]["origin_lat"] = home_lat
-                        nodes_data[node_id]["origin_lon"] = home_lon
-                        logger.debug(f'Initialized {node_id} position from home: {home_lat:.4f}, {home_lon:.4f}')
+            if is_special:
+                _initialize_special_node_home_position(node_id)
             
             # Store channel name from topic
             nodes_data[node_id]["channel_name"] = channel_name
@@ -990,49 +992,9 @@ def on_nodeinfo(json_data):
             if preset:
                 nodes_data[node_id]["modem_preset"] = preset
             
-            # Flexible extraction for name fields - payload shapes vary across nodes
-            def extract_name(p):
-                # dict-like payloads
-                if isinstance(p, dict):
-                    for k in ("longName", "longname", "long_name", "name", "deviceName", "displayName", "shortName", "short_name"):
-                        v = p.get(k)
-                        if isinstance(v, str) and v.strip():
-                            return v.strip()
-                    # search nested values for a likely name
-                    for v in p.values():
-                        if isinstance(v, str) and len(v.strip()) > 1 and any(c.isalpha() for c in v):
-                            return v.strip()
-                    return None
-                # string payloads: try JSON decode, fallback to simple parse
-                if isinstance(p, str):
-                    try:
-                        parsed = json.loads(p)
-                        return extract_name(parsed)
-                    except Exception:
-                        # try common delimiter
-                        if ":" in p:
-                            return p.split(":", 1)[1].strip()
-                        return p.strip()
-                return None
-
-            name = extract_name(payload)
-            short = None
-            if name:
-                # produce a short name if not explicit
-                if " " in name:
-                    short = name.split()[0]
-                else:
-                    short = name[:8]
-
-            # Safely extract fields from payload (might be dict or string)
-            if isinstance(payload, dict):
-                nodes_data[node_id]["long_name"] = name or payload.get("long_name") or "Unknown"
-                nodes_data[node_id]["short_name"] = short or payload.get("short_name") or "?"
-                nodes_data[node_id]["hw_model"] = payload.get("hw_model") or "Unknown"
-            else:
-                nodes_data[node_id]["long_name"] = name or "Unknown"
-                nodes_data[node_id]["short_name"] = short or "?"
-                nodes_data[node_id]["hw_model"] = "Unknown"
+            # Extract and store node name information
+            name = _extract_node_name_from_payload(payload)
+            _store_node_names(node_id, payload, name)
             nodes_data[node_id]["last_seen"] = time.time()
             
             # Store signal quality metrics if available
@@ -1045,15 +1007,8 @@ def on_nodeinfo(json_data):
 
             # If this node is a gateway, update its name in all gateway connections
             updated_name = nodes_data[node_id].get("long_name")
-            if updated_name and updated_name != "Unknown":
-                for special_id, gw_dict in special_node_gateways.items():
-                    if node_id in gw_dict:
-                        gw_dict[node_id]["name"] = updated_name
-                        logger.debug(f'Updated gateway name in connection: {node_id} -> {updated_name}')
+            _update_gateway_names_in_connections(node_id, updated_name)
 
-            # Save node data if it's a special node
-            if _is_special_node(node_id):
-                _save_special_nodes_data()
     except Exception as e:
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
@@ -1065,36 +1020,27 @@ def on_position(json_data):
     last_message_time = time.time()
     
     try:
-        add_recent(json_data)
         node_id = json_data.get("from")
         channel = json_data.get("channel")
-        
-        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
-        # This ensures we never lose packet data due to processing errors
-        if node_id:
-            # Try to get channel_name from our extracted topic mapping first
-            channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
-            # Fallback to what the library provides (usually "Unknown")
-            if channel_name == "Unknown":
-                channel_name = json_data.get("channel_name", "Unknown")
-            
-            if _is_special_node(node_id):
-                special_node_last_packet[node_id] = time.time()
-                # Update channel name if different
-                if special_node_channels.get(node_id) != channel_name:
-                    special_node_channels[node_id] = channel_name
-                    _save_special_nodes_data()
-
-            # Track packet FIRST, before any other processing (only for special nodes)
-            if _is_special_node(node_id):
-                _track_special_node_packet(node_id, 'POSITION_APP', json_data)
-                _save_special_nodes_data()  # Save packet immediately
-        
-        # NOW do the rest of the processing (which might have errors)
         payload = json_data["decoded"]["payload"]
+
+        # Extract channel name once
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
         if channel_name == "Unknown":
             channel_name = json_data.get("channel_name", "Unknown")
+
+        # Check if special node once
+        is_special = _is_special_node(node_id) if node_id else False
+
+        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
+        # This ensures we never lose packet data due to processing errors
+        if is_special:
+            special_node_last_packet[node_id] = time.time()
+            # Update channel name if different
+            if special_node_channels.get(node_id) != channel_name:
+                special_node_channels[node_id] = channel_name
+            # Track packet FIRST, before any other processing
+            _track_special_node_packet(node_id, 'POSITION_APP', json_data)
         
         if node_id and "latitude_i" in payload and "longitude_i" in payload:
             if node_id not in nodes_data:
@@ -1109,7 +1055,7 @@ def on_position(json_data):
             
             # For movement alerts on special nodes, track origin and distance
             try:
-                if node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
+                if is_special:
                     lat = payload["latitude_i"] / 1e7
                     lon = payload["longitude_i"] / 1e7
                     
@@ -1164,7 +1110,7 @@ def on_position(json_data):
                 nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
             
             # Record history for special nodes (deduplicate by rxTime to avoid retransmitted packets)
-            if node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
+            if is_special:
                 # Extract rxTime from the packet to deduplicate retransmissions
                 rx_time = json_data.get("rxTime")
                 
@@ -1193,8 +1139,7 @@ def on_position(json_data):
                     special_history[node_id].append(entry)
                     special_node_position_timestamps[node_id].add(rx_time)
                     _prune_history(node_id, now_ts=entry['ts'])
-                    
-                    _save_special_nodes_data()
+
                     logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
                 elif rx_time is not None:
                     logger.debug(f'Skipped duplicate position for {node_id} (rxTime: {rx_time} already seen)')
@@ -1218,12 +1163,112 @@ def on_position(json_data):
                     }
                     special_history[node_id].append(entry)
                     _prune_history(node_id, now_ts=entry['ts'])
-                    
-                    _save_special_nodes_data()
-            
+
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
         logger.error(f'❌ Error processing position: {e}', exc_info=True)
+
+
+def _extract_battery_and_voltage_from_telemetry(node_id, payload):
+    """
+    Extract battery percentage and voltage from telemetry payload.
+
+    Handles both power sensor nodes (INA260/INA219) and regular nodes.
+    Returns normalized values ready for storage.
+
+    Args:
+        node_id: Node ID to extract telemetry for
+        payload: Telemetry payload dictionary
+
+    Returns:
+        tuple: (battery_percent, voltage) where:
+            - battery_percent: int 0-100 or None
+            - voltage: float or None
+    """
+    battery = None
+    voltage = None
+
+    try:
+        if not isinstance(payload, dict):
+            return (None, None)
+
+        # Check if this is a power sensor node
+        if _has_power_sensor(node_id):
+            # Power sensor nodes: extract voltage from power_metrics ONLY
+            power_metrics = payload.get("power_metrics", {})
+            if isinstance(power_metrics, dict):
+                # Get configured voltage channel (ch3 for battery, ch1 for input)
+                voltage_channel = config.SPECIAL_NODES[node_id].get('voltage_channel', 'ch3_voltage')
+                if voltage_channel == 'ch3_voltage':
+                    voltage = power_metrics.get('ch3_voltage')
+                elif voltage_channel == 'ch1_voltage':
+                    voltage = power_metrics.get('ch1_voltage')
+
+                # Estimate battery percentage from voltage
+                if voltage is not None:
+                    battery = _estimate_battery_from_voltage(voltage)
+        else:
+            # Regular nodes: extract battery percentage from device_metrics
+            device_metrics = payload.get("device_metrics", {})
+            if isinstance(device_metrics, dict):
+                battery = device_metrics.get("battery_level")
+                voltage = device_metrics.get("voltage")
+
+                # If we have voltage but no battery, estimate it
+                if battery is None and voltage is not None:
+                    battery = _estimate_battery_from_voltage(voltage)
+
+        # Normalize battery to int and clamp to 0-100
+        if isinstance(battery, str) and battery.isdigit():
+            battery = int(battery)
+        if isinstance(battery, (float, int)):
+            battery = int(battery)
+            battery = max(0, min(100, battery))
+        else:
+            battery = None
+
+        # Normalize voltage
+        if voltage is not None and isinstance(voltage, (int, float)):
+            voltage = float(voltage)
+        else:
+            voltage = None
+
+    except Exception as e:
+        logger.debug(f"Error extracting battery/voltage for {node_id}: {e}")
+        return (None, None)
+
+    return (battery, voltage)
+
+
+def _merge_telemetry_payload(node_id, payload):
+    """
+    Merge telemetry payload into node's stored telemetry data.
+
+    Power sensor nodes send device_metrics and power_metrics in separate packets,
+    so we merge them instead of overwriting to preserve all data.
+
+    Args:
+        node_id: Node ID to update telemetry for
+        payload: Telemetry payload dictionary to merge
+    """
+    if "telemetry" not in nodes_data[node_id]:
+        nodes_data[node_id]["telemetry"] = {}
+
+    # Update timestamp
+    if "time" in payload:
+        nodes_data[node_id]["telemetry"]["time"] = payload["time"]
+
+    # Merge device_metrics if present
+    if "device_metrics" in payload:
+        if "device_metrics" not in nodes_data[node_id]["telemetry"]:
+            nodes_data[node_id]["telemetry"]["device_metrics"] = {}
+        nodes_data[node_id]["telemetry"]["device_metrics"].update(payload["device_metrics"])
+
+    # Merge power_metrics if present (preserve across packets)
+    if "power_metrics" in payload:
+        if "power_metrics" not in nodes_data[node_id]["telemetry"]:
+            nodes_data[node_id]["telemetry"]["power_metrics"] = {}
+        nodes_data[node_id]["telemetry"]["power_metrics"].update(payload["power_metrics"])
 
 
 def on_telemetry(json_data):
@@ -1231,38 +1276,30 @@ def on_telemetry(json_data):
     global message_received, last_message_time
     message_received = True
     last_message_time = time.time()
-    
-    try:
-        add_recent(json_data)
-        node_id = json_data.get("from")
-        
-        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
-        # This ensures we never lose packet data due to processing errors
-        if node_id:
-            # Try to get channel_name from our extracted topic mapping first
-            channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
-            # Fallback to what the library provides (usually "Unknown")
-            if channel_name == "Unknown":
-                channel_name = json_data.get("channel_name", "Unknown")
-            
-            if _is_special_node(node_id):
-                special_node_last_packet[node_id] = time.time()
-                # Update channel name if different
-                if special_node_channels.get(node_id) != channel_name:
-                    special_node_channels[node_id] = channel_name
-                    _save_special_nodes_data()
 
-            # Track packet FIRST, before any other processing (only for special nodes)
-            if _is_special_node(node_id):
-                _track_special_node_packet(node_id, 'TELEMETRY_APP', json_data)
-                _save_special_nodes_data()  # Save packet immediately
-        
-        # NOW do the rest of the processing (which might have errors)
+    try:
+        node_id = json_data.get("from")
         payload = json_data["decoded"]["payload"]
+
+        # Extract channel name ONCE (used throughout)
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
         if channel_name == "Unknown":
             channel_name = json_data.get("channel_name", "Unknown")
-        
+
+        # Check if special node ONCE (used throughout)
+        is_special = _is_special_node(node_id) if node_id else False
+
+        # IMPORTANT: Track and save packet IMMEDIATELY for special nodes, before any processing that might fail
+        # This ensures we never lose packet data due to processing errors
+        if node_id and is_special:
+            special_node_last_packet[node_id] = time.time()
+            # Update channel name if different
+            if special_node_channels.get(node_id) != channel_name:
+                special_node_channels[node_id] = channel_name
+            # Track packet FIRST, before any other processing
+            _track_special_node_packet(node_id, 'TELEMETRY_APP', json_data)
+
+        # NOW do the rest of the processing (which might have errors)
         if node_id:
             if node_id not in nodes_data:
                 nodes_data[node_id] = {}
@@ -1270,175 +1307,30 @@ def on_telemetry(json_data):
             # Store channel name from topic
             nodes_data[node_id]["channel_name"] = channel_name
 
-            # Merge telemetry data to preserve power_metrics across multiple packets
-            # Power sensor nodes send device_metrics and power_metrics in separate packets
-            # We need to preserve both instead of overwriting
-            if "telemetry" not in nodes_data[node_id]:
-                nodes_data[node_id]["telemetry"] = {}
-
-            # Update timestamp
-            if "time" in payload:
-                nodes_data[node_id]["telemetry"]["time"] = payload["time"]
-
-            # Merge device_metrics if present
-            if "device_metrics" in payload:
-                if "device_metrics" not in nodes_data[node_id]["telemetry"]:
-                    nodes_data[node_id]["telemetry"]["device_metrics"] = {}
-                nodes_data[node_id]["telemetry"]["device_metrics"].update(payload["device_metrics"])
-
-            # Merge power_metrics if present (preserve across packets)
-            if "power_metrics" in payload:
-                if "power_metrics" not in nodes_data[node_id]["telemetry"]:
-                    nodes_data[node_id]["telemetry"]["power_metrics"] = {}
-                nodes_data[node_id]["telemetry"]["power_metrics"].update(payload["power_metrics"])
+            # Merge telemetry payload (preserves power_metrics across multiple packets)
+            _merge_telemetry_payload(node_id, payload)
 
             nodes_data[node_id]["last_seen"] = time.time()
-            # flexible battery extraction
-            battery = None
-            try:
-                if isinstance(payload, dict):
-                    # Payload uses snake_case from protobuf (preserving_proto_field_name=True)
-                    device_metrics = payload.get("device_metrics", {})
-                    battery = device_metrics.get("battery_level")
-                    
-                    # Try ADMIN_APP format: deviceState.power.battery (non-standard, just in case)
-                    if battery is None:
-                        battery = payload.get("deviceState", {}).get("power", {}).get("battery")
-                    
-                    if battery is None:
-                        battery = payload.get("battery") or payload.get("batt")
-                    
-                    # If no battery level found, try to estimate from voltage
-                    if battery is None:
-                        voltage = None
-                        # Check power_metrics first (most accurate)
-                        power_metrics = payload.get("power_metrics", {})
-                        voltage = power_metrics.get("ch3_voltage") or power_metrics.get("ch1_voltage")
-                        
-                        # If no powerMetrics, check admin power format voltage
-                        if voltage is None:
-                            admin_voltage = payload.get("deviceState", {}).get("power", {}).get("voltage")
-                            if admin_voltage and isinstance(admin_voltage, (int, float)):
-                                voltage = admin_voltage / 1000.0  # Admin format uses mV
-                        
-                        # Fall back to device_metrics voltage
-                        if voltage is None:
-                            voltage = device_metrics.get("voltage")
-                        
-                        # Estimate battery percentage from voltage (Lithium cells: ~2.8V=0%, ~4.3V=100%)
-                        # Meshtastic uses LiPo/Li-ion cells which have flatter discharge curves
-                        if voltage is not None and isinstance(voltage, (int, float)):
-                            if voltage >= 4.25:
-                                battery = 100
-                            elif voltage <= 2.8:
-                                battery = 0
-                            else:
-                                # Linear approximation: map 2.8V-4.25V to 0-100%
-                                # Using more realistic range for lithium cells
-                                battery = int(((voltage - 2.8) / (4.25 - 2.8)) * 100)
-                                battery = max(0, min(100, battery))  # Clamp to 0-100
-                
-                # coerce to int if it's numeric string
-                if isinstance(battery, str) and battery.isdigit():
-                    battery = int(battery)
-                if isinstance(battery, (float, int)):
-                    battery = int(battery)
-                    # Clamp to reasonable 0-100 range
-                    battery = max(0, min(100, battery))
-                    nodes_data[node_id]["battery"] = battery
-                else:
-                    # leave as unknown
-                    nodes_data[node_id]["battery"] = None
-            except Exception as e:
-                logger.debug(f"Error extracting battery for {node_id}: {e}")
-                nodes_data[node_id]["battery"] = None
-            logger.info(f'Updated telemetry for {node_id}: battery={nodes_data[node_id].get("battery")}%')
+
+            # Extract battery and voltage using helper (handles both power sensor and regular nodes)
+            battery, voltage = _extract_battery_and_voltage_from_telemetry(node_id, payload)
+            nodes_data[node_id]["battery"] = battery
+            nodes_data[node_id]["voltage"] = voltage
+
+            logger.info(f'Updated telemetry for {node_id}: battery={battery}%')
             
             # Store signal quality metrics if available
             if "rx_rssi" in json_data:
                 nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
             if "rx_snr" in json_data:
                 nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
-            
-            # For special nodes: add telemetry to history with battery, RSSI, SNR and last known position
-            # Only add to history if we have a valid position (not 0,0)
-            if _is_special_node(node_id):
-                lat = nodes_data[node_id].get("lat")
-                lon = nodes_data[node_id].get("lon")
-                
-                # Only create history entry if we have a valid position
-                if lat is not None and lon is not None and not (lat == 0 and lon == 0):
-                    _ensure_history_struct(node_id)
-                    alt = nodes_data[node_id].get("alt", 0)
-                    
-                    current_ts = time.time()
-                    rssi = json_data.get("rx_rssi")
-                    snr = json_data.get("rx_snr")
-                    
-                    # Check if we already have an entry for this timestamp (within 2 seconds)
-                    # If so, keep only the best (highest) RSSI and SNR values
-                    dq = special_history[node_id]
-                    found_recent = None
-                    if len(dq) > 0:
-                        most_recent = dq[-1]
-                        if abs(most_recent['ts'] - current_ts) < 2:  # Within 2 seconds
-                            found_recent = most_recent
-                    
-                    if found_recent:
-                        # Update with best values (highest RSSI and SNR)
-                        if rssi is not None and (found_recent.get('rssi') is None or rssi > found_recent['rssi']):
-                            found_recent['rssi'] = rssi
-                        if snr is not None and (found_recent.get('snr') is None or snr > found_recent['snr']):
-                            found_recent['snr'] = snr
-                        # Update battery/voltage if it wasn't available before
-                        if found_recent.get('battery') is None:
-                            if _has_power_sensor(node_id):
-                                found_recent['battery'] = _get_node_voltage(node_id)
-                            else:
-                                found_recent['battery'] = nodes_data[node_id].get("battery")
-                        logger.debug(f'Updated telemetry history for {node_id}: battery={found_recent["battery"]}, rssi={found_recent["rssi"]}, snr={found_recent["snr"]}')
-                    else:
-                        # Create new entry
-                        # For nodes with power sensors, store voltage instead of battery %
-                        if _has_power_sensor(node_id):
-                            battery_value = _get_node_voltage(node_id)
-                        else:
-                            battery_value = nodes_data[node_id].get("battery")
 
-                        entry = {
-                            "ts": current_ts,
-                            "lat": lat,
-                            "lon": lon,
-                            "alt": alt,
-                            "battery": battery_value,  # voltage for power sensor nodes, % for others
-                            "rssi": rssi,
-                            "snr": snr
-                        }
-                        special_history[node_id].append(entry)
-                        logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}%, rssi={entry["rssi"]}, snr={entry["snr"]}')
-                    
-                    _prune_history(node_id, now_ts=current_ts)
-            
-            # Check for battery alert if this is a special node
-            if _is_special_node(node_id):
-                # For nodes with power sensors, use voltage threshold (< 3.5V = low)
-                # For other nodes, use battery percentage threshold
-                if _has_power_sensor(node_id):
-                    voltage = _get_node_voltage(node_id)
-                    if voltage is not None and voltage < 3.5:
-                        from . import alerts
-                        node_data = nodes_data[node_id]
-                        alerts.send_battery_alert(node_id, node_data, voltage)
-                else:
-                    battery_level = nodes_data[node_id].get("battery")
-                    if battery_level is not None and battery_level < config.LOW_BATTERY_THRESHOLD:
-                        from . import alerts
-                        node_data = nodes_data[node_id]
-                        alerts.send_battery_alert(node_id, node_data, battery_level)
-            
-            # Save node data if it's a special node
-            if _is_special_node(node_id):
-                _save_special_nodes_data()
+            # Add telemetry to special node history (if applicable)
+            _add_telemetry_to_history(node_id, json_data)
+
+            # Check for low battery alert
+            _check_battery_alert(node_id)
+
     except Exception as e:
         logger.error(f'❌ Error processing telemetry: {e}', exc_info=True)
 
@@ -1465,9 +1357,8 @@ def on_mapreport(json_data):
     global message_received, last_message_time
     message_received = True
     last_message_time = time.time()
-    
+
     try:
-        add_recent(json_data)
         payload = json_data["decoded"]["payload"]
         node_id = json_data.get("from")
         # Try to get channel_name from our extracted topic mapping first
@@ -1483,10 +1374,8 @@ def on_mapreport(json_data):
                 # Update channel name if different
                 if special_node_channels.get(node_id) != channel_name:
                     special_node_channels[node_id] = channel_name
-                    _save_special_nodes_data()
                 # Track packet (only for special nodes)
                 _track_special_node_packet(node_id, 'MAP_REPORT_APP', json_data)
-                _save_special_nodes_data()  # Save packet history after tracking
         
         if node_id and isinstance(payload, dict):
             if node_id not in nodes_data:
@@ -1637,47 +1526,65 @@ def _protobuf_to_json(proto_obj):
         return {}
 
 
+def _on_mqtt_subscribe(client_obj, userdata, mid, reason_code_list, properties):
+    """
+    MQTT subscribe callback - called when broker confirms subscription.
+    Logs the confirmation to verify subscriptions were accepted.
+    """
+    logger.info(f"[MQTT] Broker confirmed subscription (mid={mid}, count={len(reason_code_list)})")
+    for i, reason_code in enumerate(reason_code_list):
+        if reason_code >= 128:
+            logger.error(f"[MQTT] Subscription #{i+1} FAILED with reason code: {reason_code}")
+        else:
+            logger.info(f"[MQTT] Subscription #{i+1} accepted with QoS: {reason_code}")
+
+
+def _on_mqtt_connect(client_obj, userdata, flags, reason_code, properties):
+    """
+    MQTT connect callback - called when connection is established.
+    Subscribe to topics after successful connection.
+    """
+    global message_received, last_message_time, mqtt_was_connected
+
+    if reason_code == 0:
+        # Detect if this is a reconnection
+        if mqtt_was_connected:
+            logger.warning('🔄 RECONNECTED to MQTT broker (connection was restored)')
+        else:
+            logger.info('✅ Connected to MQTT broker')
+            mqtt_was_connected = True
+
+        # Subscribe to all nodes on the channel
+        # NOTE: We always subscribe to the wildcard regardless of show_gateways setting
+        # because special nodes transmit via LoRa and are forwarded by gateways to MQTT.
+        # The MQTT topic is the gateway's node ID, not the special node's ID.
+        # Filtering happens in the app based on the packet payload's 'from' field.
+        base_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/' + config.MQTT_CHANNEL_NAME
+        subscribe_topic = base_topic + '/#'
+        result, mid = client_obj.subscribe(subscribe_topic, qos=0)
+        logger.info(f"✅ Subscribed to: {subscribe_topic} (result={result}, mid={mid})")
+
+        # Mark as connected
+        message_received = True
+        last_message_time = time.time()
+    else:
+        logger.error(f'❌ Connection failed with code: {reason_code}')
+
+
 def _on_mqtt_disconnect(client_obj, userdata, disconnect_flags, reason_code, properties):
     """
     MQTT disconnect callback - called when broker connection is lost.
-    Logs the disconnection for debugging and monitoring.
-    Attempts to reconnect with exponential backoff retry.
+    Paho-mqtt will automatically reconnect via loop_start().
+    We just log the disconnection for monitoring.
     """
-    global last_packet_time, client
-    logger.warning(f'MQTT connection lost: {reason_code} ({disconnect_flags})')
-
-    # Clear the client reference so reconnection can work
-    client = None
-
-    # Check if it's a failure (not a clean disconnect)
-    try:
-        is_failure = reason_code.is_failure if isinstance(reason_code.is_failure, bool) else reason_code.is_failure()
-    except (AttributeError, TypeError):
-        is_failure = True
-
-    if is_failure:
-        logger.warning(f'Connection failed with reason: {reason_code}')
-        # Start reconnection with retry logic in background thread - NEVER give up
-        def reconnect_with_retry():
-            """Attempt reconnection with exponential backoff. Never gives up."""
-            attempt = 0
-            while True:
-                try:
-                    # Exponential backoff with max delay of 5 minutes
-                    delay = min(5 * (2 ** min(attempt, 6)), 300)  # Cap at 2^6 = 64, so max delay is 5 min
-                    logger.info(f'Reconnect attempt {attempt + 1} in {delay}s...')
-                    time.sleep(delay)
-                    connect_mqtt()
-                    logger.info('✅ Reconnection successful')
-                    break  # Exit loop on success
-                except Exception as e:
-                    logger.warning(f'Reconnect attempt {attempt + 1} failed: {e}')
-                    attempt += 1
-
-        threading.Thread(target=reconnect_with_retry, daemon=True, name='MQTT-Reconnect').start()
+    global last_packet_time
+    logger.warning(f'⚠️ [MQTT] DISCONNECTED from broker: {reason_code} ({disconnect_flags})')
 
     # Reset packet tracking on disconnect
     last_packet_time = 0
+
+    # Paho-mqtt's loop_start() will automatically attempt reconnection
+    logger.warning('[MQTT] Attempting automatic reconnection... (watch for RECONNECTED message)')
 
 
 def _on_mqtt_message(client_obj, userdata, msg):
@@ -1686,9 +1593,18 @@ def _on_mqtt_message(client_obj, userdata, msg):
     Receives raw encoded MQTT messages, decodes them, and routes to handlers.
     """
     global message_received, last_message_time, packets_received, last_packet_time
-    
-    logger.info(f'_on_mqtt_message: topic={msg.topic}')
-    
+
+    logger.info(f'[MQTT] _on_mqtt_message CALLED: topic={msg.topic}')
+    logger.debug(f'[DEBUG] Message details: topic={msg.topic}, payload_size={len(msg.payload)} bytes, qos={msg.qos}, retain={msg.retain}')
+
+    # Check if this is a special node
+    for node_id in config.SPECIAL_NODE_IDS:
+        node_hex = f"!{node_id:08x}"
+        if node_hex in msg.topic:
+            node_label = config.SPECIAL_NODES.get(node_id, {}).get('label', node_hex)
+            logger.info(f'[DEBUG] ⭐ SPECIAL NODE MESSAGE: {node_label} ({node_hex}) on topic {msg.topic}')
+            break
+
     try:
         # Mark that we received a packet (update timestamp for staleness detection)
         last_packet_time = time.time()
@@ -1735,10 +1651,7 @@ def _on_mqtt_message(client_obj, userdata, msg):
             json_packet['rx_rssi'] = mp.rx_rssi
         if hasattr(mp, 'rx_snr') and mp.rx_snr != 0:
             json_packet['rx_snr'] = mp.rx_snr
-        
-        # Store in recent messages buffer
-        add_recent(json_packet)
-        
+
         # Mark as received
         message_received = True
         packets_received = True
@@ -1834,105 +1747,133 @@ def _route_message_to_handler(portnum, portnum_name, mp, json_packet):
 
 def connect_mqtt():
     """
-    Connect to MQTT broker using paho-mqtt directly.
-    Subscribes to root topic with wildcard to receive ALL packets from all channels.
-    Extracts channel names from MQTT topic paths.
+    Connect to MQTT broker using paho-mqtt with automatic reconnection.
+    Subscribes to specific channel to receive packets only from that channel.
+    Paho-mqtt handles reconnection automatically via loop_start().
     """
-    global client
-    
+    global client, message_received, last_message_time
+
     # Don't create multiple connections
     if client is not None:
         logger.debug('MQTT client already exists, skipping connection')
         return True
-    
-    def _do_connect():
-        """Perform the MQTT connection in background thread."""
-        global client, message_received, last_message_time
-        try:
-            logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
-            logger.info(f'Root topic: {config.MQTT_ROOT_TOPIC}')
-            
-            # Create paho-mqtt client with reconnect_on_failure enabled
-            client = mqtt_client.Client(
-                mqtt_client.CallbackAPIVersion.VERSION2,
-                client_id='',
-                clean_session=True,
-                userdata=None
-            )
-            client.connect_timeout = 10
-            
-            # Set credentials if provided
-            if config.MQTT_USERNAME:
-                client.username_pw_set(
-                    username=config.MQTT_USERNAME,
-                    password=config.MQTT_PASSWORD
-                )
-            
-            # Prepare encryption key
-            key_str = getattr(config, 'MQTT_KEY', 'AQ==')
-            if key_str == 'AQ==':
-                key_str = '1PG7OiApB1nwvP+rz05pAQ=='
-            
-            # Decode and pad base64 key
-            padded_key = key_str.ljust(len(key_str) + ((4 - (len(key_str) % 4)) % 4), '=')
-            replaced_key = padded_key.replace('-', '+').replace('_', '/')
-            try:
-                key_bytes = base64.b64decode(replaced_key.encode('ascii'))
-            except Exception as e:
-                logger.error(f"Error decoding encryption key: {e}")
-                raise
-            
-            # Enable automatic reconnection with exponential backoff
-            # reconnect_on_failure=True: automatically reconnect if connection drops
-            client._reconnect_on_failure = True
-            
-            # Set callbacks and userdata
-            client.on_message = _on_mqtt_message
-            client.on_disconnect = _on_mqtt_disconnect
-            client.user_data_set({'key_bytes': key_bytes})
-            
-            # Connect to broker
-            try:
-                client.connect(config.MQTT_BROKER, config.MQTT_PORT, 60)
-                logger.info('✅ Connected to MQTT broker')
-            except Exception as e:
-                logger.error(f"Failed to connect to broker: {e}")
-                client = None
-                raise
-            
-            # Subscribe to root topic with wildcard to get all channels
-            root_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/#'
-            client.subscribe(root_topic)
-            logger.info(f"✅ Subscribed to: {root_topic}")
-            
-            # Start the loop
-            client.loop_start()
-            logger.info('✅ MQTT loop started')
-            
-            # Mark as connected
-            message_received = True
-            last_message_time = time.time()
-            
-            logger.info('✅ MQTT client ready and listening for packets')
-            
-        except Exception as e:
-            logger.error(f'Failed to connect to MQTT broker: {e}', exc_info=True)
-            if client:
-                try:
-                    client.loop_stop()
-                except:
-                    pass
-            client = None
-            raise
-    
-    # Run the actual connection in the background to avoid blocking
-    import threading
-    thread = threading.Thread(target=_do_connect, daemon=True)
-    thread.start()
-    logger.info('MQTT connection thread started')
 
-    # Return True to indicate connection thread was started successfully
-    return True
+    try:
+        logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
+        logger.info(f'Channel: {config.MQTT_CHANNEL_NAME}')
+
+        # Create paho-mqtt client with automatic reconnection enabled
+        client = mqtt_client.Client(
+            mqtt_client.CallbackAPIVersion.VERSION2,
+            client_id='',
+            clean_session=True,
+            userdata=None
+        )
+        client.connect_timeout = 10
+
+        # Set credentials if provided
+        if config.MQTT_USERNAME:
+            client.username_pw_set(
+                username=config.MQTT_USERNAME,
+                password=config.MQTT_PASSWORD
+            )
+
+        # Prepare encryption key
+        key_str = getattr(config, 'MQTT_KEY', 'AQ==')
+        if key_str == 'AQ==':
+            key_str = '1PG7OiApB1nwvP+rz05pAQ=='
+
+        # Decode and pad base64 key
+        padded_key = key_str.ljust(len(key_str) + ((4 - (len(key_str) % 4)) % 4), '=')
+        replaced_key = padded_key.replace('-', '+').replace('_', '/')
+        try:
+            key_bytes = base64.b64decode(replaced_key.encode('ascii'))
+        except Exception as e:
+            logger.error(f"Error decoding encryption key: {e}")
+            client = None
+            return False
+
+        # Set callbacks and userdata
+        client.on_message = _on_mqtt_message
+        client.on_disconnect = _on_mqtt_disconnect
+        client.on_connect = _on_mqtt_connect
+        client.on_subscribe = _on_mqtt_subscribe
+        client.user_data_set({'key_bytes': key_bytes})
+
+        # Connect to broker (non-blocking, handled by loop_start)
+        try:
+            client.connect(config.MQTT_BROKER, config.MQTT_PORT, 60)
+            logger.info('✅ Initiating connection to MQTT broker')
+        except Exception as e:
+            logger.error(f"Failed to initiate connection: {e}")
+            client = None
+            return False
+
+        # Start the background network loop - handles reconnection automatically
+        # This runs in its own thread and manages connection state
+        client.loop_start()
+        logger.info('✅ MQTT network loop started (automatic reconnection enabled)')
+
+        # Mark that we attempted connection
+        message_received = False  # Will be set to True on first message
+        last_message_time = time.time()
+
+        logger.info('✅ MQTT client ready - waiting for connection confirmation')
+
+        # Pre-populate special nodes with home positions so they appear on map at startup
+        _initialize_special_nodes_at_startup()
+
+        return True
+
+    except Exception as e:
+        logger.error(f'Failed to setup MQTT client: {e}', exc_info=True)
+        if client:
+            try:
+                client.loop_stop()
+            except:
+                pass
+        client = None
+        return False
+
+
+def _initialize_special_nodes_at_startup():
+    """
+    Pre-populate nodes_data with special nodes from config.
+    This allows special nodes to appear on the map before any packets are received.
+    Nodes without home positions will be initialized with None lat/lon (no marker until first packet).
+    """
+    global nodes_data
+
+    for node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
+        special_info = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
+        home_lat = special_info.get('home_lat')
+        home_lon = special_info.get('home_lon')
+        label = special_info.get('label')
+
+        # Don't overwrite if node already exists (from previous run or early packet)
+        if node_id not in nodes_data:
+            nodes_data[node_id] = {
+                "node_id": node_id,
+                "long_name": label or f"Node {node_id}",
+                "short_name": label[:4] if label else f"{node_id}",
+                "latitude": home_lat,  # Can be None
+                "longitude": home_lon,  # Can be None
+                "origin_lat": home_lat,  # Can be None - will be set on first position packet
+                "origin_lon": home_lon,  # Can be None - will be set on first position packet
+                "altitude": None,
+                "battery_level": None,
+                "voltage": None,
+                "channel_utilization": None,
+                "air_util_tx": None,
+                "last_seen": 0,  # Never seen yet - will show as very stale
+                "hw_model": None,
+                "distance_from_origin_m": 0,
+                "moved_far": False,
+            }
+            if home_lat is not None and home_lon is not None:
+                logger.info(f"Initialized special node {node_id} ({label}) at home position: {home_lat:.4f}, {home_lon:.4f}")
+            else:
+                logger.info(f"Initialized special node {node_id} ({label}) without home position (will use first packet location)")
 
 
 def disconnect_mqtt():
@@ -1940,9 +1881,6 @@ def disconnect_mqtt():
     global client
     try:
         if client:
-            # Save all persisted data before disconnecting
-            if _should_persist():
-                _save_special_nodes_data(force=True)
             client.loop_stop()
             client.disconnect()
             logger.info("Disconnected from MQTT broker")
@@ -1950,6 +1888,47 @@ def disconnect_mqtt():
         logger.error(f'Error disconnecting from MQTT broker: {e}')
     finally:
         client = None
+
+
+def reload_mqtt_subscriptions():
+    """
+    Reload MQTT subscriptions based on current config settings.
+    Unsubscribes from all current topics and resubscribes based on show_all_nodes and show_gateways.
+    This allows dynamic switching between all-nodes and special-nodes-only modes.
+    """
+    global client
+
+    if not client:
+        logger.warning("Cannot reload subscriptions: MQTT client not connected")
+        return False
+
+    try:
+        # Use current in-memory config values (already updated by the endpoint)
+        logger.info(f"Reloading MQTT subscriptions (show_all_nodes={config.SHOW_ALL_NODES}, show_gateways={config.SHOW_GATEWAYS})")
+
+        # Unsubscribe from all current topics
+        base_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/' + config.MQTT_CHANNEL_NAME
+
+        # Unsubscribe from wildcard (in case we were subscribed to all)
+        try:
+            client.unsubscribe(base_topic + '/#')
+            logger.info(f"Unsubscribed from: {base_topic}/#")
+        except Exception as e:
+            logger.debug(f"Could not unsubscribe from wildcard: {e}")
+
+        # Always subscribe to the channel wildcard
+        # NOTE: We don't filter at the MQTT subscription level because special nodes
+        # transmit via LoRa and are forwarded by gateways. The MQTT topic is the
+        # gateway's node ID, not the special node's ID. Filtering happens in the app.
+        subscribe_topic = base_topic + '/#'
+        result, mid = client.subscribe(subscribe_topic, qos=0)
+        logger.info(f"✅ Resubscribed to: {subscribe_topic} (result={result}, mid={mid})")
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Error reloading MQTT subscriptions: {e}", exc_info=True)
+        return False
 
 
 def update_special_nodes():
@@ -1993,25 +1972,37 @@ def update_special_nodes():
 
 def is_connected():
     """Check if MQTT client is actively receiving packets.
-    
+
     Returns status strings:
-    - 'receiving_packets': Actively receiving packets (within last 5 minutes)
-    - 'stale_data': Received packets before but none recently (over 5 minutes old)
+    - 'receiving_packets': Actively receiving packets (within threshold)
+    - 'stale_data': Received packets before but none recently (over threshold)
     - 'connected_to_server': Connected but haven't received actual packet data yet
     - 'connecting': Client exists but no messages yet
     - 'disconnected': No client or no messages
+
+    Uses dynamic staleness threshold:
+    - 5 minutes when subscribed to all nodes (high traffic)
+    - 60 minutes when subscribed to special nodes only (low traffic)
     """
     try:
         current_time = time.time()
-        
+
+        # Determine which staleness threshold to use based on subscription mode
+        # If both show_all_nodes and show_gateways are false, we're in special-nodes-only mode
+        if (not getattr(config, 'SHOW_ALL_NODES', False) and
+            not getattr(config, 'SHOW_GATEWAYS', True)):
+            staleness_threshold = PACKET_STALENESS_THRESHOLD_SPECIAL_ONLY
+        else:
+            staleness_threshold = PACKET_STALENESS_THRESHOLD_ALL_NODES
+
         # If we have received packets and the last one is recent (within threshold)
         if packets_received and last_packet_time > 0:
             time_since_last_packet = current_time - last_packet_time
-            if time_since_last_packet < PACKET_STALENESS_THRESHOLD:
+            if time_since_last_packet < staleness_threshold:
                 return 'receiving_packets'
             else:
                 # We've received packets before but none recently - connection is stale
-                logger.warning(f'MQTT connection stale: last packet {time_since_last_packet:.0f}s ago (threshold: {PACKET_STALENESS_THRESHOLD}s)')
+                logger.warning(f'MQTT connection stale: last packet {time_since_last_packet:.0f}s ago (threshold: {staleness_threshold}s)')
                 return 'stale_data'
         
         # If we have received any messages at all (but not actual packets), we're connected to server
@@ -2028,301 +2019,221 @@ def is_connected():
         return 'disconnected'
 
 
+def _calculate_node_status(time_since_seen):
+    """Determine node status color based on time since last seen."""
+    if time_since_seen < config.STATUS_BLUE_THRESHOLD:
+        return "blue"
+    elif time_since_seen < config.STATUS_ORANGE_THRESHOLD:
+        return "orange"
+    else:
+        return "red"
+
+
+def _get_special_node_metadata(node_id, is_special):
+    """Extract special node symbol and label from config."""
+    if not is_special:
+        return None, None
+
+    info = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
+    special_symbol = info.get('symbol', getattr(config, 'SPECIAL_NODE_SYMBOL', '⭐'))
+    special_label = info.get('label')
+    return special_symbol, special_label
+
+
+def _get_node_channel_name(node_id, data, is_special):
+    """Get channel name, preferring routing packets for special nodes."""
+    if is_special and node_id in special_node_channels:
+        return special_node_channels[node_id]
+    return data.get("channel_name")
+
+
+def _get_origin_coordinates(node_id, data, is_special):
+    """Get origin coordinates with config fallback for special nodes."""
+    origin_lat = data.get("origin_lat")
+    origin_lon = data.get("origin_lon")
+
+    if is_special and (origin_lat is None or origin_lon is None):
+        special_info = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
+        if origin_lat is None:
+            origin_lat = special_info.get('home_lat')
+        if origin_lon is None:
+            origin_lon = special_info.get('home_lon')
+
+    return origin_lat, origin_lon
+
+
+def _build_gateway_connections_list(node_id):
+    """Build list of gateway connections with reliability scores for a special node."""
+    gateway_connections = []
+    for gw_id, gw_info in special_node_gateways[node_id].items():
+        cached_reliability = gateway_reliability_cache.get(gw_id, {})
+        gw_info_with_score = dict(gw_info)
+        gw_info_with_score["reliability_score"] = cached_reliability.get("score", 0)
+        gw_info_with_score["detection_count"] = cached_reliability.get("detection_count", 0)
+        gw_info_with_score["avg_rssi"] = cached_reliability.get("avg_rssi")
+        gateway_connections.append(gw_info_with_score)
+    return gateway_connections
+
+
+def _build_node_info_from_data(node_id, data, is_special, current_time):
+    """Build complete node_info dictionary from node data."""
+    last_seen = data.get("last_seen", current_time)
+    time_since_seen = current_time - last_seen
+
+    status = _calculate_node_status(time_since_seen)
+    special_symbol, special_label = _get_special_node_metadata(node_id, is_special)
+    stale = time_since_seen > getattr(config, 'STALE_AFTER_SECONDS', config.STATUS_ORANGE_THRESHOLD)
+    channel_name = _get_node_channel_name(node_id, data, is_special)
+    origin_lat, origin_lon = _get_origin_coordinates(node_id, data, is_special)
+    node_name = data.get("long_name") or data.get("longName")
+
+    # Build base node info dictionary
+    node_info = {
+        "id": node_id,
+        "name": node_name,
+        "short": data.get("short_name") or data.get("shortName") or "?",
+        "lat": data.get("latitude"),
+        "lon": data.get("longitude"),
+        "alt": data.get("altitude"),
+        "hw_model": data.get("hw_model", "Unknown"),
+        "channel": data.get("channel"),
+        "channel_name": channel_name,
+        "modem_preset": data.get("modem_preset"),
+        "role": data.get("role"),
+        "origin_lat": origin_lat,
+        "origin_lon": origin_lon,
+        "status": status,
+        "is_special": is_special,
+        "has_power_sensor": _has_power_sensor(node_id) if is_special else False,
+        "stale": stale,
+        "has_fix": (data.get("latitude") is not None and data.get("longitude") is not None),
+        "special_symbol": special_symbol,
+        "special_label": special_label,
+        "time_since_seen": time_since_seen,
+        "last_seen": last_seen,
+        "last_position_update": data.get("last_position_update"),
+        "battery": data.get("battery") if data.get("battery") is not None else None,
+        "age_min": int(time_since_seen / 60),
+        "moved_far": data.get("moved_far", False),
+        "distance_from_origin_m": data.get("distance_from_origin_m"),
+        "voltage": _get_node_voltage(node_id),
+        "rx_rssi": data.get("rx_rssi"),
+        "rx_snr": data.get("rx_snr"),
+    }
+
+    # Add power current for power sensor nodes
+    telemetry = data.get("telemetry", {})
+    if isinstance(telemetry, dict):
+        power_metrics = telemetry.get("power_metrics", {})
+        node_info["power_current"] = power_metrics.get("ch3_current")
+
+    # Check for low battery
+    battery_level = node_info.get("battery")
+    node_info["battery_low"] = (
+        battery_level is not None and
+        battery_level < getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
+    )
+
+    # Add gateway connections for special nodes
+    if is_special and node_id in special_node_gateways:
+        node_info["gateway_connections"] = _build_gateway_connections_list(node_id)
+    else:
+        node_info["gateway_connections"] = []
+
+    # Add best gateway info for special nodes
+    if is_special and "best_gateway" in data:
+        node_info["best_gateway"] = data["best_gateway"]
+
+    # Determine if this node is a gateway
+    is_gw = node_is_gateway.get(node_id, False) or node_id in all_gateway_node_ids
+    node_info["is_gateway"] = is_gw
+
+    # Set name fallback based on gateway status
+    if not node_name:
+        node_info["name"] = f"Gateway {node_id}" if is_gw else "Unknown"
+
+    # Add last packet time for special nodes
+    if is_special and node_id in special_node_last_packet:
+        node_info["last_packet_time"] = special_node_last_packet[node_id]
+
+    return node_info
+
+
+def _build_gateway_only_node(gateway_id, current_time):
+    """Build node_info dictionary for gateway that hasn't sent its own data."""
+    gw_info = gateway_info_cache.get(gateway_id)
+    if gw_info is None:
+        return None
+
+    cached_reliability = gateway_reliability_cache.get(gateway_id, {})
+
+    return {
+        "id": gateway_id,
+        "name": gw_info.get("name", "Unknown Gateway"),
+        "short": "GW",
+        "lat": gw_info.get("lat"),
+        "lon": gw_info.get("lon"),
+        "alt": None,
+        "hw_model": "Gateway",
+        "channel": None,
+        "channel_name": None,
+        "modem_preset": None,
+        "role": "ROUTER",
+        "origin_lat": None,
+        "origin_lon": None,
+        "status": "orange",
+        "is_special": False,
+        "stale": True,
+        "has_fix": (gw_info.get("lat") is not None and gw_info.get("lon") is not None),
+        "special_symbol": None,
+        "special_label": None,
+        "time_since_seen": current_time - gw_info.get("last_seen", current_time),
+        "last_seen": gw_info.get("last_seen"),
+        "last_position_update": None,
+        "battery": None,
+        "age_min": int((current_time - gw_info.get("last_seen", current_time)) / 60),
+        "moved_far": False,
+        "distance_from_origin_m": None,
+        "voltage": None,
+        "power_current": None,
+        "rx_rssi": gw_info.get("rssi"),
+        "rx_snr": gw_info.get("snr"),
+        "is_gateway": True,
+        "gateway_connections": [],
+        "reliability_score": cached_reliability.get("score", 0),
+        "detection_count": cached_reliability.get("detection_count", 0),
+        "avg_rssi": cached_reliability.get("avg_rssi"),
+        "confidence_level": cached_reliability.get("confidence_level", "none"),
+    }
+
+
 def get_nodes():
     """Return list of all tracked nodes with status."""
     result = []
     current_time = time.time()
-    
-    present_ids = set()
+
     for node_id, data in nodes_data.items():
-        last_seen = data.get("last_seen", current_time)
-        time_since_seen = current_time - last_seen
-        
-        # Determine status based on time since last seen (using config thresholds)
-        if time_since_seen < config.STATUS_BLUE_THRESHOLD:
-            status = "blue"  # Newly seen
-        elif time_since_seen < config.STATUS_ORANGE_THRESHOLD:
-            status = "orange"  # Seen recently
-        else:
-            status = "red"  # Not seen for a long time
-        
-        # Check if this is a special node (based on config)
         is_special = node_id in getattr(config, 'SPECIAL_NODE_IDS', [])
-        special_symbol = None
-        special_label = None
-        if is_special:
-            info = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
-            special_symbol = info.get('symbol', getattr(config, 'SPECIAL_NODE_SYMBOL', '⭐'))
-            special_label = info.get('label')
-        
-        stale = time_since_seen > getattr(config, 'STALE_AFTER_SECONDS', config.STATUS_ORANGE_THRESHOLD)
-        
-        # Get channel name from MQTT topic and modem preset from packet
-        # For special nodes, prefer channel from routing packets (special_node_channels) as it's more current
-        if is_special and node_id in special_node_channels:
-            channel_name = special_node_channels[node_id]
-        else:
-            channel_name = data.get("channel_name")
-        modem_preset = data.get("modem_preset")
 
-        # For special nodes, get origin location from config if not in data (first packet before first position update)
-        origin_lat = data.get("origin_lat")
-        origin_lon = data.get("origin_lon")
-        if is_special and (origin_lat is None or origin_lon is None):
-            # Fallback to configured home location for special nodes
-            special_info = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
-            if origin_lat is None:
-                origin_lat = special_info.get('home_lat')
-            if origin_lon is None:
-                origin_lon = special_info.get('home_lon')
-        
-        # Get node name - prefer current data over potentially stale gateway connections
-        node_name = data.get("long_name") or data.get("longName")
+        # Skip non-special, non-gateway nodes when show_all_nodes is disabled
+        if not getattr(config, 'SHOW_ALL_NODES', False):
+            if not is_special:
+                is_gateway_check = node_is_gateway.get(node_id, False) or node_id in all_gateway_node_ids
+                if not is_gateway_check:
+                    continue
 
-        # If we don't have a name from node's own data, check gateway connections
-        # But only if the current name is missing or "Unknown"
-        if not node_name or node_name == "Unknown":
-            # Check if this node appears in any special node's gateway connections
-            for gw_dict in special_node_gateways.values():
-                if node_id in gw_dict:
-                    gateway_name = gw_dict[node_id].get("name")
-                    if gateway_name and gateway_name != "Unknown":
-                        node_name = gateway_name
-                        break
-
-        # Final fallback
-        if not node_name:
-            node_name = "Unknown"
-
-        node_info = {
-            "id": node_id,
-            "name": node_name,
-            "short": data.get("short_name") or data.get("shortName") or "?",
-            "lat": data.get("latitude"),
-            "lon": data.get("longitude"),
-            "alt": data.get("altitude"),
-            "hw_model": data.get("hw_model", "Unknown"),
-            "channel": data.get("channel"),
-            "channel_name": channel_name,
-            "modem_preset": modem_preset,
-            "role": data.get("role"),
-            # origin location for movement circle (only present for special nodes after first fix)
-            "origin_lat": origin_lat,
-            "origin_lon": origin_lon,
-            "status": status,
-            "is_special": is_special,
-            "has_power_sensor": _has_power_sensor(node_id) if is_special else False,
-            "stale": stale,
-            "has_fix": (data.get("latitude") is not None and data.get("longitude") is not None),
-            "special_symbol": special_symbol,
-            "special_label": special_label,
-            "time_since_seen": time_since_seen,
-            "last_seen": last_seen,
-            "last_position_update": data.get("last_position_update"),  # Separate timestamp for position updates
-            # battery may have been normalized earlier
-            "battery": data.get("battery") if data.get("battery") is not None else None,
-            # human-friendly age in minutes
-            "age_min": int(time_since_seen / 60),
-            # movement alert fields (special nodes)
-            "moved_far": data.get("moved_far", False),
-            "distance_from_origin_m": data.get("distance_from_origin_m"),
-        }
-        
-        # Extract voltage using helper function (uses configured voltage_channel)
-        node_info["voltage"] = _get_node_voltage(node_id)
-
-        # Extract power current for power sensor nodes
-        telemetry = data.get("telemetry", {})
-        if isinstance(telemetry, dict):
-            power_metrics = telemetry.get("power_metrics", {})
-            node_info["power_current"] = power_metrics.get("ch3_current")
-        
-        # Check for low battery
-        battery_level = node_info.get("battery")
-        node_info["battery_low"] = (
-            battery_level is not None and 
-            battery_level < getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
-        )
-        
-        # Add signal quality metrics if available
-        node_info["rx_rssi"] = data.get("rx_rssi")
-        node_info["rx_snr"] = data.get("rx_snr")
-        
-        # Add gateway connections if this is a special node
-        # Return all gateway connections recorded with reliability scores
-        if is_special and node_id in special_node_gateways:
-            gateway_connections = []
-            for gw_id, gw_info in special_node_gateways[node_id].items():
-                # Calculate reliability for each gateway connection
-                all_detections_for_gw = []
-                for special_id, connections in special_node_gateways.items():
-                    if gw_id in connections:
-                        all_detections_for_gw.append(connections[gw_id])
-                
-                reliability = _calculate_gateway_reliability_score(all_detections_for_gw)
-                
-                # Add reliability score to gateway info
-                gw_info_with_score = dict(gw_info)
-                gw_info_with_score["reliability_score"] = reliability["score"]
-                gw_info_with_score["detection_count"] = reliability["detection_count"]
-                gw_info_with_score["avg_rssi"] = reliability["avg_rssi"]
-                gateway_connections.append(gw_info_with_score)
-            
-            node_info["gateway_connections"] = gateway_connections
-        else:
-            node_info["gateway_connections"] = []
-        
-        # Add best gateway info if this is a special node
-        if is_special and "best_gateway" in data:
-            node_info["best_gateway"] = data["best_gateway"]
-        
-        # Add gateway flag if node is detected as a gateway
-        # In this app's definition: a gateway is any node that got a packet from a special node to MQTT
-        # This includes nodes in gateway_connections (which means they relayed to MQTT)
-        # OR nodes explicitly marked in node_is_gateway dict (which tracks nodes that posted packets to MQTT)
-        is_gw = node_is_gateway.get(node_id, False)
-        if not is_gw:
-            # Check if this node appears in any special node's gateway connections
-            # If so, it received and relayed a packet from a special node to MQTT
-            for gw_dict in special_node_gateways.values():
-                if node_id in gw_dict:
-                    is_gw = True
-                    break
-        node_info["is_gateway"] = is_gw
-        
-        # Add last packet time for special nodes (any packet, even encrypted/routing)
-        if is_special and node_id in special_node_last_packet:
-            node_info["last_packet_time"] = special_node_last_packet[node_id]
-        
-        # Include all tracked nodes
+        # Build complete node info dictionary using helper
+        node_info = _build_node_info_from_data(node_id, data, is_special, current_time)
         result.append(node_info)
-        present_ids.add(node_id)
-    
-    # Include offline special nodes at their home positions
-    # Always show special nodes at their configured home location, even before first packet received
-    for sid in getattr(config, 'SPECIAL_NODE_IDS', []):
-        if sid not in present_ids:
-            info = getattr(config, 'SPECIAL_NODES', {}).get(sid, {})
-            home_lat = info.get('home_lat')
-            home_lon = info.get('home_lon')
-            if home_lat is not None and home_lon is not None:
-                node_dict = {
-                    "id": sid,
-                    "name": info.get('label') or f"Node {sid}",
-                    "short": info.get('label') or "?",
-                    "lat": home_lat,  # Show at home position
-                    "lon": home_lon,  # Show at home position
-                    "alt": None,
-                    "hw_model": "Unknown",
-                    "channel": None,
-                    "channel_name": special_node_channels.get(sid),  # Use channel from routing packets
-                    "modem_preset": None,
-                    "role": None,
-                    "origin_lat": home_lat,  # Home is the origin
-                    "origin_lon": home_lon,
-                    "status": "gray",
-                    "is_special": True,
-                    "stale": True,
-                    "has_fix": False,  # No real GPS fix yet
-                    "special_symbol": info.get('symbol', getattr(config, 'SPECIAL_NODE_SYMBOL', '⭐')),
-                    "special_label": info.get('label'),
-                    "time_since_seen": None,
-                    "last_seen": None,
-                    "battery": None,
-                    "age_min": None,
-                    "moved_far": False,
-                    "distance_from_origin_m": None,
-                    "is_gateway": node_is_gateway.get(sid, False),
-                }
-                # Add last packet time if we've seen ANY packets
-                if sid in special_node_last_packet:
-                    node_dict["last_packet_time"] = special_node_last_packet[sid]
-                result.append(node_dict)
 
-    # Add any gateways from special_node_gateways that aren't already in result
-    # These are gateways detected via special node packets but never sent their own data
+    # Add gateways that aren't already in result
     result_ids = {n['id'] for n in result}
-    detected_gateways = {}  # gateway_id -> gw_info dict (from most recent special node packet)
-    gateway_all_detections = {}  # gateway_id -> list of all detections (for reliability scoring)
-    
-    # Collect all gateway connections across all special nodes
-    for special_id, connections in special_node_gateways.items():
-        for gateway_id, gw_info in connections.items():
-            # Keep the most recently seen gateway info
-            if gateway_id not in detected_gateways or gw_info.get("last_seen", 0) > detected_gateways[gateway_id].get("last_seen", 0):
-                detected_gateways[gateway_id] = gw_info
-            # Collect ALL detections for reliability scoring
-            if gateway_id not in gateway_all_detections:
-                gateway_all_detections[gateway_id] = []
-            gateway_all_detections[gateway_id].append(gw_info)
-    
-    logger.debug(f"Detected gateways from special_node_gateways: {list(detected_gateways.keys())}")
-    logger.debug(f"Result node IDs already present: {result_ids}")
-    
-    # Add detected gateways that aren't already in result
-    for gateway_id, gw_info in detected_gateways.items():
+    for gateway_id in all_gateway_node_ids:
         if gateway_id not in result_ids:
-            # Calculate reliability score based on all detections
-            reliability = _calculate_gateway_reliability_score(gateway_all_detections.get(gateway_id, []))
-            
-            gateway_node = {
-                "id": gateway_id,
-                "name": gw_info.get("name", "Unknown Gateway"),
-                "short": "GW",
-                "lat": gw_info.get("lat"),
-                "lon": gw_info.get("lon"),
-                "alt": None,
-                "hw_model": "Gateway",
-                "channel": None,
-                "channel_name": None,
-                "modem_preset": None,
-                "role": "ROUTER",
-                "origin_lat": None,
-                "origin_lon": None,
-                "status": "orange",  # Gateways not heard from directly, so assume stale
-                "is_special": False,
-                "stale": True,
-                "has_fix": (gw_info.get("lat") is not None and gw_info.get("lon") is not None),
-                "special_symbol": None,
-                "special_label": None,
-                "time_since_seen": current_time - gw_info.get("last_seen", current_time),
-                "last_seen": gw_info.get("last_seen"),
-                "last_position_update": None,
-                "battery": None,
-                "age_min": int((current_time - gw_info.get("last_seen", current_time)) / 60),
-                "moved_far": False,
-                "distance_from_origin_m": None,
-                "voltage": None,
-                "power_current": None,
-                "rx_rssi": gw_info.get("rssi"),
-                "rx_snr": gw_info.get("snr"),
-                "is_gateway": True,
-                "gateway_connections": [],
-                # Reliability metrics for filtering/sorting in UI
-                "reliability_score": reliability["score"],
-                "detection_count": reliability["detection_count"],
-                "avg_rssi": reliability["avg_rssi"],
-                "confidence_level": reliability["confidence_level"],
-            }
-            result.append(gateway_node)
+            gateway_node = _build_gateway_only_node(gateway_id, current_time)
+            if gateway_node:
+                result.append(gateway_node)
 
-    # Limit to 100 nodes to prevent response explosion
-    # BUT: Always include gateways (infrastructure) - they don't count toward the limit
-    # Prioritize: special nodes first, then blue (recently seen), then orange, then red (stale)
-    special_nodes = [n for n in result if n.get('is_special')]
-    gateways = [n for n in result if n.get('is_gateway') and not n.get('is_special')]
-    regular_nodes = [n for n in result if not n.get('is_special') and not n.get('is_gateway')]
-    
-    # Sort regular nodes by status priority (blue > orange > red)
-    status_priority = {'blue': 0, 'orange': 1, 'red': 2}
-    regular_nodes.sort(key=lambda n: status_priority.get(n.get('status'), 3))
-    
-    # Combine: all special nodes + all gateways (no limit) + up to remaining slots for regular nodes
-    result = special_nodes + gateways + regular_nodes
-    if len(result) > 100:
-        # Limit regular nodes only, keep all special nodes and gateways
-        result = special_nodes + gateways + regular_nodes[:max(0, 100 - len(special_nodes) - len(gateways))]
-    
     return result
 
 
@@ -2348,47 +2259,13 @@ def get_special_history(node_id: int, hours: int = None):
     """
     hours = hours or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
     cutoff = time.time() - (hours * 3600)
-    
-    # First try in-memory cache
-    dq = special_history.get(node_id, deque())
-    if dq:
-        filtered = [e for e in dq if e['ts'] >= cutoff]
-        # Deduplicate to one per data_limit_time window for slow-moving special nodes
-        return _deduplicate_by_hour(filtered)
-    
-    # Fallback: load from disk if in-memory cache is empty AND persistence is enabled
-    # If enable_persistence=false, return empty list (fresh start)
-    if not _should_persist():
-        return []
 
-    try:
-        path = Path(config.SPECIAL_HISTORY_PERSIST_PATH).parent / 'special_nodes.json'
-        if path.exists():
-            with path.open('r') as f:
-                data = json.load(f)
-            node_data = data.get(str(node_id), {})
-            position_history = node_data.get('position_history', [])
-            
-            # Filter by time window and convert to dict format
-            filtered = []
-            for entry in position_history:
-                if entry.get('ts', 0) >= cutoff:
-                    filtered.append({
-                        'ts': float(entry.get('ts', 0)),
-                        'lat': float(entry.get('lat', 0)),
-                        'lon': float(entry.get('lon', 0)),
-                        'alt': entry.get('alt'),
-                        'battery': entry.get('battery'),
-                        'rssi': entry.get('rssi'),
-                        'snr': entry.get('snr')
-                    })
-            
-            # Deduplicate to one per data_limit_time window for slow-moving special nodes
-            return _deduplicate_by_hour(filtered)
-    except Exception as e:
-        logger.debug(f'Failed to load signal history from disk for node {node_id}: {e}')
-    
-    return []
+    # Get position history from in-memory cache
+    dq = special_history.get(node_id, deque())
+    filtered = [e for e in dq if e['ts'] >= cutoff]
+
+    # Deduplicate to one per data_limit_time window for slow-moving special nodes
+    return _deduplicate_by_hour(filtered)
 
 def _deduplicate_by_hour(points):
     """Keep only the most recent point per time window for slow-moving special nodes.
@@ -2499,10 +2376,6 @@ def get_special_node_packets(node_id=None, limit=50):
         else:
             result[nid] = list(packets)[-limit:]
     return result
-
-
-def get_recent(limit=100):
-    return get_recent_messages(limit)
 
 
 def inject_telemetry_data(node_id, battery_level, channel_name="TEST", from_name="Test Node", message_type="telemetry"):

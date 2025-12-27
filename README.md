@@ -240,9 +240,12 @@ docker compose up -d
 - **Node Sidebar**: Click any node to zoom map to its location
 - **Map Markers**: Click markers for detailed popups with node information
   - Includes link to view node on [Meshtastic Map](https://meshtastic.liamcottle.net)
-- **Menu Controls**:
-  - Toggle "Show all nodes" to display all nodes (default: show only special nodes)
-  - Toggle position trails to visualize movement history on the map
+- **Menu Controls** (password-protected):
+  - Toggle "Show Gateways & Connections" to show/hide gateway nodes and signal connections
+  - Toggle "Show Position Trails" to visualize movement history on the map
+  - Toggle "Show Nautical Markers" to display navigation markers on the map
+  - Adjust trail history hours and movement threshold dynamically
+  - Note: "Show All Nodes" is now a server-side config setting (`show_all_nodes` in tracker.config), not a UI toggle
   - (Sorting is automatic: special nodes are always shown at the top, sorted alphabetically; all other nodes are sorted by most recently seen)
 - **Movement Alerts**:
   - Green dashed circles show 50m threshold around special node home positions
@@ -293,10 +296,19 @@ Edit `tracker.config` to customize settings:
 broker = mqtt.bayme.sh
 port = 1883
 root_topic = msh/US/bayarea/2/e/
-mqtt_channels = MediumSlow,MediumFast,LongFast
+channel_name = MediumFast
 username = meshdev
 password = large4cats
 ```
+
+**MQTT Subscription Optimization:**
+- The `channel_name` parameter filters MQTT traffic to only the specified channel
+- Subscribes to: `root_topic/channel_name/#` (e.g., `msh/US/bayarea/2/e/MediumFast/#`)
+- **Additional optimization**: When both `show_all_nodes=false` AND `show_gateways=false`, the system subscribes only to specific special node topics
+  - Example: `msh/US/bayarea/2/e/MediumFast/!db8e8f6d/#` (one subscription per special node)
+  - Dramatically reduces bandwidth by filtering at the MQTT broker level
+  - For 4 special nodes: only receives those 4 nodes' packets, ignoring hundreds of other mesh nodes
+- Toggling `show_gateways` in the UI automatically reloads MQTT subscriptions (no restart needed)
 
 ### Web Interface
 ```ini
@@ -312,7 +324,7 @@ port = 5103
 #   Alternative format also works: url_prefix = buoy-tracker
 # Notes:
 #   - Trailing slashes are automatically removed
-#   - All routes (/, /health, /api/*, /docs/*) will be prefixed
+#   - All routes (/, /health, /api/*) will be prefixed
 #   - Browser will automatically request /buoy-tracker/health, /buoy-tracker/api/nodes, etc.
 url_prefix = 
 
@@ -350,18 +362,26 @@ Lock down the user interface to prevent end users from modifying settings. This 
 
 ```ini
 [app_features]
+# Server-side performance settings (require restart to change)
+show_all_nodes = false  # false=only special+gateways (faster), true=all mesh nodes (slower)
+
 # UI feature flags (users can modify these via Controls tab)
-show_all_nodes = false
-show_gateways = true
-show_position_trails = true
-show_nautical_markers = true
-trail_history_hours = 168
+show_gateways = true           # Toggleable in UI, reloads MQTT subscriptions dynamically
+show_position_trails = true    # Toggleable in UI
+show_nautical_markers = true   # Toggleable in UI
+trail_history_hours = 168      # Adjustable in UI
 ```
 
 **Access Model:**
 - ✅ All users can view the map and data
 - 🔐 Control Menu (settings modifications) requires password authentication
 - API key is configured in `secret.config` under `[webapp] api_key`
+
+**Dynamic Settings:**
+- `show_gateways`: When toggled in UI, automatically reloads MQTT subscriptions
+  - Turning OFF reduces bandwidth by subscribing only to special node topics
+  - Turning ON subscribes to all nodes on the channel
+  - No server restart required
 
 
 
@@ -746,11 +766,10 @@ curl -X POST https://your-domain.com/api/test-alert \
 
 - **`GET /health`** - Health check with MQTT status and config (always public, no auth)
 - **`GET /api/nodes`** - All tracked nodes with position, battery, channel
-- **`GET /api/recent/messages?limit=100`** - Recent MQTT messages for debugging
 
 ### Special Node Endpoints
 
-- **`GET /api/special/history?node_id=<id>&hours=<hours>`** - Position history for a node
+- **`GET /api/special/history/batch?hours=<hours>`** - Position history for all special nodes (single batch request)
 - **`GET /api/signal/history?node_id=<id>`** - Battery/RSSI/SNR history for a node
 
 ### Admin Endpoints (Protected - Require Authentication)
@@ -893,33 +912,21 @@ The application provides a RESTful API for programmatic access to node data:
 
 Special nodes are configured in `tracker.config` for enhanced tracking:
 
-- **`GET /api/special/history?node_id=<id>&hours=<hours>`**  
-  Get position history for a specific special node
-  - `node_id` (required): Node ID to query
+- **`GET /api/special/history/batch?hours=<hours>`**
+  Get position history for all special nodes in a single batch request (replaces deprecated single-node endpoint)
   - `hours` (optional): Hours of history (default: 24)
-  ```json
-  {
-    "node_id": 123456789,
-    "hours": 24,
-    "points": [
-      {
-        "timestamp": 1699999999.123,
-        "latitude": 37.7749,
-        "longitude": -122.4194,
-        "altitude": 10
-      }
-    ],
-    "count": 1
-  }
-  ```
-
-- **`GET /api/special/all_history?hours=<hours>`**  
-  Get position history for all special nodes
   ```json
   {
     "hours": 24,
     "histories": {
-      "123456789": [...]
+      "123456789": [
+        {
+          "timestamp": 1699999999.123,
+          "latitude": 37.7749,
+          "longitude": -122.4194,
+          "altitude": 10
+        }
+      ]
     }
   }
   ```
@@ -958,14 +965,40 @@ Special nodes are configured in `tracker.config` for enhanced tracking:
 
 ### MQTT Control Endpoints
 
-- **`POST /api/mqtt/connect`**  
+- **`POST /api/mqtt/connect`** 🔐
   Manually connect to MQTT broker
 
-- **`POST /api/mqtt/disconnect`**  
+- **`POST /api/mqtt/disconnect`** 🔐
   Disconnect from MQTT broker
 
-- **`GET /api/mqtt/status`**  
+- **`GET /api/mqtt/status`**
   Get MQTT connection details
+
+### Configuration Endpoints
+
+- **`POST /api/config/show-gateways`** 🔐
+  Update show_gateways setting and reload MQTT subscriptions dynamically
+  ```json
+  {
+    "show_gateways": true
+  }
+  ```
+  Response:
+  ```json
+  {
+    "success": true,
+    "show_gateways": true,
+    "subscriptions_reloaded": true
+  }
+  ```
+
+- **`POST /api/config/movement-threshold`** 🔐
+  Update movement alert threshold (in meters)
+
+- **`POST /api/config/battery-threshold`** 🔐
+  Update low battery alert threshold (percentage)
+
+🔐 = Requires API key authentication
 
 ### Running Tests
 

@@ -4,7 +4,7 @@
 
 [app]
 title = Buoy Tracker
-version = 0.97f
+version = 0.98
 
 [mqtt]
 # MQTT broker settings
@@ -18,6 +18,7 @@ version = 0.97f
 broker = mqtt.bayme.sh
 port = 1883
 root_topic = msh/US/bayarea/2/e/
+channel_name = MediumFast
 username = meshdev
 password = large4cats
 encryption_key = AQ==
@@ -74,7 +75,6 @@ api_polling_interval = 10
 # log_level options: DEBUG (very verbose), INFO (normal), WARNING (quiet), ERROR (errors only)
 # PRODUCTION DEPLOYMENT: Set to WARNING or ERROR for minimal output
 log_level = INFO
-recent_message_buffer_size = 200
 
 [battery]
 # Battery monitoring settings
@@ -90,11 +90,9 @@ show_gateway_connections = true
 show_nautical_markers = true
 # Trail history display (in hours)
 trail_history_hours = 168
-# Persistence settings (PRODUCTION DEFAULT: false for stateless operation)
-# Set to true to enable disk persistence of special node data (development/debugging only)
-# When enabled, special node history persists across server restarts
-# When disabled (default), all history is cleared on server restart - recommended for production
-enable_persistence = true
+# Persistence settings (DEPRECATED - removed in latest version)
+# All data is now kept in-memory only for the lifetime of the process
+# Restarts will start with fresh data
 
 [special_nodes_settings]
 # Special nodes configuration

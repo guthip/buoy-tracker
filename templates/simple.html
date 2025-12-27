@@ -267,9 +267,11 @@
                         <span class="legend-item"><span class="legend-dot" style="background:#888"></span>special (stale)</span>
                         <span class="legend-item"><span class="legend-dot" style="background:#999"></span>special (no GPS)</span><br>
                         <div style="margin-top: 6px; font-size: 0.85em;">
-                            <div style="margin: 2px 0;">🟢 <span style="color: #4CAF50;">Dashed ring</span> = Movement threshold</div>
-                            <div style="margin: 2px 0;">🔴 <span style="color: #e91e63;">Solid ring</span> = Moved too far</div>
-                            <div style="margin: 2px 0;">🟠 <span style="color: #FF9800;">Dotted line</span> = Gateway connection (best signal)</div>
+                            <div id="legendMovementRings">
+                                <div style="margin: 2px 0;">🟢 <span style="color: #4CAF50;">Dashed ring</span> = Movement threshold</div>
+                                <div style="margin: 2px 0;">🔴 <span style="color: #e91e63;">Solid ring</span> = Moved too far</div>
+                            </div>
+                            <div id="legendGatewayConnections" style="margin: 2px 0;">🟠 <span style="color: #FF9800;">Dotted line</span> = Gateway connection (best signal)</div>
                         </div>
                     </div>
                 </div>
@@ -277,7 +279,7 @@
             <div id="tab-controls" style="display:none;">
                 <div class="menu-section">
                     <div class="menu-section-title">Controls</div>
-                    <label><input type="checkbox" id="showAllNodesInput"> Show All Nodes</label>
+                    <!-- show_all_nodes removed: now config-only setting (edit tracker.config + restart to change) -->
                     <label><input type="checkbox" id="showGatewaysInput"> Show Gateways &amp; Connections</label>
                     <label><input type="checkbox" id="showPositionTrailsInput"> Show Position Trails</label>
                     <label><input type="checkbox" id="showNauticalMarkersInput"> Show Nautical Markers</label>

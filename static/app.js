@@ -1,6 +1,20 @@
 /* Buoy Tracker Client Script (ES5) */
 (function(){
+    // Utility: Debounce function to limit how often a function can fire
+    // Waits for quiet period before executing (prevents spam on rapid events like keystrokes)
+    function debounce(func, wait) {
+      var timeout;
+      return function() {
+        var context = this, args = arguments;
+        clearTimeout(timeout);
+        timeout = setTimeout(function() {
+          func.apply(context, args);
+        }, wait);
+      };
+    }
+
     // Tab switching logic for menu: Legend/Controls
+    var settingsInitialized = false;
     window.showMenuTab = function(tabName) {
       var legendTabBtn = document.getElementById('legendTabBtn');
       var controlsTabBtn = document.getElementById('controlsTabBtn');
@@ -33,7 +47,11 @@
         controlsTabBtn.classList.add('tab-controls');
         tabLegend.style.display = 'none';
         tabControls.style.display = 'block';
-        setTimeout(initSettingsInputs, 100);
+        // Only initialize settings once per menu session
+        if (!settingsInitialized) {
+          setTimeout(initSettingsInputs, 100);
+          settingsInitialized = true;
+        }
       }
     };
 
@@ -56,9 +74,7 @@
           movement_threshold: cfg.special_movement_threshold || 80,
           api_polling_interval: cfg.api_polling_interval || 10
         };
-        if (document.getElementById('showAllNodesInput')) {
-          document.getElementById('showAllNodesInput').checked = controls.show_all_nodes;
-        }
+        // show_all_nodes removed - now config-only setting
         if (document.getElementById('showGatewaysInput')) {
           document.getElementById('showGatewaysInput').checked = controls.show_gateways;
         }
@@ -81,26 +97,41 @@
           document.getElementById('apiPollingInput').value = controls.api_polling_interval;
         }
 
-        // Wire up listeners to update UI state (not persistent)
-        document.getElementById('showAllNodesInput').onchange = function(e) {
-          appFeatures.show_all_nodes = e.target.checked;
-          updateNodes();
-        };
+        // Wire up listeners to update UI state and persist to backend
+        // show_all_nodes removed - now config-only setting
         document.getElementById('showGatewaysInput').onchange = function(e) {
-          appFeatures.show_gateways = e.target.checked;
+          var newValue = e.target.checked;
+          appFeatures.show_gateways = newValue;
+
+          // Update backend setting and reload MQTT subscriptions
+          makeApiRequest('POST', 'api/config/show-gateways', function(xhr) {
+            if (xhr.status === 200 || xhr.status === 207) {
+              var response = JSON.parse(xhr.responseText);
+              if (response.subscriptions_reloaded) {
+                console.log('[CONFIG] show_gateways updated and MQTT subscriptions reloaded');
+              } else if (response.warning) {
+                console.warn('[CONFIG] ' + response.warning);
+              }
+            } else {
+              console.error('[CONFIG] Failed to update show_gateways on backend');
+            }
+          }, JSON.stringify({show_gateways: newValue}));
+
           // Update legend visibility
           var legendRSSI = document.getElementById('legendRSSI');
           var legendSNR = document.getElementById('legendSNR');
           var trafficLightLegend = document.getElementById('trafficLightLegend');
-          if (legendRSSI) legendRSSI.style.display = e.target.checked ? 'block' : 'none';
-          if (legendSNR) legendSNR.style.display = e.target.checked ? 'block' : 'none';
+          if (legendRSSI) legendRSSI.style.display = newValue ? 'block' : 'none';
+          if (legendSNR) legendSNR.style.display = newValue ? 'block' : 'none';
           if (trafficLightLegend) {
-            trafficLightLegend.style.gridTemplateColumns = e.target.checked ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
+            trafficLightLegend.style.gridTemplateColumns = newValue ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
           }
+          updateLegendVisibility();
           updateNodes();
         };
         document.getElementById('showPositionTrailsInput').onchange = function(e) {
           appFeatures.show_position_trails = e.target.checked;
+          updateLegendVisibility();
           updateNodes();
         };
         document.getElementById('showNauticalMarkersInput').onchange = function(e) {
@@ -132,10 +163,11 @@
           }
           updateNodes();
         };
-        document.getElementById('trailHistoryInput').oninput = function(e) {
+        // Debounce: wait 500ms after user stops typing before updating
+        document.getElementById('trailHistoryInput').oninput = debounce(function(e) {
           appFeatures.trail_history_hours = Number(e.target.value);
           updateNodes();
-        };
+        }, 500);
         document.getElementById('lowBatteryInput').onchange = function(e) {
           var newThreshold = parseInt(e.target.value);
           if (newThreshold > 0 && newThreshold <= 100) {
@@ -164,10 +196,15 @@
             }, JSON.stringify({threshold: newThreshold}));
           }
         };
-        document.getElementById('apiPollingInput').oninput = function(e) {
+        // Debounce: wait 500ms after user stops typing before updating polling
+        document.getElementById('apiPollingInput').oninput = debounce(function(e) {
           appFeatures.api_polling_interval = Number(e.target.value);
-          // If polling interval changes, you may want to restart polling logic here
-        };
+          // Restart polling with new interval
+          if (window.pollingTimer) {
+            clearInterval(window.pollingTimer);
+          }
+          startPolling();
+        }, 500);
       });
     }
 
@@ -176,6 +213,8 @@
     window.toggleMenu = function() {
       origToggleMenu();
       var modal = document.getElementById('menu-modal');
+      // Reset settings initialization flag when menu opens
+      settingsInitialized = false;
       // Always show Legend tab by default when menu opens
       showMenuTab('legend');
     };
@@ -339,10 +378,10 @@
         url = urlPrefix + '/' + url.replace(/^\//, '');
       }
 
-      // Add cache-busting parameter with truly random value
+      // Add cache-busting parameter (timestamp is sufficient, no need for random)
       if (method === 'GET') {
         var separator = (url.indexOf('?') === -1) ? '?' : '&';
-        url += separator + '_t=' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        url += separator + '_t=' + Date.now();
       }
 
       var xhr = new XMLHttpRequest();
@@ -513,6 +552,8 @@
         // DO NOT show modal here - only show when user tries to access Control Menu
         // Modal will appear on 401 response when accessing protected endpoints
       }
+      // Set up tooltip event delegation (once on init, eliminates memory leak)
+      setupTooltipDelegation();
     });
   } else {
     // Already loaded
@@ -521,6 +562,8 @@
       // DO NOT show modal here - only show when user tries to access Control Menu
       // Modal will appear on 401 response when accessing protected endpoints
     }
+    // Set up tooltip event delegation (once on init, eliminates memory leak)
+    setupTooltipDelegation();
   }
 
 
@@ -575,9 +618,7 @@
             trafficLightLegend.style.gridTemplateColumns = appFeatures.show_gateways ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
           }
           // Initialize control menu checkboxes immediately
-          if (document.getElementById('showAllNodesInput')) {
-            document.getElementById('showAllNodesInput').checked = appFeatures.show_all_nodes;
-          }
+          // show_all_nodes removed - now config-only setting
           if (document.getElementById('showGatewaysInput')) {
             document.getElementById('showGatewaysInput').checked = appFeatures.show_gateways;
           }
@@ -590,6 +631,8 @@
           if (document.getElementById('trailHistoryInput')) {
             document.getElementById('trailHistoryInput').value = appFeatures.trail_history_hours || 168;
           }
+          // Update legend visibility based on loaded features
+          updateLegendVisibility();
           // Display options are now config-driven; no toggles to update
         } else {
           console.warn('[FEATURES] No features in /health response');
@@ -602,11 +645,26 @@
       });
   }
 
+  // Update legend visibility based on current feature settings
+  function updateLegendVisibility() {
+    // Hide/show movement rings based on position trails setting
+    var movementRings = document.getElementById('legendMovementRings');
+    if (movementRings) {
+      movementRings.style.display = appFeatures.show_position_trails ? 'block' : 'none';
+    }
+
+    // Hide/show gateway connections based on show_gateways setting
+    var gatewayLegend = document.getElementById('legendGatewayConnections');
+    if (gatewayLegend) {
+      gatewayLegend.style.display = appFeatures.show_gateways ? 'block' : 'none';
+    }
+  }
+
     // Ensure the menu checkbox for trails is always checked on load
   // All display options are config-driven; no menu toggles to set
-  
+
   // All display options are config-driven; no menu toggles or listeners needed
-  
+
   // All trail history duration is now config-driven via appFeatures.trail_history_hours
 
   window.toggleMenu = function(){
@@ -647,33 +705,47 @@
   };
 
   // Attach event listeners to traffic light dots for JavaScript-based tooltips
-  function attachTooltipListeners() {
+  function createTooltipElements() {
+    // Creates tooltip DOM elements without adding event listeners
+    // Event listeners are handled via delegation (see setupTooltipDelegation below)
     var dots = document.querySelectorAll('.traffic-light-dot');
     dots.forEach(function(dot) {
       var tooltipText = dot.getAttribute('data-tooltip');
       if (!tooltipText) return;
-      
+
       // Remove any existing tooltip
       var existingTooltip = dot.querySelector('.js-tooltip');
       if (existingTooltip) existingTooltip.parentNode.removeChild(existingTooltip);
-      
+
       // Create tooltip element
       var tooltip = document.createElement('div');
       tooltip.className = 'js-tooltip';
       tooltip.textContent = tooltipText;
       tooltip.style.cssText = 'position:absolute;bottom:120%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.95);color:#fff;padding:4px 8px;border-radius:3px;font-size:11px;white-space:nowrap;display:none;pointer-events:none;z-index:1001;box-shadow:0 2px 8px rgba(0,0,0,0.5);';
       dot.appendChild(tooltip);
-      
-      // Show tooltip on mouseenter
-      dot.addEventListener('mouseenter', function() {
-        tooltip.style.display = 'block';
-      });
-      
-      // Hide tooltip on mouseleave
-      dot.addEventListener('mouseleave', function() {
-        tooltip.style.display = 'none';
-      });
     });
+  }
+
+  // Event delegation for tooltips - set up ONCE on app initialization
+  // This eliminates the memory leak from repeated addEventListener calls
+  function setupTooltipDelegation() {
+    var nodesContainer = document.getElementById('nodes');
+    if (!nodesContainer) return;
+
+    // Use event capturing (true parameter) to catch events before they bubble
+    nodesContainer.addEventListener('mouseenter', function(e) {
+      if (e.target.classList.contains('traffic-light-dot')) {
+        var tooltip = e.target.querySelector('.js-tooltip');
+        if (tooltip) tooltip.style.display = 'block';
+      }
+    }, true);
+
+    nodesContainer.addEventListener('mouseleave', function(e) {
+      if (e.target.classList.contains('traffic-light-dot')) {
+        var tooltip = e.target.querySelector('.js-tooltip');
+        if (tooltip) tooltip.style.display = 'none';
+      }
+    }, true);
   }
 
   // Close sidebar when tapping outside on mobile
@@ -1227,27 +1299,21 @@
             
             // Channel filter removed: skip discoveredChannels logic
             var list = data.nodes.slice(0);
-            
-            // Filter based on display mode:
-            // - show_all_nodes: display everything (no filtering)
-            // - show special + gateways: display special and gateway nodes
-            // - show special only: display only special nodes (when show_gateways is false)
-            if (!appFeatures.show_all_nodes) {
+
+            // Backend already filtered based on show_all_nodes setting
+            // Frontend only needs to filter based on show_gateways toggle (user can hide gateways in real-time)
+            if (!appFeatures.show_gateways) {
               var tmp = [];
               for (var m = 0; m < list.length; m++) {
-                // Always include special nodes
+                // When show_gateways is disabled, only show special nodes (hide gateways)
                 if (list[m].is_special) {
-                  tmp.push(list[m]);
-                }
-                // Include gateway nodes if show_gateways is enabled
-                else if (list[m].is_gateway && appFeatures.show_gateways) {
                   tmp.push(list[m]);
                 }
               }
               list = tmp;
             }
-            // When show_all_nodes is true, don't filter further - show all nodes including gateways and regular nodes
-            
+            // When show_gateways is enabled, show everything backend sent (special + gateways when show_all_nodes=false, or all nodes when show_all_nodes=true)
+
             
             // Always sort: special nodes at top (alphabetically), then gateway nodes, then non-special by newest seen
             var special = [], gateway = [], nonSpecial = [];
@@ -1276,18 +1342,23 @@
               return timeA - timeB;
             });
             list = special.concat(gateway).concat(nonSpecial);
-            // Clear existing nodes safely
+            // Clear existing nodes and update with DocumentFragment (eliminates layout thrashing)
             var nodesContainer = document.getElementById('nodes');
-            nodesContainer.innerHTML = '';
-            // Add nodes using safe DOM methods
+            var fragment = document.createDocumentFragment();
+
+            // Build all cards in DocumentFragment (off-DOM, no reflows)
             for(var q=0;q<list.length;q++){
               var cardElement = buildNodeCardElement(list[q]);
-              nodesContainer.appendChild(cardElement);
+              fragment.appendChild(cardElement);
             }
+
+            // Single DOM update - only 1 reflow instead of N reflows
+            nodesContainer.textContent = ''; // Faster than innerHTML = ''
+            nodesContainer.appendChild(fragment);
             document.getElementById('node-count').textContent = String(list.length);
-            
-            // Attach tooltip event listeners to traffic light dots
-            setTimeout(attachTooltipListeners, 0);
+
+            // Create tooltip DOM elements (event delegation handles interactions)
+            setTimeout(createTooltipElements, 0);
           
           if (map){
             var toMap = []; 
@@ -1823,18 +1894,26 @@
             }
             
             if (appFeatures.show_position_trails){
-              for(var t=0; t<toMap.length; t++){
-                var sn = toMap[t]; 
-                if(!sn.is_special) continue;
-                (function(node){
-                  var hours = parseInt(appFeatures.trail_history_hours || '24', 10);
-                  makeApiRequest('GET', 'api/special/history?node_id=' + node.id + '&hours=' + hours, function(xhr2){
-                    if (xhr2.status === 200){
-                      try { 
-                        var h = JSON.parse(xhr2.responseText); 
-                        var pts = h.points || []; 
-                        
-                        // Remove old trail polyline
+              // Batch API call: get trail history for ALL special nodes in one request
+              // Eliminates N+1 query problem (was making 1 request per special node)
+              var hours = parseInt(appFeatures.trail_history_hours || '24', 10);
+              makeApiRequest('GET', 'api/special/history/batch?hours=' + hours, function(xhr2){
+                if (xhr2.status === 200){
+                  try {
+                    var batchData = JSON.parse(xhr2.responseText);
+                    var trails_data = batchData.trails || {};
+
+                    // Process trail history for each special node
+                    for(var t=0; t<toMap.length; t++){
+                      var node = toMap[t];
+                      if(!node.is_special) continue;
+
+                      var nodeTrailData = trails_data[String(node.id)];
+                      if (!nodeTrailData) continue;
+
+                      var pts = nodeTrailData.points || [];
+
+                      // Remove old trail polyline
                         if (trails[node.id]) { 
                           map.removeLayer(trails[node.id]); 
                           delete trails[node.id]; 
@@ -1993,15 +2072,14 @@
                           trails[node.id].addTo(map);
                         }
                         // Trail data empty for this node
-                      } catch(e){ 
-                        console.warn('Error parsing trail history for node', node.id, e);
-                      }
-                    } else {
-                      console.warn('Trail API request failed for node', node.id, xhr2.status);
                     }
-                  });
-                })(sn);
-              }
+                  } catch(e){
+                    console.warn('Error parsing batch trail history', e);
+                  }
+                } else {
+                  console.warn('Batch trail API request failed:', xhr2.status);
+                }
+              });
             } else { 
               // Remove trails and history markers
               for (var tk in trails){ 
@@ -2082,28 +2160,6 @@
     }
   }
 
-  window.showRecent = function(){
-    try { 
-      makeApiRequest('GET', 'api/recent/messages', function(xhr){ 
-        if (xhr.status !== 200){ 
-          alert('Failed to fetch recent messages'); 
-          return; 
-        } 
-        try { 
-          var data = JSON.parse(xhr.responseText); 
-          var pretty = JSON.stringify(data, null, 2); 
-          var blob = new Blob([pretty], {type:'application/json'}); 
-          var url = URL.createObjectURL(blob); 
-          window.open(url, '_blank'); 
-        } catch(e){ 
-          alert('Failed to parse recent messages'); 
-        } 
-      }); 
-    } catch(e){ 
-      alert('Error fetching recent messages'); 
-    }
-  };
-  
   window.centerNode = function(lat, lon){ 
     if (map) map.setView([lat, lon], 13);
     // On mobile, close sidebar when clicking a node to show the map
@@ -2209,19 +2265,44 @@
   
   // Poll status continuously every 500ms to ensure live updates
   var statusPollInterval = null;
+  var nodePollInterval = null;
   var pollAttempts = 0;
-  
+  var isPageVisible = true;
+
+  // Page Visibility API - pause polling when tab is hidden
+  function handleVisibilityChange() {
+    if (document.hidden) {
+      isPageVisible = false;
+      console.log('[POLLING] Page hidden - pausing polls');
+    } else {
+      isPageVisible = true;
+      console.log('[POLLING] Page visible - resuming polls');
+      // Immediately poll when page becomes visible again
+      try {
+        updateStatus();
+        updateNodes();
+      } catch(e) {
+        console.error('[POLLING] Error on visibility resume:', e);
+      }
+    }
+  }
+
+  // Listen for page visibility changes
+  if (typeof document.hidden !== 'undefined') {
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+  }
+
   function startStatusPolling(){
     try {
       if (statusPollInterval) {
         clearInterval(statusPollInterval);
       }
       pollAttempts = 0;
-      
+
       statusPollInterval = setInterval(function() {
         try {
-          // Skip polling if rate limited
-          if (isRateLimitPaused()) {
+          // Skip polling if page is hidden or rate limited
+          if (!isPageVisible || isRateLimitPaused()) {
             return;
           }
           pollAttempts++;
@@ -2235,18 +2316,22 @@
       console.error('Error starting polling:', e);
     }
   }
-  
+
   try {
     startStatusPolling();
   } catch(e) {
     console.error('Error starting polling:', e);
   }
-  
+
   // Start node polling
   try {
-    setInterval(function(){ 
+    nodePollInterval = setInterval(function(){
       try {
-        updateNodes(); 
+        // Skip polling if page is hidden
+        if (!isPageVisible) {
+          return;
+        }
+        updateNodes();
       } catch(e) {
         console.error('Error in node polling:', e);
       }
@@ -2298,9 +2383,8 @@
       window.addEventListener('resize', reanchorFAB);
       document.addEventListener('scroll', reanchorFAB, { passive: true });
       window.addEventListener('orientationchange', reanchorFAB);
-      
-      // Also check periodically in case we miss an event
-      setInterval(reanchorFAB, 2000);
+
+      // Periodic check removed - event listeners are sufficient
     }
   } catch(e) {
     console.error('[UI] Error setting up FAB:', e);

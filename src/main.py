@@ -29,7 +29,7 @@ console_handler.setLevel(log_level)
 console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(console_formatter)
 
-# File handler with rotation (5MB per file, keep 5 backups = 25MB total)
+# File handler - create fresh log file on each startup
 # Use /app/logs in Docker, otherwise use local logs directory
 if Path('/app').exists() and Path('/app').is_dir():
     log_dir = Path('/app/logs')
@@ -37,11 +37,15 @@ else:
     log_dir = Path(__file__).parent.parent / 'logs'
 log_dir.mkdir(parents=True, exist_ok=True)
 log_file = log_dir / 'buoy_tracker.log'
-file_handler = RotatingFileHandler(
-    str(log_file),
-    maxBytes=5 * 1024 * 1024,  # 5MB per file
-    backupCount=5  # Keep 5 backups
-)
+
+# If log file exists from previous run, archive it with timestamp
+if log_file.exists():
+    timestamp = time.strftime('%Y%m%d-%H%M%S')
+    archived_log = log_dir / f'buoy_tracker-{timestamp}.log'
+    log_file.rename(archived_log)
+
+# Create fresh log file for this run
+file_handler = logging.FileHandler(str(log_file), mode='w')
 file_handler.setLevel(log_level)
 file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(file_formatter)
@@ -53,7 +57,7 @@ root_logger.addHandler(console_handler)
 root_logger.addHandler(file_handler)
 
 logger = logging.getLogger(__name__)
-logger.info(f'=== BUOY TRACKER STARTING (log_level={config.LOG_LEVEL}) ===')
+logger.info(f'=== BUOY TRACKER STARTED at {time.strftime("%Y-%m-%d %H:%M:%S")} (log_level={config.LOG_LEVEL}) ===')
 
 # Suppress verbose Flask/Werkzeug HTTP request logging
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -378,17 +382,6 @@ def health_check() -> Response:
 # /api/status merged into /health endpoint - see health_check() above
 
 
-@api_bp.route('/api/recent/messages', methods=['GET'])
-@check_rate_limit
-def recent_messages() -> Response:
-    try:
-        msgs = mqtt_handler.get_recent(limit=100)
-        return jsonify({'recent': msgs, 'count': len(msgs)})
-    except Exception as e:
-        logger.exception('Failed to return recent messages')
-        return jsonify({'error': str(e)}), 500
-
-
 @api_bp.route('/api/nodes', methods=['GET'])
 @check_rate_limit
 def get_nodes() -> Response:
@@ -401,23 +394,42 @@ def get_nodes() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
-@api_bp.route('/api/special/history', methods=['GET'])
+@api_bp.route('/api/special/history/batch', methods=['GET'])
 @check_rate_limit
-def get_special_history() -> Response:
+def get_special_history_batch() -> Response:
+    """
+    Get trail history for ALL special nodes in a single request.
+    Eliminates N+1 query problem (1 request instead of N requests).
+
+    Query params:
+        hours (int, optional): History window in hours (default from config)
+
+    Returns:
+        {
+            'hours': int,
+            'trails': {
+                'node_id': {'points': [...], 'count': int},
+                ...
+            }
+        }
+    """
     from flask import request
     try:
-        node_id = int(request.args.get('node_id'))
-    except (TypeError, ValueError):
-        logger.warning('special_history: Missing or invalid node_id parameter')
-        return jsonify({'error': 'node_id is required'}), 400
-    try:
         hours = request.args.get('hours', type=int) or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
-        data = mqtt_handler.get_special_history(node_id, hours)
-        return jsonify({'node_id': node_id, 'hours': hours, 'points': data, 'count': len(data)})
-    except Exception as e:
-        logger.exception('Failed to get special history')
-        return jsonify({'error': str(e)}), 500
+        trails = {}
 
+        # Get history for all special nodes
+        for node_id in config.SPECIAL_NODE_IDS:
+            data = mqtt_handler.get_special_history(node_id, hours)
+            trails[str(node_id)] = {
+                'points': data,
+                'count': len(data)
+            }
+
+        return jsonify({'hours': hours, 'trails': trails})
+    except Exception as e:
+        logger.exception('Failed to get batch special history')
+        return jsonify({'error': str(e)}), 500
 
 
 @api_bp.route('/api/signal/history', methods=['GET'])
@@ -473,6 +485,39 @@ def update_battery_threshold() -> Response:
         logger.exception('Failed to update battery threshold')
         return jsonify({'error': str(e)}), 500
 
+@api_bp.route('/api/config/show-gateways', methods=['POST'])
+@require_api_key
+@check_rate_limit
+def update_show_gateways() -> Response:
+    """Update the show_gateways setting and reload MQTT subscriptions."""
+    try:
+        data = request.get_json()
+        show_gateways = bool(data.get('show_gateways', True))
+
+        # Update in memory
+        config.SHOW_GATEWAYS = show_gateways
+        logger.info(f'show_gateways updated to {show_gateways}')
+
+        # Reload MQTT subscriptions with new setting
+        reload_success = mqtt_handler.reload_mqtt_subscriptions()
+
+        if reload_success:
+            return jsonify({
+                'success': True,
+                'show_gateways': show_gateways,
+                'subscriptions_reloaded': True
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'show_gateways': show_gateways,
+                'subscriptions_reloaded': False,
+                'warning': 'Setting updated but MQTT subscriptions could not be reloaded'
+            }), 207  # Multi-Status
+    except Exception as e:
+        logger.exception('Failed to update show_gateways')
+        return jsonify({'error': str(e)}), 500
+
 @api_bp.route('/api/test-alert', methods=['POST'])
 @require_api_key
 @check_rate_limit
@@ -506,50 +551,6 @@ def test_alert() -> Response:
     except Exception as e:
         logger.exception('Failed to send test alert')
         return jsonify({'error': str(e)}), 500
-
-
-@api_bp.route('/docs/<filename>', methods=['GET'])
-def serve_docs(filename: str) -> Tuple[str, int, Dict[str, str]]:
-    """Serve documentation files (LICENSE, ATTRIBUTION.md)."""
-    # Whitelist allowed files for security
-    allowed_files = {'LICENSE', 'ATTRIBUTION.md', 'license', 'attribution.md'}
-    if filename.lower() not in allowed_files:
-        return jsonify({'error': 'Not found'}), 404
-
-    try:
-        # Get the project root directory
-        project_root = Path(__file__).parent.parent
-
-        # Try exact filename first, then lowercase
-        doc_path = project_root / filename
-        if not doc_path.exists():
-            doc_path = project_root / filename.lower()
-
-        if doc_path.exists() and doc_path.is_file():
-            with open(doc_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            # Return as HTML with pre-formatted text
-            html = f'''<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{filename}</title>
-    <style>
-        body {{ font-family: monospace; white-space: pre-wrap; word-wrap: break-word; margin: 20px; background: #f5f5f5; }}
-        pre {{ background: white; padding: 20px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-    </style>
-</head>
-<body>
-<pre>{content}</pre>
-</body>
-</html>'''
-            return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
-    except Exception as e:
-        logger.warning(f'Failed to serve doc file {filename}: {e}')
-        return jsonify({'error': 'Failed to read file'}), 500
-
-    return jsonify({'error': 'File not found'}), 404
 
 
 # Register blueprint with the Flask app
