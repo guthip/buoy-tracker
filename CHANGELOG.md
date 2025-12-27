@@ -2,6 +2,33 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-26] - v0.98 - Critical MQTT Subscription Fix & Page Visibility Polling
+
+### Critical Bug Fix
+- **Fixed broken MQTT subscription logic**
+  - Previous logic attempted to subscribe to individual special node topics (e.g., `!f71e451c/#`)
+  - Special nodes transmit via LoRa mesh and are forwarded by gateways to MQTT
+  - MQTT topic uses gateway's node ID, not the special node's ID
+  - Result: Zero packets received when `show_gateways=false`
+  - **Solution:** Always subscribe to channel wildcard `msh/US/bayarea/2/e/MediumFast/#`
+  - Filtering now happens in application code based on packet payload `from` field
+  - `show_gateways` setting only controls UI display, not MQTT subscriptions
+
+### Frontend Optimization
+- **Added Page Visibility API support**
+  - Automatically pauses all polling when browser tab is hidden/minimized
+  - Immediately refreshes data when user returns to tab
+  - Reduces bandwidth usage and server load
+  - Improves battery life on mobile devices
+  - Logs visibility changes to console for debugging
+
+### Bug Fixes
+- **Fixed special node initialization**
+  - Special nodes now initialized at startup even without configured `home_lat`/`home_lon`
+  - Allows nodes to appear in UI immediately
+  - Origin position set from first GPS packet received
+  - Previously only initialized nodes with home positions configured
+
 ## [2025-12-26] - MQTT Optimization & Logging Improvements
 
 ### MQTT Optimizations
