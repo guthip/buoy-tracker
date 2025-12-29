@@ -199,16 +199,16 @@ def _update_history_entry(entry, rssi, snr, battery_value):
         snr: New SNR value (or None)
         battery_value: New battery value (or None)
     """
-    # Update RSSI if better
+    # Update RSSI if better (RSSI is negative dBm, higher value = better signal, e.g. -50 > -90)
     if rssi is not None and (entry.get('rssi') is None or rssi > entry['rssi']):
         entry['rssi'] = rssi
 
-    # Update SNR if better
+    # Update SNR if better (SNR in dB, higher is better)
     if snr is not None and (entry.get('snr') is None or snr > entry['snr']):
         entry['snr'] = snr
 
-    # Update battery if it wasn't available before
-    if entry.get('battery') is None and battery_value is not None:
+    # Always update battery with latest value
+    if battery_value is not None:
         entry['battery'] = battery_value
 
 def _add_telemetry_to_history(node_id, json_data):
@@ -511,7 +511,14 @@ def _record_gateway_connection(special_node_id, gateway_node_id, json_data, conf
     
     # Store/update this gateway connection
     special_node_gateways[special_node_id][gateway_node_id] = connection_info
-    
+
+    # Update the gateway's own node_data with latest signal and timestamp
+    nodes_data[gateway_node_id]["last_seen"] = time.time()
+    if json_data.get("rx_rssi") is not None:
+        nodes_data[gateway_node_id]["rx_rssi"] = json_data["rx_rssi"]
+    if json_data.get("rx_snr") is not None:
+        nodes_data[gateway_node_id]["rx_snr"] = json_data["rx_snr"]
+
     # Track best gateway: the one with strongest RSSI for this special node
     # rssi is negative, so higher (less negative) = stronger
     # Prefer direct-hop detections over partial detections
@@ -608,7 +615,7 @@ def _extract_gateway_from_packet(special_node_id, json_data):
             nodes_data[gateway_node_id] = {}
         # Record the gateway as direct reception (only type we accept)
         _record_gateway_connection(special_node_id, gateway_node_id, json_data, confidence="direct")
-        logger.info(f"✅ GATEWAY DETECTED [Direct Reception]: {gateway_node_id} for special node {special_node_id}, topic: {mqtt_topic}")
+        logger.debug(f"Gateway detected: {gateway_node_id} received direct from special_node={special_node_id}")
     else:
         logger.debug(f"Failed to extract gateway node ID from topic: {mqtt_topic}")
 
@@ -1005,9 +1012,13 @@ def on_nodeinfo(json_data):
             
             logger.info(f'Updated nodeinfo for {node_id}: {nodes_data[node_id]["long_name"]}')
 
-            # If this node is a gateway, update its name in all gateway connections
+            # If this node is a gateway, update its name in all gateway connections and cache
             updated_name = nodes_data[node_id].get("long_name")
             _update_gateway_names_in_connections(node_id, updated_name)
+
+            # Also update gateway info cache if this is a gateway
+            if node_is_gateway.get(node_id, False) and node_id in gateway_info_cache:
+                gateway_info_cache[node_id]["name"] = updated_name
 
     except Exception as e:
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
@@ -1102,13 +1113,26 @@ def on_position(json_data):
             nodes_data[node_id]["altitude"] = alt
             nodes_data[node_id]["last_seen"] = time.time()
             nodes_data[node_id]["last_position_update"] = time.time()  # Track position updates separately
-            
+
             # Store signal quality metrics if available
             if "rx_rssi" in json_data:
                 nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
             if "rx_snr" in json_data:
                 nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
-            
+
+            # If this is a gateway, update its position in all special node connections
+            if node_is_gateway.get(node_id, False):
+                for special_id, gw_dict in special_node_gateways.items():
+                    if node_id in gw_dict:
+                        gw_dict[node_id]["lat"] = lat
+                        gw_dict[node_id]["lon"] = lon
+                        gw_dict[node_id]["last_seen"] = time.time()
+
+                # Update gateway info cache
+                if node_id in gateway_info_cache:
+                    gateway_info_cache[node_id]["lat"] = lat
+                    gateway_info_cache[node_id]["lon"] = lon
+
             # Record history for special nodes (deduplicate by rxTime to avoid retransmitted packets)
             if is_special:
                 # Extract rxTime from the packet to deduplicate retransmissions

@@ -13,6 +13,426 @@
       };
     }
 
+    // ============================================================================
+    // HELPER FUNCTIONS - Reusable utilities to reduce code duplication
+    // ============================================================================
+
+    /**
+     * Calculate distance between two lat/lon points using Haversine formula
+     * @param {number} lat1 - Latitude of first point
+     * @param {number} lon1 - Longitude of first point
+     * @param {number} lat2 - Latitude of second point
+     * @param {number} lon2 - Longitude of second point
+     * @returns {number} Distance in meters
+     */
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      var R = 6371; // Earth's radius in km
+      var lat1Rad = (lat1 * Math.PI) / 180;
+      var lon1Rad = (lon1 * Math.PI) / 180;
+      var lat2Rad = (lat2 * Math.PI) / 180;
+      var lon2Rad = (lon2 * Math.PI) / 180;
+      var dlat = lat2Rad - lat1Rad;
+      var dlon = lon2Rad - lon1Rad;
+      var a = Math.sin(dlat / 2) * Math.sin(dlat / 2) +
+              Math.cos(lat1Rad) * Math.cos(lat2Rad) *
+              Math.sin(dlon / 2) * Math.sin(dlon / 2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return Math.round(R * c * 1000); // Return meters
+    }
+
+    /**
+     * Format battery/voltage for display
+     * @param {number} batteryValue - Battery percentage or voltage
+     * @param {boolean} hasPowerSensor - True if node has power sensor (voltage), false for battery %
+     * @param {number} voltage - Optional voltage value if available
+     * @returns {string} Formatted battery string or null
+     */
+    function formatBattery(batteryValue, hasPowerSensor, voltage) {
+      if (batteryValue === null || batteryValue === undefined) return null;
+
+      var displayVoltage, displayBat;
+      if (hasPowerSensor) {
+        displayVoltage = batteryValue;
+        displayBat = voltageToPercentage(displayVoltage);
+      } else {
+        displayBat = Math.round(batteryValue);
+        displayVoltage = voltage != null ? voltage : percentageToVoltage(displayBat);
+      }
+
+      if (displayVoltage != null && displayBat != null) {
+        return displayVoltage.toFixed(2) + 'V (' + displayBat + '%)';
+      }
+      return null;
+    }
+
+    /**
+     * Format timestamp for display
+     * @param {number} epochSeconds - Unix timestamp in seconds
+     * @returns {string} Formatted date string
+     */
+    function formatTimestamp(epochSeconds) {
+      return new Date(epochSeconds * 1000).toLocaleString();
+    }
+
+    /**
+     * Format time ago in human readable format (e.g. "5m ago", "2h ago")
+     * @param {number} epochSeconds - Unix timestamp in seconds
+     * @returns {string} Human readable time ago string
+     */
+    function formatTimeAgo(epochSeconds) {
+      var now = Date.now() / 1000;
+      var age = Math.round(now - epochSeconds);
+      if (age < 60) return age + 's';
+      if (age < 3600) return Math.floor(age / 60) + 'm';
+      return Math.floor(age / 3600) + 'h';
+    }
+
+    /**
+     * Build popup text for trail position marker
+     * @param {object} point - Position point with lat, lon, ts, battery, rssi, snr
+     * @param {number} index - Index of this point in trail
+     * @param {number} total - Total number of points
+     * @param {object} node - Node object with origin_lat, origin_lon, has_power_sensor
+     * @returns {string} HTML popup text
+     */
+    function buildTrailPopup(point, index, total, node) {
+      var lines = [];
+
+      // Position info
+      var posText = 'Pos #' + (index + 1) + ' / ' + total;
+      if (index === 0) posText += ' (OLDEST)';
+      if (index === total - 1) posText += ' (NEWEST)';
+      lines.push(posText);
+
+      // Timestamp
+      if (point.ts) {
+        lines.push('Time: ' + formatTimestamp(point.ts));
+      }
+
+      // Coordinates
+      lines.push('Lat: ' + point.lat.toFixed(6));
+      lines.push('Lon: ' + point.lon.toFixed(6));
+
+      // Distance to home
+      if (node.origin_lat != null && node.origin_lon != null) {
+        var distM = calculateDistance(node.origin_lat, node.origin_lon, point.lat, point.lon);
+        lines.push('Distance to home: ' + distM + ' M');
+      }
+
+      // Battery
+      var batteryStr = formatBattery(point.battery, node.has_power_sensor, point.voltage);
+      if (batteryStr) {
+        lines.push('Battery: ' + batteryStr);
+      }
+
+      // Signal quality
+      if (point.rssi !== null && point.rssi !== undefined) {
+        lines.push('RSSI: ' + point.rssi + ' dBm');
+      }
+      if (point.snr !== null && point.snr !== undefined) {
+        lines.push('SNR: ' + (Math.round(point.snr * 10) / 10) + ' dB');
+      }
+
+      return lines.join('<br>');
+    }
+
+    /**
+     * Create marker style options based on position in trail
+     * Size gradient: newest (last) = largest, oldest (first) = smallest
+     * @param {number} index - Index of point in trail
+     * @param {number} total - Total points in trail
+     * @returns {object} Leaflet marker style options
+     */
+    function getTrailMarkerStyle(index, total) {
+      // Size increases from 5px (oldest) to 12px (newest)
+      // Color fades from light blue (oldest) to dark blue (newest)
+      var ratio = total > 1 ? (index / (total - 1)) : 1;
+      var radius = 5 + (ratio * 7);  // 5-12px range
+
+      // Color gradient: #90CAF9 (light blue, oldest) to #1976D2 (dark blue, newest)
+      var r = Math.round(144 + (ratio * (25 - 144)));  // 144 -> 25
+      var g = Math.round(202 + (ratio * (118 - 202))); // 202 -> 118
+      var b = Math.round(249 + (ratio * (210 - 249))); // 249 -> 210
+      var fillColor = 'rgb(' + r + ',' + g + ',' + b + ')';
+
+      return {
+        radius: radius,
+        fillColor: fillColor,
+        color: fillColor,
+        weight: 2,
+        opacity: 0.8,
+        fillOpacity: 0.6
+      };
+    }
+
+    /**
+     * Convert traffic light color name to hex color
+     * @param {string} color - Color name: 'green', 'yellow', 'red', or anything else
+     * @returns {string} Hex color code
+     */
+    function trafficLightColor(color) {
+      switch(color) {
+        case 'green': return '#4CAF50';
+        case 'yellow': return '#FFEB3B';
+        case 'red': return '#F44336';
+        default: return '#bbb';
+      }
+    }
+
+    /**
+     * Format battery for node card display (voltage on one line, % on another)
+     * @param {number} voltage - Voltage value (can be null)
+     * @param {number} battery - Battery percentage (can be null)
+     * @returns {string} Formatted battery string with line break
+     */
+    function formatBatteryForCard(voltage, battery) {
+      var displayVoltage = voltage;
+      var displayBat = battery;
+
+      // Calculate missing values
+      if (displayVoltage === null && displayBat !== null) {
+        displayVoltage = percentageToVoltage(displayBat);
+      } else if (displayBat === null && displayVoltage !== null) {
+        displayBat = voltageToPercentage(displayVoltage);
+      }
+
+      // Show both voltage and percentage
+      if (displayVoltage !== null && displayBat !== null) {
+        return displayVoltage.toFixed(2) + 'V<br>' + displayBat + '%';
+      }
+      return '?';
+    }
+
+    /**
+     * Calculate age-based traffic light color and text
+     * @param {number} timestamp - Unix timestamp in seconds
+     * @param {number} greenThreshold - Max age (seconds) for green status
+     * @param {number} yellowThreshold - Max age (seconds) for yellow status
+     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '5s'|'3m'|'2h'|'?'}
+     */
+    function getAgeStatus(timestamp, greenThreshold, yellowThreshold) {
+      if (timestamp == null) return {color: 'gray', text: '?'};
+      var now = Date.now() / 1000;
+      var age = Math.round(now - timestamp);
+      var color = age < greenThreshold ? 'green' : age < yellowThreshold ? 'yellow' : 'red';
+      var text = formatTimeAgo(timestamp);
+      return {color: color, text: text};
+    }
+
+    /**
+     * Calculate battery traffic light color
+     * @param {number} batteryPct - Battery percentage (0-100)
+     * @param {number} voltage - Battery voltage
+     * @returns {string} 'green'|'yellow'|'red'|'gray'
+     */
+    function getBatteryColor(batteryPct, voltage) {
+      if (batteryPct !== null) {
+        if (voltage !== null) {
+          // Have both: use combined check
+          if (batteryPct >= 70 && voltage >= 3.7) return 'green';
+          if (batteryPct >= 40 && voltage >= 3.5) return 'yellow';
+          return 'red';
+        } else {
+          // Have battery but not voltage
+          if (batteryPct >= 70) return 'green';
+          if (batteryPct >= 40) return 'yellow';
+          return 'red';
+        }
+      } else if (voltage !== null) {
+        // Have voltage but not battery percentage
+        if (voltage >= 3.7) return 'green';
+        if (voltage >= 3.5) return 'yellow';
+        return 'red';
+      }
+      return 'gray';
+    }
+
+    /**
+     * Calculate distance traffic light color and text
+     * @param {number} distanceMeters - Distance from home in meters
+     * @param {number} threshold - Movement threshold in meters
+     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '150M'|'?'}
+     */
+    function getDistanceStatus(distanceMeters, threshold) {
+      if (distanceMeters == null || isNaN(distanceMeters)) return {color: 'gray', text: '?'};
+      var distm = Math.round(Number(distanceMeters));
+      var color = distm < threshold/2 ? 'green' : distm < threshold ? 'yellow' : 'red';
+      var text = distm + 'M';
+      return {color: color, text: text};
+    }
+
+    /**
+     * Calculate signal strength (RSSI) traffic light color and text
+     * @param {number} rssi - Signal strength in dBm (e.g. -70)
+     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '-70dBm'|'?'}
+     */
+    function getRssiStatus(rssi) {
+      if (rssi == null) return {color: 'gray', text: '?'};
+      var color = rssi > -70 ? 'green' : rssi > -90 ? 'yellow' : 'red';
+      var text = rssi + 'dBm';
+      return {color: color, text: text};
+    }
+
+    /**
+     * Calculate signal-to-noise ratio (SNR) traffic light color and text
+     * @param {number} snr - SNR in dB
+     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '5.2dB'|'?'}
+     */
+    function getSnrStatus(snr) {
+      if (snr == null) return {color: 'gray', text: '?'};
+      var color = snr > 5 ? 'green' : snr > -5 ? 'yellow' : 'red';
+      var text = Math.round(snr * 10) / 10 + 'dB';
+      return {color: color, text: text};
+    }
+
+    /**
+     * Build a single traffic light indicator HTML
+     * @param {string} tooltip - Tooltip text
+     * @param {string} color - Traffic light color name
+     * @param {string} text - Display text below dot
+     * @returns {string} HTML string for indicator
+     */
+    function buildIndicator(tooltip, color, text) {
+      return '<div style="text-align:center;font-size:0.7em;">' +
+             '<div class="traffic-light-dot" data-tooltip="' + tooltip + '">' +
+             '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' +
+             trafficLightColor(color) +
+             ';border:1px solid #888;cursor:help;"></span></div>' +
+             '<div style="margin-top:2px;color:#666;min-height:12px;line-height:1.2;">' + text + '</div>' +
+             '</div>';
+    }
+
+    /**
+     * Build map marker popup HTML for a node
+     * @param {object} node - Node data object
+     * @param {object} displayInfo - Display information {name, label, stale, noFix, short, channel}
+     * @returns {string} HTML popup content
+     */
+    function buildMapPopup(node, displayInfo) {
+      var popup = '<b>' + displayInfo.name + '</b>' + displayInfo.label + displayInfo.stale + displayInfo.noFix + '<br>' + displayInfo.short;
+
+      // Node ID in decimal and hex
+      var nodeIdHex = '!' + node.id.toString(16).padStart(8, '0');
+      popup += '<br>ID: ' + node.id + ' (' + nodeIdHex + ')';
+
+      // Battery/Voltage info
+      var displayVoltage = (node.is_special && node.improved_voltage != null) ? node.improved_voltage : node.voltage;
+      var displayBat = node.battery;
+
+      // Calculate missing values
+      if (displayVoltage === null && displayBat !== null) {
+        displayVoltage = percentageToVoltage(displayBat);
+      } else if (displayBat === null && displayVoltage !== null) {
+        displayBat = voltageToPercentage(displayVoltage);
+      }
+
+      if (displayVoltage !== null && displayBat !== null) {
+        popup += '<br>Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)';
+        if (node.battery_low) {
+          popup += ' ⚠️ LOW';
+        }
+      } else {
+        popup += '<br>Battery: ?';
+      }
+
+      // Channel
+      if (displayInfo.channel) {
+        popup += '<br>Channel: ' + displayInfo.channel;
+      }
+
+      // Hardware model
+      if (node.hw_model && node.hw_model !== 'Unknown') {
+        popup += '<br>Hardware: ' + node.hw_model;
+      }
+
+      // Role
+      if (node.role && node.role !== 'Unknown') {
+        popup += '<br>Role: ' + node.role.replace('CLIENT_', '');
+      }
+
+      // Gateway: Show which special nodes it's receiving from
+      if (node.is_gateway) {
+        var specialNodesReceivingViaThis = [];
+        var allSpecialNodes = currentNodesData || [];
+        for (var snIdx = 0; snIdx < allSpecialNodes.length; snIdx++) {
+          var specialNode = allSpecialNodes[snIdx];
+          if (specialNode.is_special && specialNode.gateway_connections) {
+            for (var gwIdx = 0; gwIdx < specialNode.gateway_connections.length; gwIdx++) {
+              var gw = specialNode.gateway_connections[gwIdx];
+              if (gw.id === node.id) {
+                specialNodesReceivingViaThis.push({
+                  name: specialNode.name,
+                  rssi: gw.rssi,
+                  snr: gw.snr,
+                  hops_traveled: (gw.hop_start !== undefined && gw.hop_limit !== undefined) ? (gw.hop_start - gw.hop_limit) : null,
+                  is_best: specialNode.best_gateway && specialNode.best_gateway.id === node.id
+                });
+                break;
+              }
+            }
+          }
+        }
+
+        if (specialNodesReceivingViaThis.length > 0) {
+          popup += '<br><hr style="margin:3px 0;"><span style="font-weight:bold;">📶 Receiving from:</span>';
+          for (var snrIdx = 0; snrIdx < specialNodesReceivingViaThis.length; snrIdx++) {
+            var snConnection = specialNodesReceivingViaThis[snrIdx];
+            var bestMarker = snConnection.is_best ? ' ⭐' : '';
+            var hopInfo = snConnection.hops_traveled !== null ? ' (' + snConnection.hops_traveled + 'h)' : '';
+            var rssiStr = snConnection.rssi !== undefined ? ' ' + snConnection.rssi + 'dBm' : '';
+            var snrStr = snConnection.snr !== undefined ? ' SNR:' + snConnection.snr.toFixed(1) : '';
+            popup += '<br>├─ ' + snConnection.name + hopInfo + rssiStr + snrStr + bestMarker;
+          }
+        }
+      }
+
+      // Position coordinates
+      if (node.lat != null && node.lon != null) {
+        popup += '<br>Position: ' + node.lat.toFixed(6) + ', ' + node.lon.toFixed(6);
+        if (node.alt != null && node.alt !== 0) {
+          popup += ' (' + node.alt + 'm)';
+        }
+      }
+
+      // Special node: movement info
+      if (node.is_special) {
+        if (node.distance_from_origin_m != null) {
+          var dist = Math.round(node.distance_from_origin_m);
+          popup += '<br>Distance from home: ' + dist + 'M';
+          if (node.moved_far) {
+            popup += ' <span style="color:#e91e63;font-weight:bold;">⚠️ MOVED FAR</span>';
+          }
+        }
+
+        // Time indicators
+        if (node.last_position_update != null) {
+          popup += '<br>Last Position Update: ' + formatTimeAgo(node.last_position_update) + ' ago';
+        }
+        if (node.last_seen != null) {
+          popup += '<br>Sign of Life: ' + formatTimeAgo(node.last_seen) + ' ago';
+        }
+      }
+
+      // All gateway connections (only for special nodes)
+      if (node.is_special && node.gateway_connections && node.gateway_connections.length > 0) {
+        popup += '<br><hr style="margin:3px 0;"><span style="font-weight:bold;">📡 First-hop Gateways:</span>';
+        for (var gwPopupIdx = 0; gwPopupIdx < node.gateway_connections.length; gwPopupIdx++) {
+          var gwConn = node.gateway_connections[gwPopupIdx];
+          var isBest = node.best_gateway && node.best_gateway.id === gwConn.id;
+          var bestMarker = isBest ? ' ⭐' : '';
+          var rssiStr = gwConn.rssi !== undefined ? ' RSSI:' + gwConn.rssi + 'dBm' : '';
+          var snrStr = gwConn.snr !== undefined ? ' SNR:' + gwConn.snr.toFixed(2) + 'dB' : '';
+          var noPos = (gwConn.lat == null || gwConn.lon == null) ? ' 📍?' : '';
+          popup += '<br>├─ ' + gwConn.name + rssiStr + snrStr + noPos + bestMarker;
+        }
+      }
+
+      // Add link to liamcottle meshview server
+      popup += '<br><a href="https://meshtastic.liamcottle.net/?node_id=' + node.id + '" target="_blank" style="color:#2196F3;">View on Meshtastic Map</a>';
+
+      return popup;
+    }
+
     // Tab switching logic for menu: Legend/Controls
     var settingsInitialized = false;
     window.showMenuTab = function(tabName) {
@@ -56,6 +476,18 @@
     };
 
     // Initialize settings inputs with config values from /health
+    // Helper to set input values from config
+    function setInputValue(elementId, value, isCheckbox) {
+      var el = document.getElementById(elementId);
+      if (el) {
+        if (isCheckbox) {
+          el.checked = value;
+        } else {
+          el.value = value;
+        }
+      }
+    }
+
     function initSettingsInputs() {
       makeApiRequest('GET', 'health', function(xhr) {
         if (xhr.status !== 200) return;
@@ -63,6 +495,7 @@
         try { data = JSON.parse(xhr.responseText); } catch(e) { return; }
         var cfg = data.config || {};
         var features = data.features || {};
+
         // Set controls to defaults from config
         var controls = {
           show_all_nodes: features.show_all_nodes !== undefined ? features.show_all_nodes : false,
@@ -74,28 +507,15 @@
           movement_threshold: cfg.special_movement_threshold || 80,
           api_polling_interval: cfg.api_polling_interval || 10
         };
-        // show_all_nodes removed - now config-only setting
-        if (document.getElementById('showGatewaysInput')) {
-          document.getElementById('showGatewaysInput').checked = controls.show_gateways;
-        }
-        if (document.getElementById('showPositionTrailsInput')) {
-          document.getElementById('showPositionTrailsInput').checked = controls.show_position_trails;
-        }
-        if (document.getElementById('showNauticalMarkersInput')) {
-          document.getElementById('showNauticalMarkersInput').checked = controls.show_nautical_markers;
-        }
-        if (document.getElementById('trailHistoryInput')) {
-          document.getElementById('trailHistoryInput').value = controls.trail_history_hours;
-        }
-        if (document.getElementById('lowBatteryInput')) {
-          document.getElementById('lowBatteryInput').value = controls.low_battery_threshold;
-        }
-        if (document.getElementById('movementThresholdInput')) {
-          document.getElementById('movementThresholdInput').value = controls.movement_threshold;
-        }
-        if (document.getElementById('apiPollingInput')) {
-          document.getElementById('apiPollingInput').value = controls.api_polling_interval;
-        }
+
+        // Initialize input values using helper
+        setInputValue('showGatewaysInput', controls.show_gateways, true);
+        setInputValue('showPositionTrailsInput', controls.show_position_trails, true);
+        setInputValue('showNauticalMarkersInput', controls.show_nautical_markers, true);
+        setInputValue('trailHistoryInput', controls.trail_history_hours, false);
+        setInputValue('lowBatteryInput', controls.low_battery_threshold, false);
+        setInputValue('movementThresholdInput', controls.movement_threshold, false);
+        setInputValue('apiPollingInput', controls.api_polling_interval, false);
 
         // Wire up listeners to update UI state and persist to backend
         // show_all_nodes removed - now config-only setting
@@ -863,15 +1283,17 @@
           count: 1
         };
       } else {
-        // Keep the max (highest) RSSI and SNR values within the minute
+        // Keep the best signal values within the minute (RSSI: higher value = better, e.g. -50 > -90, SNR: higher is better)
         if (p.rssi != null && (aggregatedData[minuteKey].rssi == null || p.rssi > aggregatedData[minuteKey].rssi)) {
           aggregatedData[minuteKey].rssi = p.rssi;
         }
         if (p.snr != null && (aggregatedData[minuteKey].snr == null || p.snr > aggregatedData[minuteKey].snr)) {
           aggregatedData[minuteKey].snr = p.snr;
         }
-        if (p.battery != null) {
+        // Keep the most recent battery value within the minute (latest timestamp)
+        if (p.battery != null && (aggregatedData[minuteKey].battery == null || p.ts >= aggregatedData[minuteKey].ts)) {
           aggregatedData[minuteKey].battery = p.battery;
+          aggregatedData[minuteKey].ts = p.ts; // Update timestamp to match battery value
         }
         aggregatedData[minuteKey].count++;
       }
@@ -967,19 +1389,9 @@
       // Build tooltip with each metric on a new line
       var tooltipLines = [];
       if (p.battery != null) {
-        var displayVoltage, displayBat;
-        if (hasPowerSensor) {
-          // For power sensor nodes, battery field contains voltage
-          displayVoltage = p.battery;
-          displayBat = voltageToPercentage(displayVoltage);
-        } else {
-          // For other nodes, battery field contains percentage
-          displayBat = Math.round(p.battery);
-          displayVoltage = p.voltage != null ? p.voltage : percentageToVoltage(displayBat);
-        }
-        // Always show both voltage and percentage
-        if (displayVoltage != null && displayBat != null) {
-          tooltipLines.push('Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)');
+        var batteryStr = formatBattery(p.battery, hasPowerSensor, p.voltage);
+        if (batteryStr) {
+          tooltipLines.push('Battery: ' + batteryStr);
         }
       }
       if (p.rssi != null) tooltipLines.push('RSSI: ' + p.rssi + 'dBm');
@@ -1090,150 +1502,40 @@
                  '</div>';
 
     // --- Traffic light indicators ---
-    var now = Date.now() / 1000;
-    // Battery
     var bat = (node.battery != null) ? node.battery : null;
     var voltage = (node.voltage != null) ? node.voltage : null;
-    var batteryColor = 'gray';
-    // Show battery color if either battery percentage OR voltage is available
-    if (bat !== null) {
-      if (voltage !== null) {
-        // Have both: use combined check
-        if (bat >= 70 && voltage >= 3.7) batteryColor = 'green';
-        else if (bat >= 40 && voltage >= 3.5) batteryColor = 'yellow';
-        else batteryColor = 'red';
-      } else {
-        // Have battery but not voltage: use battery alone
-        if (bat >= 70) batteryColor = 'green';
-        else if (bat >= 40) batteryColor = 'yellow';
-        else batteryColor = 'red';
-      }
-    } else if (voltage !== null) {
-      // Have voltage but not battery percentage: estimate from voltage
-      if (voltage >= 3.7) batteryColor = 'green';
-      else if (voltage >= 3.5) batteryColor = 'yellow';
-      else batteryColor = 'red';
-    }
-    // LPU
-    var lpuColor = 'gray';
-    var lpuStr = '?';
-    if (node.last_position_update != null) {
-      var lpuAge = Math.round(now - node.last_position_update);
-      if (lpuAge < statusBlueThreshold) lpuColor = 'green';
-      else if (lpuAge < statusOrangeThreshold) lpuColor = 'yellow';
-      else lpuColor = 'red';
-      if (lpuAge < 60) lpuStr = lpuAge + 's';
-      else if (lpuAge < 3600) lpuStr = Math.floor(lpuAge / 60) + 'm';
-      else lpuStr = Math.floor(lpuAge / 3600) + 'h';
-    }
-    // SoL
-    var solColor = 'gray';
-    var solStr = '?';
-    if (node.last_seen != null) {
-      var solAge = Math.round(now - node.last_seen);
-      if (solAge < 3600) solColor = 'green';
-      else if (solAge < 12*3600) solColor = 'yellow';
-      else solColor = 'red';
-      if (solAge < 60) solStr = solAge + 's';
-      else if (solAge < 3600) solStr = Math.floor(solAge / 60) + 'm';
-      else solStr = Math.floor(solAge / 3600) + 'h';
-    }
-    // Distance from home (special nodes)
-    var distColor = 'gray';
-    var distStr = '?';
-    if (node.is_special && node.distance_from_origin_m != null && node.origin_lat != null && node.origin_lon != null) {
-      var distm = Math.round(Number(node.distance_from_origin_m));
-      distStr = !isNaN(distm) ? distm + 'M' : '?';
-      var threshold = specialMovementThreshold;
-      if (distm < threshold/2) distColor = 'green';
-      else if (distm < threshold) distColor = 'yellow';
-      else distColor = 'red';
-    }
 
-    // Build traffic light indicators row in order: LPU, distance, SoL, battery, RSSI, SNR
-    var rssiColor = 'gray';
-    var rssiStr = '?';
-    var rssiValue = null;
-    
-    // For special nodes, show gateway signal metrics; for others show node rx metrics
-    if (node.is_special && node.best_gateway) {
-      rssiValue = node.best_gateway.rssi;
-    } else if (node.rx_rssi != null) {
-      rssiValue = node.rx_rssi;
-    }
-    
-    if (rssiValue != null) {
-      var rssi = rssiValue;
-      rssiStr = rssi + 'dBm';
-      // RSSI scale: -50 (excellent) to -120 (poor)
-      if (rssi > -70) rssiColor = 'green';
-      else if (rssi > -90) rssiColor = 'yellow';
-      else rssiColor = 'red';
-    }
-    
-    // SNR
-    var snrColor = 'gray';
-    var snrStr = '?';
-    var snrValue = null;
-    
-    // For special nodes, show gateway signal metrics; for others show node rx metrics
-    if (node.is_special && node.best_gateway) {
-      snrValue = node.best_gateway.snr;
-    } else if (node.rx_snr != null) {
-      snrValue = node.rx_snr;
-    }
-    
-    if (snrValue != null) {
-      var snr = snrValue;
-      snrStr = Math.round(snr * 10) / 10 + 'dB';
-      // SNR scale: >10 (excellent) to <-5 (poor)
-      if (snr > 5) snrColor = 'green';
-      else if (snr > -5) snrColor = 'yellow';
-      else snrColor = 'red';
-    }
+    // Calculate all indicator statuses using helper functions
+    var batteryColor = getBatteryColor(bat, voltage);
+    var lpuStatus = getAgeStatus(node.last_position_update, statusBlueThreshold, statusOrangeThreshold);
+    var solStatus = getAgeStatus(node.last_seen, 3600, 12*3600);
+    var distStatus = getDistanceStatus(
+      node.is_special ? node.distance_from_origin_m : null,
+      specialMovementThreshold
+    );
 
-    // Build indicators row conditionally based on show_gateways setting
-    var indicatorGrid = '<div style="display:grid;grid-template-columns:repeat(' + (appFeatures.show_gateways ? 6 : 4) + ',1fr);gap:8px;margin:6px 0 0 0;">'
-      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Last Position Update"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-      + (lpuColor==='green'?'#4CAF50':lpuColor==='yellow'?'#FFEB3B':lpuColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + lpuStr + '</div></div>'
-      + (node.is_special?'<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Distance from Home"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-      + (distColor==='green'?'#4CAF50':distColor==='yellow'?'#FFEB3B':distColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + distStr + '</div></div>':'<div></div>')
-      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Sign of Life"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-      + (solColor==='green'?'#4CAF50':solColor==='yellow'?'#FFEB3B':solColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + solStr + '</div></div>'
-      + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Battery Voltage"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-      + (batteryColor==='green'?'#4CAF50':batteryColor==='yellow'?'#FFEB3B':batteryColor==='red'?'#F44336':'#bbb')
-      + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;line-height:1.2;">'
-      + (function() {
-          var displayVoltage = voltage;
-          var displayBat = bat;
-          // Calculate missing values
-          if (displayVoltage === null && displayBat !== null) {
-            displayVoltage = percentageToVoltage(displayBat);
-          } else if (displayBat === null && displayVoltage !== null) {
-            displayBat = voltageToPercentage(displayVoltage);
-          }
-          // Show both voltage and percentage
-          if (displayVoltage !== null && displayBat !== null) {
-            return displayVoltage.toFixed(2) + 'V<br>' + displayBat + '%';
-          }
-          return '?';
-        })()
-      + '</div></div>';
-    
-    // Only add RSSI and SNR indicators if show_gateways is enabled
+    // For special nodes, show gateway signal metrics; for others show node rx metrics
+    var rssiValue = (node.is_special && node.best_gateway) ? node.best_gateway.rssi : node.rx_rssi;
+    var snrValue = (node.is_special && node.best_gateway) ? node.best_gateway.snr : node.rx_snr;
+
+    var rssiStatus = getRssiStatus(rssiValue);
+    var snrStatus = getSnrStatus(snrValue);
+
+    // Build indicators row using helper function
+    var numColumns = appFeatures.show_gateways ? 6 : 4;
+    var indicators = '<div style="display:grid;grid-template-columns:repeat(' + numColumns + ',1fr);gap:8px;margin:6px 0 0 0;">'
+      + buildIndicator('Last Position Update', lpuStatus.color, lpuStatus.text)
+      + (node.is_special ? buildIndicator('Distance from Home', distStatus.color, distStatus.text) : '<div></div>')
+      + buildIndicator('Sign of Life', solStatus.color, solStatus.text)
+      + buildIndicator('Battery Voltage', batteryColor, formatBatteryForCard(voltage, bat));
+
+    // Add RSSI and SNR indicators if show_gateways is enabled
     if (appFeatures.show_gateways) {
-      indicatorGrid += '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal Strength"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-        + (rssiColor==='green'?'#4CAF50':rssiColor==='yellow'?'#FFEB3B':rssiColor==='red'?'#F44336':'#bbb')
-        + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + rssiStr + '</div></div>'
-        + '<div style="text-align:center;font-size:0.7em;"><div class="traffic-light-dot" data-tooltip="Signal-to-Noise Ratio"><span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:'
-        + (snrColor==='green'?'#4CAF50':snrColor==='yellow'?'#FFEB3B':snrColor==='red'?'#F44336':'#bbb')
-        + ';border:1px solid #888;cursor:help;"></span></div><div style="margin-top:2px;color:#666;min-height:12px;">' + snrStr + '</div></div>';
+      indicators += buildIndicator('Signal Strength', rssiStatus.color, rssiStatus.text)
+                  + buildIndicator('Signal-to-Noise Ratio', snrStatus.color, snrStatus.text);
     }
-    
-    var indicators = indicatorGrid + '</div>';
+
+    indicators += '</div>';
 
     var info = indicators;
     var extraInfo = '';
@@ -1300,27 +1602,23 @@
             // Channel filter removed: skip discoveredChannels logic
             var list = data.nodes.slice(0);
 
-            // Backend already filtered based on show_all_nodes setting
-            // Frontend only needs to filter based on show_gateways toggle (user can hide gateways in real-time)
+            // Backend only sends special nodes + gateways
+            // Frontend filter: user can hide gateways in real-time
             if (!appFeatures.show_gateways) {
               var tmp = [];
               for (var m = 0; m < list.length; m++) {
-                // When show_gateways is disabled, only show special nodes (hide gateways)
                 if (list[m].is_special) {
                   tmp.push(list[m]);
                 }
               }
               list = tmp;
             }
-            // When show_gateways is enabled, show everything backend sent (special + gateways when show_all_nodes=false, or all nodes when show_all_nodes=true)
 
-            
-            // Always sort: special nodes at top (alphabetically), then gateway nodes, then non-special by newest seen
-            var special = [], gateway = [], nonSpecial = [];
+            // Sort: special nodes first (alphabetically), then gateways (alphabetically)
+            var special = [], gateway = [];
             for (var i = 0; i < list.length; i++) {
               if (list[i].is_special) special.push(list[i]);
               else if (list[i].is_gateway) gateway.push(list[i]);
-              else nonSpecial.push(list[i]);
             }
             special.sort(function(a, b) {
               var nameA = (a.name || '').toLowerCase();
@@ -1336,12 +1634,7 @@
               if (nameA > nameB) return 1;
               return 0;
             });
-            nonSpecial.sort(function(a, b) {
-              var timeA = a.time_since_seen || 999999;
-              var timeB = b.time_since_seen || 999999;
-              return timeA - timeB;
-            });
-            list = special.concat(gateway).concat(nonSpecial);
+            list = special.concat(gateway);
             // Clear existing nodes and update with DocumentFragment (eliminates layout thrashing)
             var nodesContainer = document.getElementById('nodes');
             var fragment = document.createDocumentFragment();
@@ -1419,17 +1712,16 @@
             }
             
             for(var r=0; r<toMap.length; r++){
-              var node = toMap[r]; 
-              var key = String(node.id); 
+              var node = toMap[r];
+              var key = String(node.id);
               var color = '#f44336';
-              
-              // Skip rendering gateways that are already shown as gateway_connections (to avoid double-rendering)
-              // Only skip if show_all_nodes is enabled (when show_all_nodes is OFF, we only show special+gateways anyway)
-              if (appFeatures.show_all_nodes && node.is_gateway && renderedGatewayIds[node.id]) {
+
+              // Skip gateways already shown as gateway_connections (avoid double-rendering)
+              if (node.is_gateway && renderedGatewayIds[node.id]) {
                 continue;
               }
 
-              // Priority: (1) Special nodes (yellow) > (2) Gateways (green) > (3) Other nodes (blue)
+              // Color coding: Special nodes (yellow/gray) or Gateways (green)
               if (node.is_special) {
                 // Special nodes: yellow when online, gray when offline
                 if (node.status === 'gray' || node.status === 'red') {
@@ -1442,157 +1734,18 @@
               } else if (node.is_gateway) {
                 // Gateways: always green
                 color = '#4CAF50';
-              } else if (node.status === 'blue') {
-                // Regular nodes: blue
-                color = '#2196F3';
-              } else if (node.status === 'red') {
-                color = '#f44336';
-              } else if (node.status === 'online' || node.status_color === 'green') {
-                color = '#4CAF50';
-              } else if (node.status === 'orange') {
-                color = '#FF9800';
               }
               
-              var nm2 = node.name || 'Unknown'; 
-              var sl = (node.is_special && node.special_label)? ' ('+node.special_label+')':''; 
-              var staleTxt = node.stale? ' <em>(stale)</em>':'';
-              var noFixTxt = (node.status === 'gray') ? ' <em>(awaiting GPS)</em>' : '';
-              var sh2 = node.short||'?'; 
-              var bat2 = (node.battery!=null)? node.battery:'?';
-              var channel = node.channel_name ? node.channel_name : (node.modem_preset ? node.modem_preset : '');
-              var channelText = channel ? ('<br>Channel: ' + channel) : '';
-              
-              // Build detailed popup - enhanced for special nodes
-              var popup = '<b>' + nm2 + '</b>' + sl + staleTxt + noFixTxt + '<br>' + sh2;
-              
-              // Node ID in decimal and hex
-              var nodeIdHex = '!' + node.id.toString(16).padStart(8, '0');
-              popup += '<br>ID: ' + node.id + ' (' + nodeIdHex + ')';
-              
-              // Battery/Voltage info
-              // Always show both voltage and percentage, calculating missing values
-              var displayVoltage = (node.is_special && node.improved_voltage != null) ? node.improved_voltage : node.voltage;
-              var displayBat = bat2;
-
-              // Calculate missing values
-              if (displayVoltage === null && displayBat !== null) {
-                displayVoltage = percentageToVoltage(displayBat);
-              } else if (displayBat === null && displayVoltage !== null) {
-                displayBat = voltageToPercentage(displayVoltage);
-              }
-
-              if (displayVoltage !== null && displayBat !== null) {
-                popup += '<br>Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)';
-                if (node.battery_low) {
-                  popup += ' ⚠️ LOW';
-                }
-              } else {
-                popup += '<br>Battery: ?';
-              }
-              
-              // Channel
-              popup += channelText;
-              
-              // Hardware model
-              if (node.hw_model && node.hw_model !== 'Unknown') {
-                popup += '<br>Hardware: ' + node.hw_model;
-              }
-              
-              // Role
-              if (node.role && node.role !== 'Unknown') {
-                popup += '<br>Role: ' + node.role.replace('CLIENT_', '');
-              }
-              
-              // Gateway: Show which special nodes it's receiving from
-              if (node.is_gateway) {
-                // Search all special nodes to find which ones list this gateway in their connections
-                var specialNodesReceivingViaThis = [];
-                var allSpecialNodes = currentNodesData || [];
-                for (var snIdx = 0; snIdx < allSpecialNodes.length; snIdx++) {
-                  var specialNode = allSpecialNodes[snIdx];
-                  if (specialNode.is_special && specialNode.gateway_connections) {
-                    for (var gwIdx = 0; gwIdx < specialNode.gateway_connections.length; gwIdx++) {
-                      var gw = specialNode.gateway_connections[gwIdx];
-                      if (gw.id === node.id) {
-                        specialNodesReceivingViaThis.push({
-                          name: specialNode.name,
-                          rssi: gw.rssi,
-                          snr: gw.snr,
-                          hops_traveled: (gw.hop_start !== undefined && gw.hop_limit !== undefined) ? (gw.hop_start - gw.hop_limit) : null,
-                          is_best: specialNode.best_gateway && specialNode.best_gateway.id === node.id
-                        });
-                        break;
-                      }
-                    }
-                  }
-                }
-                
-                if (specialNodesReceivingViaThis.length > 0) {
-                  popup += '<br><hr style="margin:3px 0;"><span style="font-weight:bold;">📶 Receiving from:</span>';
-                  for (var snrIdx = 0; snrIdx < specialNodesReceivingViaThis.length; snrIdx++) {
-                    var snConnection = specialNodesReceivingViaThis[snrIdx];
-                    var bestMarker = snConnection.is_best ? ' ⭐' : '';
-                    var hopInfo = snConnection.hops_traveled !== null ? ' (' + snConnection.hops_traveled + 'h)' : '';
-                    var rssiStr = snConnection.rssi !== undefined ? ' ' + snConnection.rssi + 'dBm' : '';
-                    var snrStr = snConnection.snr !== undefined ? ' SNR:' + snConnection.snr.toFixed(1) : '';
-                    popup += '<br>├─ ' + snConnection.name + hopInfo + rssiStr + snrStr + bestMarker;
-                  }
-                }
-              }
-              
-              // Position coordinates
-              if (node.lat != null && node.lon != null) {
-                popup += '<br>Position: ' + node.lat.toFixed(6) + ', ' + node.lon.toFixed(6);
-                if (node.alt != null && node.alt !== 0) {
-                  popup += ' (' + node.alt + 'm)';
-                }
-              }
-              
-              // Special node: movement info
-              if (node.is_special) {
-                if (node.distance_from_origin_m != null) {
-                  var dist = Math.round(node.distance_from_origin_m);
-                  popup += '<br>Distance from home: ' + dist + 'M';
-                  if (node.moved_far) {
-                    popup += ' <span style="color:#e91e63;font-weight:bold;">⚠️ MOVED FAR</span>';
-                  }
-                }
-                
-                // Time indicators
-                var now = Date.now() / 1000;
-                if (node.last_position_update != null) {
-                  var lpuAge = Math.round(now - node.last_position_update);
-                  var lpuStr = '';
-                  if (lpuAge < 60) lpuStr = lpuAge + 's';
-                  else if (lpuAge < 3600) lpuStr = Math.floor(lpuAge / 60) + 'm';
-                  else lpuStr = Math.floor(lpuAge / 3600) + 'h';
-                  popup += '<br>Last Position Update: ' + lpuStr + ' ago';
-                }
-                if (node.last_seen != null) {
-                  var solAge = Math.round(now - node.last_seen);
-                  var solStr = '';
-                  if (solAge < 60) solStr = solAge + 's';
-                  else if (solAge < 3600) solStr = Math.floor(solAge / 60) + 'm';
-                  else solStr = Math.floor(solAge / 3600) + 'h';
-                  popup += '<br>Sign of Life: ' + solStr + ' ago';
-                }
-                
-                // Power metrics if available
-              }
-              
-              // Best gateway info if available (only for special nodes)
-              if (node.is_special && node.best_gateway) {
-                popup += '<br><span style="color:#4CAF50;font-weight:bold;">📡 Gateway: ' + node.best_gateway.name + '</span>';
-                if (node.best_gateway.rssi != null) {
-                  popup += '<br>Gateway RSSI: ' + node.best_gateway.rssi + ' dBm';
-                }
-                if (node.best_gateway.snr != null) {
-                  popup += '<br>Gateway SNR: ' + node.best_gateway.snr.toFixed(2) + ' dB';
-                }
-              }
-              
-              // Add link to liamcottle meshview server
-              popup += '<br><a href="https://meshtastic.liamcottle.net/?node_id=' + node.id + '" target="_blank" style="color:#2196F3;">View on Meshtastic Map</a>';
+              // Build popup using helper function
+              var displayInfo = {
+                name: node.name || 'Unknown',
+                label: (node.is_special && node.special_label) ? ' (' + node.special_label + ')' : '',
+                stale: node.stale ? ' <em>(stale)</em>' : '',
+                noFix: (node.status === 'gray') ? ' <em>(awaiting GPS)</em>' : '',
+                short: node.short || '?',
+                channel: node.channel_name ? node.channel_name : (node.modem_preset ? node.modem_preset : '')
+              };
+              var popup = buildMapPopup(node, displayInfo);
 
               
               // Handle nodes without position data (show grey circle at home position for special nodes)
@@ -1734,125 +1887,79 @@
                     delete movementLines[key]; 
                   }
                 }
-                
-                // Draw lines to top 4 gateway connections from the backend
-                if (appFeatures.show_gateways && node.is_special && node.lat != null && node.lon != null && node.gateway_connections) {
-                  var connections = node.gateway_connections;
-                  
-                  // Filter to only gateways that:
-                  // 1. HAVE position data (lat/lon available)
-                  // 2. MEET reliability threshold (score >= 50 = Tier 1 & 2 only)
-                  var connectionsWithPosition = connections.filter(function(gw) {
-                    var hasPosition = gw.lat != null && gw.lon != null && !isNaN(gw.lat) && !isNaN(gw.lon);
-                    var reliabilityScore = gw.reliability_score !== undefined ? gw.reliability_score : 0;
-                    return hasPosition && reliabilityScore >= 50;  // Only Tier 1 (70+) and Tier 2 (50-69)
-                  });
-                  
-                  // Sort connections by RSSI (signal strength) - strongest first
-                  var sortedConnections = connectionsWithPosition.slice().sort(function(a, b) {
-                    var rssiA = a.rssi !== undefined ? a.rssi : -999;
-                    var rssiB = b.rssi !== undefined ? b.rssi : -999;
-                    return rssiB - rssiA; // Descending order (higher RSSI is better)
-                  });
-                  
-                  // Only keep top 4 gateways WITH POSITION DATA and high reliability
-                  var topConnections = sortedConnections.slice(0, 4);
-                  var topGatewayIds = topConnections.map(function(gw) { return gw.id; });
-                  
-                  // Remove lines for gateways NOT in top 4 (but keep them in gateway_connections for future position data)
-                  for (var lineKey in gatewayLines) {
-                    if (lineKey.indexOf('gw_' + node.id + '_') === 0) {
-                      var gwIdFromKey = lineKey.substring(('gw_' + node.id + '_').length);
-                      if (topGatewayIds.indexOf(parseInt(gwIdFromKey, 10)) === -1) {
-                        map.removeLayer(gatewayLines[lineKey]);
-                        delete gatewayLines[lineKey];
-                      }
-                    }
-                  }
-                  
-                  // Draw/update lines for top 4 gateways WITH POSITION DATA
-                  for (var gc = 0; gc < topConnections.length; gc++) {
-                    var gwConnection = topConnections[gc];
-                    var gwId = gwConnection.id;
-                    var gwLat = gwConnection.lat;
-                    var gwLon = gwConnection.lon;
-                    var isBestGateway = node.best_gateway && node.best_gateway.id === gwId;
-                    
-                    if (gwLat != null && gwLon != null) {
-                      var lineKey = 'gw_' + node.id + '_' + gwId;
+
+                // Draw lines to all first-hop gateways
+                if (appFeatures.show_gateways && node.is_special && node.lat != null && node.lon != null && node.gateway_connections && node.gateway_connections.length > 0) {
+                  var activeGatewayKeys = [];
+
+                  // Loop through all gateway connections
+                  for (var gwIdx = 0; gwIdx < node.gateway_connections.length; gwIdx++) {
+                    var gw = node.gateway_connections[gwIdx];
+
+                    // Only show if gateway has position data
+                    if (gw.lat != null && gw.lon != null) {
+                      var lineKey = 'gw_' + node.id + '_' + gw.id;
+                      activeGatewayKeys.push(lineKey);
+
                       var lineOpts = {
-                        color: isBestGateway ? '#FF6F00' : '#FF9800',  // Darker orange for best, brighter for others
-                        weight: isBestGateway ? 3 : 2,  // Thicker lines for visibility
-                        opacity: isBestGateway ? 0.9 : 0.7,  // Higher opacity
-                        dashArray: '3, 5',  // Dotted line
+                        color: '#FF6F00',  // Orange for all gateways
+                        weight: 3,
+                        opacity: 0.9,
+                        dashArray: '3, 5',
                         lineCap: 'round',
                         lineJoin: 'round',
                         interactive: true,
-                        bubblingMouseEvents: false  // Prevent event bubbling
+                        bubblingMouseEvents: false
                       };
-                      var latlngs = [[node.lat, node.lon], [gwLat, gwLon]];
-                      
+                      var latlngs = [[node.lat, node.lon], [gw.lat, gw.lon]];
+
                       if (!gatewayLines[lineKey]) {
-                        try {
-                          gatewayLines[lineKey] = L.polyline(latlngs, lineOpts).addTo(map);
-                        } catch(e) {
-                          console.error(`ERROR creating gateway line: ${e}`);
-                        }
+                        gatewayLines[lineKey] = L.polyline(latlngs, lineOpts).addTo(map);
                       } else {
                         gatewayLines[lineKey].setLatLngs(latlngs);
                         gatewayLines[lineKey].setStyle(lineOpts);
                       }
-                      
+
                       // Update popup with gateway info
-                      var rssiStr = gwConnection.rssi !== undefined ? ' RSSI:' + gwConnection.rssi : '';
-                      var snrStr = gwConnection.snr !== undefined ? ' SNR:' + gwConnection.snr.toFixed(2) : '';
-                      var popup = 'Signal: ' + gwConnection.name + rssiStr + snrStr;
+                      var rssiStr = gw.rssi !== undefined ? ' RSSI:' + gw.rssi : '';
+                      var snrStr = gw.snr !== undefined ? ' SNR:' + gw.snr.toFixed(2) : '';
+                      var popup = 'Signal: ' + gw.name + rssiStr + snrStr;
                       gatewayLines[lineKey].bindPopup(popup);
-                      
-                      // Add hover effects to make the line easier to click
+
+                      // Hover effects
                       gatewayLines[lineKey].on('mouseover', function() {
-                        this.setStyle({
-                          weight: (isBestGateway ? 5 : 4),  // Thicker on hover
-                          opacity: 1.0  // Full opacity on hover
-                        });
+                        this.setStyle({ weight: 5, opacity: 1.0 });
                       });
                       gatewayLines[lineKey].on('mouseout', function() {
-                        this.setStyle({
-                          weight: isBestGateway ? 3 : 2,  // Back to original
-                          opacity: isBestGateway ? 0.9 : 0.7
-                        });
+                        this.setStyle({ weight: 3, opacity: 0.9 });
                       });
-                      
-                      // Calculate circle size based on reliability score (50-100 maps to radius 5-9)
-                      var reliabilityScore = gwConnection.reliability_score !== undefined ? gwConnection.reliability_score : 50;
+
+                      // Create gateway marker
+                      var gwMarkerKey = 'gw_' + node.id + '_' + gw.id;
+                      var reliabilityScore = gw.reliability_score !== undefined ? gw.reliability_score : 50;
                       var circleRadius = 5 + ((reliabilityScore - 50) / 50) * 4;  // 5-9 px range
-                      var confidenceTag = gwConnection.confidence_level === 'direct' ? '✅ DIRECT' : '⚠️ PARTIAL';
-                      
-                      // Create or update gateway marker on map
-                      var gwMarkerKey = 'gw_' + node.id + '_' + gwId;  // Include special node ID to distinguish markers from different nodes
-                      var gwMarkerPopup = '<strong>📡 ' + gwConnection.name + '</strong><br>' +
-                                         'ID: ' + gwId + '<br>' +
+                      var confidenceTag = gw.confidence_level === 'direct' ? '✅ DIRECT' : '⚠️ PARTIAL';
+                      var fillColor = gw.confidence_level === 'direct' ? '#2196F3' : '#4CAF50';
+
+                      var gwMarkerPopup = '<strong>📡 ' + gw.name + '</strong><br>' +
+                                         'ID: ' + gw.id + '<br>' +
                                          'Confidence: ' + confidenceTag + '<br>' +
                                          'Reliability Score: ' + reliabilityScore + '/100<br>' +
-                                         'Detections: ' + (gwConnection.detection_count || 'N/A') + '<br>' +
-                                         'RSSI: ' + (gwConnection.rssi || 'N/A') + ' dBm<br>' +
-                                         'SNR: ' + (gwConnection.snr !== undefined ? gwConnection.snr.toFixed(2) : 'N/A') + ' dB';
-                      
-                      // Determine fill color based on confidence level
-                      var fillColor = gwConnection.confidence_level === 'direct' ? '#2196F3' : '#4CAF50';  // Blue for direct, green for partial
-                      
+                                         'Detections: ' + (gw.detection_count || 'N/A') + '<br>' +
+                                         'RSSI: ' + (gw.rssi || 'N/A') + ' dBm<br>' +
+                                         'SNR: ' + (gw.snr !== undefined ? gw.snr.toFixed(2) : 'N/A') + ' dB';
+
                       if (!gatewayMarkers[gwMarkerKey]) {
-                        // Create new gateway marker with size based on reliability
-                        gatewayMarkers[gwMarkerKey] = L.circleMarker([gwLat, gwLon], {
+                        gatewayMarkers[gwMarkerKey] = L.circleMarker([gw.lat, gw.lon], {
                           radius: circleRadius,
                           fillColor: fillColor,
-                          color: fillColor === '#2196F3' ? '#0D47A1' : '#2E7D32',  // Darker border
+                          color: fillColor === '#2196F3' ? '#0D47A1' : '#2E7D32',
                           weight: 2,
                           opacity: 0.8,
                           fillOpacity: 0.7
                         }).addTo(map).bindPopup(gwMarkerPopup);
                       } else {
-                        gatewayMarkers[gwMarkerKey].setLatLng([gwLat, gwLon]);
+                        gatewayMarkers[gwMarkerKey].setLatLng([gw.lat, gw.lon]);
                         gatewayMarkers[gwMarkerKey].setPopupContent(gwMarkerPopup);
                         gatewayMarkers[gwMarkerKey].setRadius(circleRadius);
                         gatewayMarkers[gwMarkerKey].setStyle({
@@ -1862,29 +1969,30 @@
                       }
                     }
                   }
-                  
-                  // Clean up gateway markers that are no longer in top connections FOR THIS NODE ONLY
-                  for (var markerKey in gatewayMarkers) {
-                    if (markerKey.indexOf('gw_' + node.id + '_') === 0) {
-                      var gwIdFromMarker = markerKey.substring(('gw_' + node.id + '_').length);
-                      // Remove if this gateway ID is NOT in top gateways for this node
-                      if (topGatewayIds.indexOf(parseInt(gwIdFromMarker, 10)) === -1) {
-                        map.removeLayer(gatewayMarkers[markerKey]);
-                        delete gatewayMarkers[markerKey];
-                      }
+
+                  // Clean up old gateway lines/markers for this node that are no longer active
+                  for (var lineKey2 in gatewayLines) {
+                    if (lineKey2.indexOf('gw_' + node.id + '_') === 0 && activeGatewayKeys.indexOf(lineKey2) === -1) {
+                      map.removeLayer(gatewayLines[lineKey2]);
+                      delete gatewayLines[lineKey2];
                     }
                   }
-                } else if (!appFeatures.show_gateways) {
-                  // Remove all gateway lines and markers for this node if feature is disabled
+                  for (var markerKey2 in gatewayMarkers) {
+                    if (markerKey2.indexOf('gw_' + node.id + '_') === 0 && activeGatewayKeys.indexOf(markerKey2.replace('gw_', 'gw_')) === -1) {
+                      map.removeLayer(gatewayMarkers[markerKey2]);
+                      delete gatewayMarkers[markerKey2];
+                    }
+                  }
+                } else if (!appFeatures.show_gateways || !node.gateway_connections || node.gateway_connections.length === 0) {
+                  // Remove gateway lines and markers for this node if feature disabled or no gateways
                   for (var lineKey in gatewayLines) {
                     if (lineKey.indexOf('gw_' + node.id + '_') === 0) {
                       map.removeLayer(gatewayLines[lineKey]);
                       delete gatewayLines[lineKey];
                     }
                   }
-                  // Also clean up gateway markers
                   for (var markerKey in gatewayMarkers) {
-                    if (markerKey.indexOf('gw_') === 0) {
+                    if (markerKey.indexOf('gw_' + node.id + '_') === 0) {
                       map.removeLayer(gatewayMarkers[markerKey]);
                       delete gatewayMarkers[markerKey];
                     }
@@ -1927,149 +2035,34 @@
                           delete trail_markers[node.id];
                         }
                         
-                        if (pts.length >= 2){ 
-                          var latlngs = []; 
+                        if (pts.length >= 2){
+                          var latlngs = [];
                           trail_markers[node.id] = [];
-                          var firstPointIndex = 0;
-                          var lastPointIndex = pts.length - 1;
-                          
-                          for(var u=0; u<pts.length; u++){ 
-                            var pnt = pts[u]; 
+
+                          // Create markers for each trail point
+                          for(var u=0; u<pts.length; u++){
+                            var pnt = pts[u];
                             latlngs.push([pnt.lat, pnt.lon]);
-                            
-                            var markerOpts = {
-                              radius: 8,
-                              fillColor: '#CCCCCC',
-                              color: '#666',
-                              weight: 2,
-                              opacity: 0.8,
-                              fillOpacity: 0.6
-                            };
-                            
-                            // Special styling for first and last points
-                            if (u === firstPointIndex) {
-                              // Oldest point: green filled circle
-                              markerOpts = {
-                                radius: 10,
-                                fillColor: '#4CAF50',
-                                color: '#4CAF50',
-                                weight: 2,
-                                opacity: 0.9,
-                                fillOpacity: 0.9
-                              };
-                            } else if (u === lastPointIndex) {
-                              // Newest point: red filled circle
-                              markerOpts = {
-                                radius: 10,
-                                fillColor: '#FF6B6B',
-                                color: '#FF6B6B',
-                                weight: 2,
-                                opacity: 0.9,
-                                fillOpacity: 0.9
-                              };
-                            }
-                            
+
+                            // Get marker style based on position (first/last/middle)
+                            var markerOpts = getTrailMarkerStyle(u, pts.length);
+
+                            // Create marker
                             var historyMarker = L.circleMarker([pnt.lat, pnt.lon], markerOpts).addTo(map);
-                            // Add hover effect to make them more obvious
-                            historyMarker.on('mouseover', function() {
-                              this.setStyle({weight: 3, opacity: 1.0});
-                            });
-                            historyMarker.on('mouseout', function() {
-                              var isEndpoint = (u === firstPointIndex || u === lastPointIndex);
-                              this.setStyle({weight: isEndpoint ? 2 : 2, opacity: isEndpoint ? 0.9 : 0.8});
-                            });
-                            
-                            // Add popup with timestamp and signal info
-                            var popupText = 'Pos #' + (u+1) + ' / ' + pts.length;
-                            if (u === firstPointIndex) popupText += ' (OLDEST)';
-                            if (u === lastPointIndex) popupText += ' (NEWEST)';
-                            popupText += '<br>';
-                            if (pnt.ts) {
-                              var popupDate = new Date(pnt.ts * 1000).toLocaleString();
-                              popupText += 'Time: ' + popupDate + '<br>';
-                            }
-                            popupText += 'Lat: ' + pnt.lat.toFixed(6) + '<br>';
-                            popupText += 'Lon: ' + pnt.lon.toFixed(6);
-                            
-                            // Calculate distance from this position to home location
-                            if (node.origin_lat != null && node.origin_lon != null) {
-                              var homeLatRad = (node.origin_lat * Math.PI) / 180;
-                              var homeLonRad = (node.origin_lon * Math.PI) / 180;
-                              var pntLatRad = (pnt.lat * Math.PI) / 180;
-                              var pntLonRad = (pnt.lon * Math.PI) / 180;
-                              var dlat = pntLatRad - homeLatRad;
-                              var dlon = pntLonRad - homeLonRad;
-                              var a = Math.sin(dlat / 2) * Math.sin(dlat / 2) +
-                                      Math.cos(homeLatRad) * Math.cos(pntLatRad) *
-                                      Math.sin(dlon / 2) * Math.sin(dlon / 2);
-                              var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                              var distKm = 6371 * c;  // Earth's radius in km
-                              var distM = Math.round(distKm * 1000);
-                              popupText += '<br>Distance to home: ' + distM + ' M';
-                            }
-                            
-                            if (pnt.battery !== null && pnt.battery !== undefined) {
-                              var displayVoltage, displayBat;
-                              if (node.has_power_sensor) {
-                                // For power sensor nodes, battery field contains voltage
-                                displayVoltage = pnt.battery;
-                                displayBat = voltageToPercentage(displayVoltage);
-                              } else {
-                                // For other nodes, battery field contains percentage
-                                displayBat = Math.round(pnt.battery);
-                                displayVoltage = pnt.voltage != null ? pnt.voltage : percentageToVoltage(displayBat);
-                              }
-                              // Always show both voltage and percentage
-                              if (displayVoltage != null && displayBat != null) {
-                                popupText += '<br>Battery: ' + displayVoltage.toFixed(2) + 'V (' + displayBat + '%)';
-                              }
-                            }
-                            if (pnt.rssi !== null && pnt.rssi !== undefined) {
-                              popupText += '<br>RSSI: ' + pnt.rssi + ' dBm';
-                            }
-                            if (pnt.snr !== null && pnt.snr !== undefined) {
-                              popupText += '<br>SNR: ' + (Math.round(pnt.snr * 10) / 10) + ' dB';
-                            }
+
+                            // Build and bind popup
+                            var popupText = buildTrailPopup(pnt, u, pts.length, node);
                             historyMarker.bindPopup(popupText);
+
                             trail_markers[node.id].push(historyMarker);
                           }
-                          
-                          // Draw polyline trail with color gradient: light blue (oldest) to dark blue (newest)
-                          // Create individual line segments with interpolated colors
-                          var lightBlue = '#ADD8E6';  // Light blue (oldest)
-                          var darkBlue = '#1976D2';   // Dark blue (newest)
-                          
-                          function interpolateColor(ratio) {
-                            // ratio: 0 = light blue (oldest), 1 = dark blue (newest)
-                            var r0 = parseInt(lightBlue.substr(1, 2), 16);
-                            var g0 = parseInt(lightBlue.substr(3, 2), 16);
-                            var b0 = parseInt(lightBlue.substr(5, 2), 16);
-                            var r1 = parseInt(darkBlue.substr(1, 2), 16);
-                            var g1 = parseInt(darkBlue.substr(3, 2), 16);
-                            var b1 = parseInt(darkBlue.substr(5, 2), 16);
-                            
-                            var r = Math.round(r0 + (r1 - r0) * ratio);
-                            var g = Math.round(g0 + (g1 - g0) * ratio);
-                            var b = Math.round(b0 + (b1 - b0) * ratio);
-                            
-                            return '#' + ('0' + r.toString(16)).slice(-2) + 
-                                        ('0' + g.toString(16)).slice(-2) + 
-                                        ('0' + b.toString(16)).slice(-2);
-                          }
-                          
-                          // Draw segments between consecutive points with gradient color
-                          trails[node.id] = L.featureGroup();
-                          for (var seg = 0; seg < latlngs.length - 1; seg++) {
-                            var ratio = seg / (latlngs.length - 2);  // 0 to 1 across all segments
-                            var segmentColor = interpolateColor(ratio);
-                            var segment = L.polyline([latlngs[seg], latlngs[seg + 1]], {
-                              color: segmentColor,
-                              weight: 3,
-                              opacity: 0.7
-                            }).addTo(map);
-                            trails[node.id].addLayer(segment);
-                          }
-                          trails[node.id].addTo(map);
+
+                          // Draw trail polyline (light blue line)
+                          trails[node.id] = L.polyline(latlngs, {
+                            color: '#64B5F6',
+                            weight: 3,
+                            opacity: 0.7
+                          }).addTo(map);
                         }
                         // Trail data empty for this node
                     }
@@ -2624,32 +2617,16 @@
           var node = currentNodesData.find(function(n) { return n.id === nodeId; });
           var hasPowerSensor = node ? node.has_power_sensor : false;
 
-          // For power sensor nodes: use current voltage from node data
-          // For regular nodes: fill null battery values with current battery
+          // Fill null battery values with current node data if needed
           var displayData = data.points;
-          if (hasPowerSensor && node && node.voltage != null) {
-            // Replace all battery values with current voltage for power sensor nodes
+          if (node && (node.voltage != null || node.battery != null)) {
             displayData = data.points.map(function(point) {
               return {
                 ts: point.ts,
                 lat: point.lat,
                 lon: point.lon,
                 alt: point.alt,
-                battery: node.voltage,  // Use current voltage for power sensor nodes (no batteryPct)
-                rssi: point.rssi,
-                snr: point.snr
-              };
-            });
-          } else if (!hasPowerSensor && node && node.battery != null) {
-            // Fill null battery values with current battery for regular nodes
-            displayData = data.points.map(function(point) {
-              return {
-                ts: point.ts,
-                lat: point.lat,
-                lon: point.lon,
-                alt: point.alt,
-                battery: point.battery != null ? point.battery : node.battery,
-                voltage: node.voltage,  // Add voltage for regular nodes
+                battery: point.battery != null ? point.battery : (hasPowerSensor ? node.voltage : node.battery),
                 rssi: point.rssi,
                 snr: point.snr
               };

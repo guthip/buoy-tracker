@@ -249,11 +249,16 @@ if config.has_section('special_nodes'):
 
                     # Optional home position (lat, lon) in parts 2 and 3
                     if len(parts) >= 3:
-                        try:
-                            home_lat = parse_coordinate(parts[1])
-                            home_lon = parse_coordinate(parts[2])
-                        except (ValueError, IndexError) as e:
-                            logger.warning(f"Invalid coordinates for node {node_id} ({label}): {e}. Will use first position as origin.")
+                        # Check if coordinates are provided (not empty)
+                        if parts[1] and parts[2]:
+                            try:
+                                home_lat = parse_coordinate(parts[1])
+                                home_lon = parse_coordinate(parts[2])
+                            except (ValueError, IndexError) as e:
+                                logger.warning(f"Invalid coordinates for node {node_id} ({label}): {e}. Will use first position as origin.")
+                        else:
+                            # Empty coordinates - intentionally omitted
+                            logger.info(f"No home coordinates specified for node {node_id} ({label}). Will use first position as origin.")
 
                     # Optional power sensor flag in part 4
                     if len(parts) >= 4:

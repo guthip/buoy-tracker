@@ -2,7 +2,7 @@
 
 import logging
 import smtplib
-from datetime import datetime
+from datetime import datetime, UTC
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, List, Union, Any
@@ -85,7 +85,7 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
             f"{config.APP_TITLE} - Movement Alert\n\n"
             f"ALERT TYPE: Position Outside Safe Zone\n\n"
             f"Buoy: {special_label}\n\n"
-            f"DETECTION TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+            f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
             f"ALERT DETAILS:\n  Distance from home: {int(distance_m)} meters\n  Safe zone threshold: {config.SPECIAL_MOVEMENT_THRESHOLD_METERS} meters\n\n"
             f"TELEMETRY:\n  Battery Level: {battery}%\n\n"
             f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
@@ -110,7 +110,7 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
     Args:
         node_id: Node ID with low battery
         node_data: Dictionary with node information
-        battery_level: Current battery percentage
+        battery_level: Current battery percentage or voltage (for power sensor nodes)
     """
     # Check if we should send alert (avoid spam)
     import time
@@ -138,6 +138,17 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
         # Special node label
         special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
 
+        # Determine if this node has a power sensor
+        has_power_sensor = node_data.get("has_power_sensor", False)
+
+        # Format battery display based on sensor type
+        if has_power_sensor:
+            battery_display = f"{battery_level}V"
+            log_unit = "V"
+        else:
+            battery_display = f"{battery_level}%"
+            log_unit = "%"
+
         # Create email
         subject = f"🔋 {config.APP_TITLE} - Low Battery Alert: {special_label}"
 
@@ -145,8 +156,8 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
             f"{config.APP_TITLE} - Low Battery Alert\n\n"
             f"ALERT TYPE: Low Battery Level\n\n"
             f"Buoy: {special_label}\n\n"
-            f"DETECTION TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
-            f"ALERT DETAILS:\n  Current battery: {battery_level}%\n\n"
+            f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+            f"ALERT DETAILS:\n  Current battery: {battery_display}\n\n"
             f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
             f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN / 3600:.1f} hours between alerts"
         )
@@ -156,7 +167,7 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
 
         # Update last sent time
         last_alert_sent[alert_key] = now
-        logger.info(f"Sent battery alert for {special_label} ({battery_level}%)")
+        logger.info(f"Sent battery alert for {special_label} ({battery_level}{log_unit})")
 
     except Exception as e:
         logger.error(f"Failed to send battery alert: {e}", exc_info=True)

@@ -2,6 +2,43 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2025-12-29] - v1.0 - Multiple Gateway Support & Critical Fixes
+
+### Major Features
+- **Multiple first-hop gateway visualization**
+  - Changed from displaying only best gateway to showing all first-hop gateways
+  - Map displays lines to all gateways with position data
+  - Node popup shows complete list of gateways (📍? indicates missing position)
+  - Gateway detection uses hop_start == hop_limit filter for true first-hop detection
+  - Gateways: Pilsner and Herkimer-9/G2 confirmed working
+
+### Critical Bug Fixes
+- **Fixed battery voltage histogram bug**
+  - Histogram was showing flat line instead of voltage changes over time
+  - Root cause: Code was overwriting all historical battery values with current voltage
+  - Fix: Preserve historical `point.battery` values, only use current as fallback for nulls
+  - Affects power sensor nodes (SYCS with INA260)
+
+- **Fixed email alert timezone inconsistency**
+  - Emails from different machines (Mac/Ubuntu) showed different times
+  - Changed from `datetime.now()` to `datetime.utcnow()` for consistent UTC timestamps
+  - All alert emails now show actual UTC time regardless of server timezone
+
+### Improvements
+- **Trail marker visualization enhancement**
+  - Added color gradient: light blue (oldest) → dark blue (newest)
+  - Combined with existing size gradient for better temporal indication
+  - Trail line color changed to lighter blue (#64B5F6) for improved visibility
+
+- **Config warning clarity**
+  - Improved message when coordinates are intentionally omitted from tracker.config
+  - Changed from confusing "Invalid coordinates" to clear "No home coordinates specified"
+
+- **Code cleanup**
+  - Removed debug logging added during gateway investigation
+  - Reduced frontend code complexity through helper function extraction
+  - Gateway detection logging now at DEBUG level
+
 ## [2025-12-26] - v0.98 - Critical MQTT Subscription Fix & Page Visibility Polling
 
 ### Critical Bug Fix

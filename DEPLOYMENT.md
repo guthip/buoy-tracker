@@ -1,9 +1,9 @@
-# Deployment Guide v0.96
+# Deployment Guide v1.0
 
-**Release Date:** December 15, 2025
-**Version:** 0.96
+**Release Date:** December 29, 2025
+**Version:** 1.0
 **Status:** Ready for Deployment
-**Risk Level:** Low (file permissions & ownership fixes, no breaking changes)
+**Risk Level:** Low (multiple gateway support, bug fixes, no breaking changes)
 
 ---
 
@@ -26,15 +26,16 @@ grep "^ARG APP_VERSION=" Dockerfile
 
 ## Executive Summary
 
-Version 0.96 includes Docker file permission and ownership fixes to enable host user access for backups, log viewing, and file management. Previous releases (0.95) included subpath deployment support, automated version consistency checking, and security improvements to the authorization modal system.
+Version 1.0 includes multiple first-hop gateway visualization support, critical bug fixes for battery voltage histogram and email alert timezones, and various frontend improvements. This is a stable production release.
 
 **Key Improvements:**
-- ✅ Authorization modal security fixes (modal only appears on Control Menu access)
-- ✅ MQTT handler undefined function bug fixed
-- ✅ Docker permission issues resolved
-- ✅ Quality assurance infrastructure operational
+- ✅ Multiple first-hop gateway support (shows all gateways, not just best)
+- ✅ Battery voltage histogram bug fixed (was showing flat line)
+- ✅ Email alert timezone consistency (now uses UTC on all machines)
+- ✅ Trail marker color gradient for better temporal indication
+- ✅ Config warning improvements
+- ✅ Debug logging cleanup
 - ✅ Multi-platform Docker images (amd64, arm64)
-- ✅ Automated version consistency checking
 
 ---
 
@@ -89,11 +90,13 @@ Use this checklist to verify everything is working before deployment.
 
 ### Version Synchronization
 
-- [ ] **tracker.config** - version = 0.96
-- [ ] **tracker.config.template** - version = 0.96
-- [ ] **CHANGELOG.md** - v0.93 entry present with changes
+- [ ] **tracker.config** - version = 1.0
+- [ ] **tracker.config.template** - version = 1.0
+- [ ] **tracker.config.mijnwolk** - version = 1.0
+- [ ] **tracker.config.syc** - version = 1.0
+- [ ] **tracker.config.local** - version = 1.0
+- [ ] **CHANGELOG.md** - v1.0 entry present with changes
 - [ ] **DOCKER.md** - Port references updated to 5103
-- [ ] **SECURITY.md** - v0.93 compatibility verified
 - [ ] **README.md** - No outdated version references
 - [ ] **QUICKSTART.md** - Port and version current
 
@@ -135,8 +138,8 @@ Use this checklist to verify everything is working before deployment.
 #### 2. Git & GitHub
 - [ ] Current branch is `main`
 - [ ] All changes committed and pushed
-- [ ] Create release tag: `git tag -a v0.93 -m "Release: v0.93 - Security & QA improvements"`
-- [ ] Push tag: `git push origin v0.93`
+- [ ] Create release tag: `git tag -a v1.0 -m "Release: v1.0 - Multiple Gateway Support & Critical Fixes"`
+- [ ] Push tag: `git push origin v1.0`
 - [ ] Verify tag appears on GitHub
 
 #### 3. Automated Build Process
@@ -163,20 +166,22 @@ This script automatically:
 - You have Docker buildx configured for multi-platform builds
 - You are logged in to Docker Hub (`docker login`)
 
+**IMPORTANT:** The script uses `docker buildx` to create multi-platform images (amd64, arm64). You must grant permission when prompted to run buildx commands.
+
 The script will prompt before pushing. It extracts the version from `tracker.config.template` (source of truth).
 
 #### 4. Manual Build Verification (if script fails)
 ```bash
 # Check version consistency
-grep "^version = " tracker.config.template tracker.config.local tracker.config.remote
+grep "^version = " tracker.config.template tracker.config.local tracker.config.mijnwolk
 grep "^ARG APP_VERSION=" Dockerfile
 
 # Local build test
-docker build -t dokwerker8891/buoy-tracker:0.93 .
+docker build -t dokwerker8891/buoy-tracker:1.0 .
 
-# Multi-platform build and push
+# Multi-platform build and push (requires permission approval)
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t dokwerker8891/buoy-tracker:0.93 \
+  -t dokwerker8891/buoy-tracker:1.0 \
   -t dokwerker8891/buoy-tracker:latest \
   --push .
 ```
@@ -191,17 +196,17 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 #### 5. Docker Hub Verification
 - [ ] Wait 2-3 minutes for image processing
 - [ ] Visit: https://hub.docker.com/r/dokwerker8891/buoy-tracker
-- [ ] Verify v0.93 tag visible
-- [ ] Verify latest tag updated to v0.93
+- [ ] Verify v1.0 tag visible
+- [ ] Verify latest tag updated to v1.0
 - [ ] Click tag to verify both architectures present
-- [ ] Test pull: `docker pull dokwerker8891/buoy-tracker:0.93`
-- [ ] Test run: `docker run -p 5103:5103 dokwerker8891/buoy-tracker:0.93`
+- [ ] Test pull: `docker pull dokwerker8891/buoy-tracker:1.0`
+- [ ] Test run: `docker run -p 5103:5103 dokwerker8891/buoy-tracker:1.0`
 
-#### 5. GitHub Release Creation
-- [ ] Extract v0.93 section from CHANGELOG.md
+#### 6. GitHub Release Creation
+- [ ] Extract v1.0 section from CHANGELOG.md
 - [ ] Go to: https://github.com/guthip/buoy-tracker/releases/new
-- [ ] Tag: v0.93
-- [ ] Release title: "v0.93 - Security & QA improvements"
+- [ ] Tag: v1.0
+- [ ] Release title: "v1.0 - Multiple Gateway Support & Critical Fixes"
 - [ ] Release notes include:
   - [ ] Executive summary
   - [ ] What's Fixed section
@@ -235,14 +240,14 @@ cp secret.config secret.config.backup.$(date +%Y%m%d_%H%M%S)
 docker compose down
 ```
 
-### Deploy v0.93
+### Deploy v1.0
 
 ```bash
 # Pull latest image
-docker pull dokwerker8891/buoy-tracker:0.93
+docker pull dokwerker8891/buoy-tracker:1.0
 
 # Update docker-compose.yml if needed
-# Ensure image: dokwerker8891/buoy-tracker:0.93
+# Ensure image: dokwerker8891/buoy-tracker:1.0
 
 # Start service
 docker compose up -d
@@ -452,12 +457,12 @@ grep -A2 "COPY\|RUN chmod" Dockerfile
 docker compose down
 
 # Archive problematic data
-mv data/ data.v0.93.$(date +%Y%m%d_%H%M%S)/
+mv data/ data.v1.0.$(date +%Y%m%d_%H%M%S)/
 
 # Pull previous version
-docker pull dokwerker8891/buoy-tracker:v0.92
+docker pull dokwerker8891/buoy-tracker:v0.98
 
-# Update docker-compose.yml to use v0.92
+# Update docker-compose.yml to use v0.98
 # Start previous version
 docker compose up -d
 
@@ -471,7 +476,7 @@ curl http://localhost:5103/api/status
 1. Document issue that caused rollback
 2. Create GitHub issue describing problem
 3. Plan fix for next iteration
-4. Keep v0.93 image on Docker Hub (don't delete)
+4. Keep v1.0 image on Docker Hub (don't delete)
 5. Notify team of rollback
 
 ---
@@ -492,9 +497,10 @@ curl http://localhost:5103/api/status
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0 | 2025-12-29 | Multiple gateway support, battery histogram fix, timezone fix |
+| 0.98 | 2025-12-26 | MQTT subscription fix, page visibility polling |
+| 0.96 | 2025-12-15 | Docker permission fixes |
 | 0.93 | 2025-12-07 | Security fixes, QA infrastructure, bug fixes |
-| 0.92 | 2025-12-02 | Gateway quality filtering, performance optimization |
-| 0.91 | Earlier | Previous release |
 
 ---
 
@@ -537,5 +543,5 @@ python3 -m py_compile src/*.py tests/*.py
 
 ---
 
-**Last Updated:** December 7, 2025  
+**Last Updated:** December 29, 2025
 **For questions or issues:** See TROUBLESHOOTING section or GitHub Issues
