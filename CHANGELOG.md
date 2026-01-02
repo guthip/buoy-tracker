@@ -2,6 +2,15 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2026-01-02] - v1.01 - Unknown PortNum Handling Fix
+
+### Bug Fixes
+- **Fixed crash on unknown PortNum values in MQTT packets**
+  - Added error handling for `portnums_pb2.PortNum.Name()` to gracefully handle unknown values
+  - Unknown port numbers now logged as `UNKNOWN_PORTNUM_{value}` instead of crashing
+  - Prevents `ValueError: Enum PortNum has no name defined for value X` errors
+  - Allows system to process packets with data outside current protobuf spec
+
 ## [2025-12-29] - v1.0 - Multiple Gateway Support & Critical Fixes
 
 ### Major Features

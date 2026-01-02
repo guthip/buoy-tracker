@@ -1,5 +1,5 @@
 # Dockerfile for Buoy Tracker
-ARG APP_VERSION=1.0
+ARG APP_VERSION=1.01
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

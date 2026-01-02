@@ -1,7 +1,7 @@
-# Deployment Guide v1.0
+# Deployment Guide v1.01
 
-**Release Date:** December 29, 2025
-**Version:** 1.0
+**Release Date:** January 2, 2026
+**Version:** 1.01
 **Status:** Ready for Deployment
 **Risk Level:** Low (multiple gateway support, bug fixes, no breaking changes)
 
@@ -26,7 +26,7 @@ grep "^ARG APP_VERSION=" Dockerfile
 
 ## Executive Summary
 
-Version 1.0 includes multiple first-hop gateway visualization support, critical bug fixes for battery voltage histogram and email alert timezones, and various frontend improvements. This is a stable production release.
+Version 1.01 includes bug fix for handling unknown PortNum values in MQTT packets. This is a stable production release.
 
 **Key Improvements:**
 - ✅ Multiple first-hop gateway support (shows all gateways, not just best)

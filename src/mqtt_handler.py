@@ -1655,7 +1655,12 @@ def _on_mqtt_message(client_obj, userdata, msg):
         
         # Extract portnum (message type) and get name
         portnum = mp.decoded.portnum
-        portnum_name = portnums_pb2.PortNum.Name(portnum)
+        try:
+            portnum_name = portnums_pb2.PortNum.Name(portnum)
+        except ValueError:
+            # Handle unknown portnum values gracefully (e.g., new types not in our proto definitions)
+            portnum_name = f"UNKNOWN_PORTNUM_{portnum}"
+            logger.debug(f"Received packet with unknown PortNum value: {portnum}")
         
         # Convert to JSON for callbacks (preserving meshtastic_mqtt_json format)
         json_packet = _protobuf_to_json(mp)

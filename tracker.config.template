@@ -3,18 +3,15 @@
 # For secrets (MQTT credentials, email passwords), use secret.config
 
 [app]
-title = Buoy Tracker
-version = 1.0
+title = SYC buoy tracker
+version = 1.01
 
 [mqtt]
 # MQTT broker settings
 # Root MQTT topic structure (include trailing slash)
-# System automatically subscribes to root_topic/# to capture packets from ALL channels and modem presets.
-# Nodes can switch channels without any configuration changes needed.
+# System subscribes to root_topic/channel_name/# to capture packets from the specified channel.
 
-# MQTT public brokers:
-#   bayme.sh - San Francisco Bay Area
-#   mqtt.meshtastic.org - Global
+# bayme.sh (San Fransico Bay Area)
 broker = mqtt.bayme.sh
 port = 1883
 root_topic = msh/US/bayarea/2/e/
@@ -31,27 +28,27 @@ encryption_key = AQ==
 host = 0.0.0.0
 port = 5103
 
-# URL prefix for subpath deployments (optional)
+# URL prefix for subpath deployments (OPTIONAL)
 # Use this if the app is deployed at a subpath (e.g., behind a reverse proxy at /buoy-tracker/)
 # Examples:
-#   Root deployment (https://example.com/): leave empty or omit this line
+#   Root deployment (https://example.com/): url_prefix = (leave empty)
 #   Subpath deployment (https://example.com/buoy-tracker/): url_prefix = /buoy-tracker
-#   Alternative format also works: url_prefix = buoy-tracker
-# Note: Trailing slashes are automatically removed
-url_prefix = 
+# NOTE: Set to empty for local development; set to /buoy-tracker for remote deployment
+url_prefix =
 
 # Map settings
 # Center point for the map. Format: "latitude,longitude" or "N/S/E/Wdeg° min', N/S/E/Wdeg° min'"
 # Decimal: 37.5528,-122.1947
 # Degrees-minutes: N37° 33.16', W122° 11.70'
-default_center = 37.5528,-122.1947
+#default_center = 37.5528,-122.1947
+default_center = N37° 33.16', W122° 11.70'
 default_zoom = 13
 
 # Node status color thresholds (in hours)
 # Less than status_blue_threshold = blue (recent)
 # Between blue and orange = orange (stale)
 # Older than status_orange_threshold = red (very stale)
-status_blue_threshold = 1
+status_blue_threshold = 3
 status_orange_threshold = 12
 
 # Data polling interval (in seconds)
@@ -65,31 +62,30 @@ status_orange_threshold = 12
 # Rate limit formula: (3600 / polling_interval_seconds) * (3 + N_special_nodes) * 2.0
 # Examples (with 4 special nodes and 2.0x safety multiplier):
 #   5 seconds  = 7,200/hour rate limit
-#   10 seconds = 3,600/hour rate limit (default)
+#   10 seconds = 3,600/hour rate limit (current default)
 #   30 seconds = 1,200/hour rate limit
 #   60 seconds = 600/hour rate limit
-api_polling_interval = 10
+api_polling_interval = 30
 
 [debug]
 # Debug and logging settings
 # log_level options: DEBUG (very verbose), INFO (normal), WARNING (quiet), ERROR (errors only)
 # PRODUCTION DEPLOYMENT: Set to WARNING or ERROR for minimal output
-log_level = INFO
+log_level = ERROR
 
 [battery]
 # Battery monitoring settings
 # Battery level below this percentage triggers low battery indicator
-low_battery_threshold = 50
+low_battery_threshold = 25
 
 [app_features]
 # Web interface display options (set to true/false)
 show_all_nodes = false
-show_gateways = true
+show_gateways = false
 show_position_trails = true
-show_gateway_connections = true
 show_nautical_markers = true
 # Trail history display (in hours)
-trail_history_hours = 168
+trail_history_hours = 80
 # Persistence settings (DEPRECATED - removed in latest version)
 # All data is now kept in-memory only for the lifetime of the process
 # Restarts will start with fresh data
@@ -99,11 +95,16 @@ trail_history_hours = 168
 stale_after_hours = 12
 # Symbol displayed for special nodes on map
 special_symbol = ⭐
+# Data deduplication window: deduplicate position history to one point per this many hours
+# Default: 1.0 (one point per hour)
+# Use 0.5 for finer granularity (one point per 30 minutes)
+# Use 24 for daily snapshots
+data_limit_time = 0.25
 
 [special_nodes]
 # Highlight specific nodes with custom symbols and home positions
 # Movement threshold: radius in meters beyond which movement alerts trigger
-movement_threshold = 100
+movement_threshold = 150
 #
 # Format: node_id = label,home_lat,home_lon,has_power_sensor,voltage_channel
 #   - label: Display name for the node
@@ -124,8 +125,12 @@ movement_threshold = 100
 #   3681533965 = SYCS,N37° 33.81',W122° 13.13',true          (with INA260 sensor, defaults to ch3_voltage)
 #   3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch1_voltage  (with sensor, monitor input voltage)
 #
-# Add your special nodes here
-# Example: 3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch3_voltage
+# Primary 4 SYC nodes
+3681533965 = SYCS,N37° 33.81',W122° 13.13',true
+492590216 = SYCE,N37° 34.81',W122° 13.07'
+2512106321 = SYCA,N37° 31.94',W122° 10.31'
+2009991947 = SYCX,N37° 34.23',W122° 12.13'
+# Additional nodes, add as needed
 
 [alerts]
 # Email alert settings for movement notifications
@@ -152,5 +157,5 @@ smtp_port = 25
 smtp_ssl = false
 # Credentials stored in secret.config (sensitive data, not tracked by git)
 # Can also use environment variables: ALERT_SMTP_USERNAME, ALERT_SMTP_PASSWORD
-# smtp_username = 
-# smtp_password = 
+# smtp_username =
+# smtp_password =

@@ -1,7 +1,7 @@
 # Fedora Linux Deployment Guide for Buoy Tracker
 
-**Date**: December 16, 2025
-**Container Version**: v0.97d or later
+**Date**: January 2, 2026
+**Container Version**: v1.01 or later
 **Target OS**: Fedora Linux (tested on Fedora 39+)
 
 ---
@@ -543,6 +543,6 @@ If you encounter issues deploying on Fedora:
 
 ---
 
-**Last Updated**: December 16, 2025
+**Last Updated**: January 2, 2026
 **Tested On**: Fedora 39, Fedora 40
-**Container Version**: v0.97d
+**Container Version**: v1.01
