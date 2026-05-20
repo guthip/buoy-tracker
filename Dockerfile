@@ -1,5 +1,5 @@
 # Dockerfile for Buoy Tracker
-ARG APP_VERSION=1.01
+ARG APP_VERSION=1.03
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -38,9 +38,11 @@ RUN groupadd -g 999 docker && \
 RUN mkdir -p /app/config /app/data /app/logs
 
 # Set ownership of application source files to app user (but NOT the config/data/logs dirs)
-# This is done AFTER creating config/data/logs so they remain writable
-RUN find /app -maxdepth 1 -type f -exec chown app:app {} \; && \
-    find /app -maxdepth 1 -type d -not -name config -not -name data -not -name logs -exec chown app:app {} \;
+# Chown recursively for src/static/templates, and top-level files directly in /app.
+# chmod ensures files copied from SMB (which may arrive mode 600) are readable by the app user.
+RUN chown -R app:app /app/src /app/static /app/templates && \
+    find /app -maxdepth 1 -type f -exec chown app:app {} \; && \
+    chmod -R a+rX /app/src /app/static /app/templates
 
 VOLUME ["/app/config", "/app/data", "/app/logs"]
 EXPOSE 5103

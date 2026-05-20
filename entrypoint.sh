@@ -39,7 +39,8 @@ if [ ! -f /app/config/secret.config ]; then
 fi
 
 # Change ownership to app:docker (NOT app:app) so host users in docker group keep access
-chown -R app:docker /app/config /app/data /app/logs
+# Use || true so SMB-mounted AppleDouble (._*) files that can't be chowned don't abort startup
+chown -R app:docker /app/config /app/data /app/logs 2>/dev/null || true
 
 echo "✓ Configuration files ready in /app/config/"
 echo "✓ Data directory ready at /app/data/"

@@ -1,9 +1,9 @@
-# Deployment Guide v1.01
+# Deployment Guide v1.03
 
-**Release Date:** January 2, 2026
-**Version:** 1.01
+**Release Date:** May 19, 2026
+**Version:** 1.03
 **Status:** Ready for Deployment
-**Risk Level:** Low (multiple gateway support, bug fixes, no breaking changes)
+**Risk Level:** Low (data quality improvements, new config options, no breaking changes)
 
 ---
 
@@ -26,16 +26,15 @@ grep "^ARG APP_VERSION=" Dockerfile
 
 ## Executive Summary
 
-Version 1.01 includes bug fix for handling unknown PortNum values in MQTT packets. This is a stable production release.
+Version 1.03 delivers six data quality and operational reliability improvements. All changes are backward-compatible — existing `tracker.config` files work unchanged with sensible defaults for all new settings.
 
 **Key Improvements:**
-- ✅ Multiple first-hop gateway support (shows all gateways, not just best)
-- ✅ Battery voltage histogram bug fixed (was showing flat line)
-- ✅ Email alert timezone consistency (now uses UTC on all machines)
-- ✅ Trail marker color gradient for better temporal indication
-- ✅ Config warning improvements
-- ✅ Debug logging cleanup
-- ✅ Multi-platform Docker images (amd64, arm64)
+- ✅ Position precision validation — rejects corrupted GPS packets (`precision_bits < 32`)
+- ✅ Battery display fix — alert emails now show actual voltage from telemetry (not "None%")
+- ✅ Configurable RSSI/SNR traffic light thresholds — tuned to realistic Meshtastic LoRa values
+- ✅ Separate LPU and SoL timing thresholds — independent config for position vs. any-packet activity
+- ✅ Email kill switch — toggle alerts on/off from Control Menu without restarting
+- ✅ Server restart via web UI — clear all cached trail data without SSH access
 
 ---
 
@@ -90,12 +89,12 @@ Use this checklist to verify everything is working before deployment.
 
 ### Version Synchronization
 
-- [ ] **tracker.config** - version = 1.0
-- [ ] **tracker.config.template** - version = 1.0
-- [ ] **tracker.config.mijnwolk** - version = 1.0
-- [ ] **tracker.config.syc** - version = 1.0
-- [ ] **tracker.config.local** - version = 1.0
-- [ ] **CHANGELOG.md** - v1.0 entry present with changes
+- [ ] **tracker.config** - version = 1.03
+- [ ] **tracker.config.template** - version = 1.03
+- [ ] **tracker.config.mijnwolk** - version = 1.03
+- [ ] **tracker.config.syc** - version = 1.03
+- [ ] **tracker.config.local** - version = 1.03
+- [ ] **CHANGELOG.md** - v1.03 entry present with changes
 - [ ] **DOCKER.md** - Port references updated to 5103
 - [ ] **README.md** - No outdated version references
 - [ ] **QUICKSTART.md** - Port and version current
@@ -138,8 +137,8 @@ Use this checklist to verify everything is working before deployment.
 #### 2. Git & GitHub
 - [ ] Current branch is `main`
 - [ ] All changes committed and pushed
-- [ ] Create release tag: `git tag -a v1.0 -m "Release: v1.0 - Multiple Gateway Support & Critical Fixes"`
-- [ ] Push tag: `git push origin v1.0`
+- [ ] Create release tag: `git tag -a v1.03 -m "Release: v1.03 - Data Quality, Alert Controls & Signal Thresholds"`
+- [ ] Push tag: `git push origin v1.03`
 - [ ] Verify tag appears on GitHub
 
 #### 3. Automated Build Process
@@ -177,11 +176,11 @@ grep "^version = " tracker.config.template tracker.config.local tracker.config.m
 grep "^ARG APP_VERSION=" Dockerfile
 
 # Local build test
-docker build -t dokwerker8891/buoy-tracker:1.0 .
+docker build -t dokwerker8891/buoy-tracker:1.03 .
 
 # Multi-platform build and push (requires permission approval)
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -t dokwerker8891/buoy-tracker:1.0 \
+  -t dokwerker8891/buoy-tracker:1.03 \
   -t dokwerker8891/buoy-tracker:latest \
   --push .
 ```
@@ -196,17 +195,17 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 #### 5. Docker Hub Verification
 - [ ] Wait 2-3 minutes for image processing
 - [ ] Visit: https://hub.docker.com/r/dokwerker8891/buoy-tracker
-- [ ] Verify v1.0 tag visible
-- [ ] Verify latest tag updated to v1.0
+- [ ] Verify v1.03 tag visible
+- [ ] Verify latest tag updated to v1.03
 - [ ] Click tag to verify both architectures present
-- [ ] Test pull: `docker pull dokwerker8891/buoy-tracker:1.0`
-- [ ] Test run: `docker run -p 5103:5103 dokwerker8891/buoy-tracker:1.0`
+- [ ] Test pull: `docker pull dokwerker8891/buoy-tracker:1.03`
+- [ ] Test run: `docker run -p 5103:5103 dokwerker8891/buoy-tracker:1.03`
 
 #### 6. GitHub Release Creation
-- [ ] Extract v1.0 section from CHANGELOG.md
+- [ ] Extract v1.03 section from CHANGELOG.md
 - [ ] Go to: https://github.com/guthip/buoy-tracker/releases/new
-- [ ] Tag: v1.0
-- [ ] Release title: "v1.0 - Multiple Gateway Support & Critical Fixes"
+- [ ] Tag: v1.03
+- [ ] Release title: "v1.03 - Data Quality, Alert Controls & Signal Thresholds"
 - [ ] Release notes include:
   - [ ] Executive summary
   - [ ] What's Fixed section
@@ -240,14 +239,14 @@ cp secret.config secret.config.backup.$(date +%Y%m%d_%H%M%S)
 docker compose down
 ```
 
-### Deploy v1.0
+### Deploy v1.03
 
 ```bash
 # Pull latest image
-docker pull dokwerker8891/buoy-tracker:1.0
+docker pull dokwerker8891/buoy-tracker:1.03
 
 # Update docker-compose.yml if needed
-# Ensure image: dokwerker8891/buoy-tracker:1.0
+# Ensure image: dokwerker8891/buoy-tracker:1.03
 
 # Start service
 docker compose up -d
@@ -457,7 +456,7 @@ grep -A2 "COPY\|RUN chmod" Dockerfile
 docker compose down
 
 # Archive problematic data
-mv data/ data.v1.0.$(date +%Y%m%d_%H%M%S)/
+mv data/ data.v1.03.$(date +%Y%m%d_%H%M%S)/
 
 # Pull previous version
 docker pull dokwerker8891/buoy-tracker:v0.98
@@ -476,7 +475,7 @@ curl http://localhost:5103/api/status
 1. Document issue that caused rollback
 2. Create GitHub issue describing problem
 3. Plan fix for next iteration
-4. Keep v1.0 image on Docker Hub (don't delete)
+4. Keep v1.03 image on Docker Hub (don't delete)
 5. Notify team of rollback
 
 ---
@@ -497,6 +496,9 @@ curl http://localhost:5103/api/status
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.03 | 2026-05-19 | Position precision validation, battery alert fix, configurable RSSI/SNR/LPU/SoL thresholds, email kill switch, server restart |
+| 1.02 | 2026-04-08 | Duplicate alert email fix |
+| 1.01 | 2026-01-02 | Unknown PortNum handling fix |
 | 1.0 | 2025-12-29 | Multiple gateway support, battery histogram fix, timezone fix |
 | 0.98 | 2025-12-26 | MQTT subscription fix, page visibility polling |
 | 0.96 | 2025-12-15 | Docker permission fixes |
@@ -543,5 +545,5 @@ python3 -m py_compile src/*.py tests/*.py
 
 ---
 
-**Last Updated:** December 29, 2025
+**Last Updated:** May 19, 2026
 **For questions or issues:** See TROUBLESHOOTING section or GitHub Issues

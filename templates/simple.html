@@ -288,6 +288,16 @@
                     <label>Movement Threshold (m): <input type="number" id="movementThresholdInput" min="10" max="500" value="80" style="width:60px;"></label>
                     <label>API Polling Interval (sec): <input type="number" id="apiPollingInput" min="5" max="60" value="10" style="width:60px;"></label>
                 </div>
+                <div class="menu-section" style="margin-top: 12px; border-top: 1px solid #ddd; padding-top: 12px;">
+                    <div class="menu-section-title">Alert Controls</div>
+                    <button id="toggleAlertsBtn" onclick="toggleAlerts()" style="padding: 6px 12px; width: 100%; margin-bottom: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">⚠️ Alerts Enabled</button>
+                    <div id="alertStatus" style="font-size: 0.85em; color: #666; text-align: center; margin-top: 4px;"></div>
+                </div>
+                <div class="menu-section" style="margin-top: 12px; border-top: 1px solid #ddd; padding-top: 12px;">
+                    <div class="menu-section-title">Server Management</div>
+                    <button id="restartServerBtn" onclick="restartServer()" style="padding: 6px 12px; width: 100%; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🔄 Restart Server</button>
+                    <div id="restartStatus" style="font-size: 0.85em; color: #666; text-align: center; margin-top: 4px;"></div>
+                </div>
             </div>
         </div>
     </div>

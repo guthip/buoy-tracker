@@ -362,6 +362,14 @@ def health_check() -> Response:
         'config': {
             'status_blue_threshold': config.STATUS_BLUE_THRESHOLD,
             'status_orange_threshold': config.STATUS_ORANGE_THRESHOLD,
+            'lpu_blue_threshold': config.LPU_BLUE_THRESHOLD,
+            'lpu_orange_threshold': config.LPU_ORANGE_THRESHOLD,
+            'sol_blue_threshold': config.SOL_BLUE_THRESHOLD,
+            'sol_orange_threshold': config.SOL_ORANGE_THRESHOLD,
+            'rssi_green_threshold': config.RSSI_GREEN_THRESHOLD,
+            'rssi_yellow_threshold': config.RSSI_YELLOW_THRESHOLD,
+            'snr_green_threshold': config.SNR_GREEN_THRESHOLD,
+            'snr_yellow_threshold': config.SNR_YELLOW_THRESHOLD,
             'special_movement_threshold': getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50),
             'low_battery_threshold': getattr(config, 'LOW_BATTERY_THRESHOLD', 50),
             'api_polling_interval': getattr(config, 'API_POLLING_INTERVAL_MS', 10000) // 1000  # Convert ms to seconds
@@ -391,6 +399,115 @@ def get_nodes() -> Response:
         return jsonify({'nodes': nodes, 'count': len(nodes)})
     except Exception as e:
         logger.exception('Failed to get nodes')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/alerts/toggle', methods=['POST'])
+@check_rate_limit
+@require_api_key
+def toggle_alerts() -> Response:
+    """
+    Toggle email alerts on/off without restarting the server.
+    
+    This allows users to temporarily disable movement and battery alerts
+    to prevent alert spam during network issues or testing.
+    
+    Returns:
+        {
+            'status': 'ok',
+            'alerts_enabled': boolean,
+            'message': 'Alerts enabled/disabled'
+        }
+    """
+    try:
+        # Get current alert status
+        current_status = getattr(config, 'ALERT_ENABLED', False)
+        
+        # Toggle the status
+        new_status = not current_status
+        config.ALERT_ENABLED = new_status
+        
+        logger.info(f"Alerts toggled: {'ENABLED' if new_status else 'DISABLED'} by {request.remote_addr}")
+        
+        return jsonify({
+            'status': 'ok',
+            'alerts_enabled': new_status,
+            'message': f'Alerts {("enabled" if new_status else "disabled")}'
+        })
+    except Exception as e:
+        logger.exception('Failed to toggle alerts')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/alerts/status', methods=['GET'])
+@check_rate_limit
+@require_api_key
+def get_alerts_status() -> Response:
+    """
+    Get current alert status (enabled/disabled).
+    
+    Returns:
+        {
+            'alerts_enabled': boolean,
+            'alert_cooldown': int (seconds),
+            'low_battery_threshold': int (%)
+        }
+    """
+    try:
+        return jsonify({
+            'alerts_enabled': getattr(config, 'ALERT_ENABLED', False),
+            'alert_cooldown': getattr(config, 'ALERT_COOLDOWN', 3600),
+            'low_battery_threshold': getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
+        })
+    except Exception as e:
+        logger.exception('Failed to get alert status')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/server/restart', methods=['POST'])
+@check_rate_limit
+@require_api_key
+def restart_server() -> Response:
+    """
+    Gracefully restart the server process.
+    
+    This clears all in-memory cache (position trails, deduplication data, etc.)
+    while preserving configuration files. Used to recover from network issues
+    or reset accumulated stale data.
+    
+    Returns:
+        {
+            'status': 'ok',
+            'message': 'Server restarting...'
+        }
+    """
+    try:
+        import os
+        import signal
+        
+        logger.warning(f"Server restart requested via /api/server/restart by {request.remote_addr}")
+        
+        # Return success response first (client will see this before shutdown)
+        response_data = {
+            'status': 'ok',
+            'message': 'Server restarting...'
+        }
+        
+        # Schedule restart for 1 second from now to allow response to be sent
+        def restart_after_delay():
+            import time
+            time.sleep(1)
+            logger.info("Initiating graceful shutdown for server restart")
+            os.kill(os.getpid(), signal.SIGTERM)
+        
+        import threading
+        restart_thread = threading.Thread(target=restart_after_delay, daemon=True)
+        restart_thread.start()
+        
+        return jsonify(response_data), 202  # 202 Accepted (operation in progress)
+    
+    except Exception as e:
+        logger.exception('Failed to restart server')
         return jsonify({'error': str(e)}), 500
 
 
@@ -450,12 +567,12 @@ def get_signal_history() -> Response:
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/api/config/movement-threshold', methods=['POST'])
-@require_api_key
 @check_rate_limit
+@require_api_key
 def update_movement_threshold() -> Response:
     """Update the special nodes movement threshold in memory."""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         threshold = float(data.get('threshold', 80))
         if threshold <= 0:
             return jsonify({'error': 'threshold must be positive'}), 400
@@ -468,12 +585,12 @@ def update_movement_threshold() -> Response:
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/api/config/battery-threshold', methods=['POST'])
-@require_api_key
 @check_rate_limit
+@require_api_key
 def update_battery_threshold() -> Response:
     """Update the low battery threshold in memory."""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         threshold = int(data.get('threshold', 25))
         if threshold <= 0 or threshold > 100:
             return jsonify({'error': 'threshold must be between 1 and 100'}), 400
@@ -486,12 +603,12 @@ def update_battery_threshold() -> Response:
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/api/config/show-gateways', methods=['POST'])
-@require_api_key
 @check_rate_limit
+@require_api_key
 def update_show_gateways() -> Response:
     """Update the show_gateways setting and reload MQTT subscriptions."""
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True) or {}
         show_gateways = bool(data.get('show_gateways', True))
 
         # Update in memory
@@ -519,8 +636,8 @@ def update_show_gateways() -> Response:
         return jsonify({'error': str(e)}), 500
 
 @api_bp.route('/api/test-alert', methods=['POST'])
-@require_api_key
 @check_rate_limit
+@require_api_key
 def test_alert() -> Response:
     """Send a test alert email to verify email configuration."""
     try:

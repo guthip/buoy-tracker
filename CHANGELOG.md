@@ -2,6 +2,67 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2026-05-19] - v1.03 - Data Quality, Alert Controls & Signal Thresholds
+
+### Added
+
+- **Position Packet Precision Validation**
+  - New `_validate_position_precision()` function in `mqtt_handler.py` filters corrupted GPS packets
+  - Rejects packets with `precision_bits < 32` (Meshtastic standard requires 32-bit full precision)
+  - Also rejects zero-coordinate packets (no GPS fix) and out-of-range lat/lon values
+  - Prevents erratic trails and false drift alerts from degraded mesh relay packets
+  - Rejected packets logged with reason (`precision_bits`, `precision_bits_not_set`, `zero_coordinates`)
+
+- **Configurable RSSI/SNR Traffic Light Thresholds**
+  - New `[signal_quality]` section in `tracker.config` with four configurable thresholds
+  - Defaults tuned to realistic Meshtastic LoRa operation (not conservative WiFi-era values)
+  - RSSI: green ≥ -90 dBm, yellow -90 to -110 dBm, red < -110 dBm
+  - SNR: green ≥ 5 dB, yellow -5 to 5 dB, red < -5 dB
+  - All four thresholds sent to frontend via `/api/status` — no hardcoded values in JavaScript
+
+- **Separate LPU and SoL Timing Thresholds**
+  - LPU (Last Position Update) and SoL (Sign of Life) now have independent, configurable thresholds
+  - New keys in `[special_nodes_settings]`: `lpu_blue_threshold_hours`, `lpu_orange_threshold_hours`, `sol_blue_threshold_hours`, `sol_orange_threshold_hours`
+  - Defaults: LPU blue < 3h / orange 3–8h / red > 8h; SoL blue < 2h / orange 2–6h / red > 6h
+  - Designed for 2-hour position update interval with more frequent telemetry
+  - Thresholds passed to frontend via `/api/status` for accurate color rendering
+
+- **Email Kill Switch (Alerts Toggle)**
+  - New `POST /api/alerts/toggle` endpoint toggles email alerts on/off without server restart
+  - New `GET /api/alerts/status` endpoint returns current alert enabled/disabled state
+  - Toggle button visible in Control Menu (requires API key authentication)
+  - Prevents alert spam during network malfunctions or testing without any restart
+  - State change logged with timestamp for audit trail
+
+- **Server Restart via Web UI**
+  - New `POST /api/server/restart` endpoint (202 Accepted) triggers graceful SIGTERM shutdown
+  - Clears all in-memory cache: position trails, deduplication timestamps, gateway connections
+  - Control Menu button with confirmation dialog prevents accidental restart
+  - Page auto-reloads 3 seconds after restart request
+  - Returns immediately so the response is delivered before shutdown begins
+
+### Fixed
+
+- **Battery Display in Alert Emails**
+  - Movement alert emails no longer show "Battery Level: None%"
+  - Root cause: code was reading `battery_level` (from node info, always ~100%) before `battery` (from telemetry)
+  - Fix: reads only from telemetry `battery` field; auto-detects voltage vs percentage by value range
+  - Shows `3.82V` for power sensor nodes (INA260), `64%` for standard nodes, `No telemetry` if unavailable
+  - Battery alert emails apply the same fix
+
+---
+
+## [2026-04-08] - v1.02 - Duplicate Alert Fix
+
+### Bug Fixes
+- **Fixed duplicate movement/battery alert emails sent for the same event**
+  - Root cause: `last_alert_sent` timestamp was recorded *after* `_send_email()` completed
+  - When the same Meshtastic packet is forwarded by multiple gateways and arrives in rapid
+    succession, both packets passed the cooldown check before either set the timestamp
+  - Fix: Record `last_alert_sent` *before* calling `_send_email()` so any concurrent duplicate
+    is blocked immediately, regardless of how long the SMTP call takes
+  - Applies to both movement alerts and battery alerts
+
 ## [2026-01-02] - v1.01 - Unknown PortNum Handling Fix
 
 ### Bug Fixes

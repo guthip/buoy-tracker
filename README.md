@@ -57,6 +57,8 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
   - **Batt** (Battery): Voltage level status
   - **RSSI** (Signal Strength): Radio signal quality (-120 to -50 dBm)
   - **SNR** (Signal-to-Noise Ratio): Channel quality (-20 to +10 dB)
+  - Thresholds tuned for Meshtastic LoRa operation and fully configurable in `tracker.config` (`[signal_quality]` section)
+- **Position Precision Validation**: Automatically rejects GPS packets with degraded precision (`precision_bits < 32`), preventing corrupted relay packets from polluting position trails
 - **Signal History Visualization**: Click 📊 button on any node card to view:
   - Interactive histogram showing battery, RSSI, and SNR trends
   - Hover tooltips with detailed readings and timestamps
@@ -71,6 +73,8 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
   - **Trail History**: Toggle position trail display and history length
   - **Low Battery Threshold**: Customize battery alert level
   - **API Polling Interval**: Adjust refresh rate
+  - **Email Kill Switch**: Enable/disable alert emails instantly from the Control Menu — no restart needed
+  - **Server Restart**: Clear all cached trail data and reset in-memory state from the Control Menu
   - Settings persist for current session
 - **Special Node Tracking**: Track specific nodes with home positions and movement alerts
   - Green dashed rings show movement threshold (configurable)
@@ -260,6 +264,9 @@ docker compose up -d
   - ⚫ Dark Gray: Special node stale
   - ⚪ Light Gray: Awaiting GPS (at home position)
   - 🔴 Light Red Card: Special node outside expected range
+  - **LPU/SoL indicators** use separate configurable thresholds (see `[special_nodes_settings]` in `tracker.config`):
+    - LPU: blue < 3h, orange 3–8h, red > 8h (defaults for ~2-hour position update interval)
+    - SoL: blue < 2h, orange 2–6h, red > 6h (defaults for ~1-hour telemetry interval)
 
 ## Configuration
 
@@ -355,6 +362,25 @@ status_orange_threshold = 12
 # ⚠️ Progress bar in UI updates every 100ms, filling from 0-100% over the polling interval
 api_polling_interval = 10
 ```
+
+### Signal Quality Thresholds
+
+Traffic light colors for RSSI and SNR indicators are configurable to match your deployment's radio characteristics:
+
+```ini
+[signal_quality]
+# RSSI thresholds (dBm, closer to 0 is stronger)
+rssi_green_threshold = -90      # Excellent signal (>= -90 dBm)
+rssi_yellow_threshold = -110    # Acceptable signal (-90 to -110 dBm)
+# Below -110 dBm = red (poor)
+
+# SNR thresholds (dB, higher is better)
+snr_green_threshold = 5.0       # Excellent SNR (>= 5 dB)
+snr_yellow_threshold = -5.0     # Acceptable SNR (-5 to 5 dB)
+# Below -5 dB = red (poor)
+```
+
+These defaults reflect typical Meshtastic LoRa operation. Meshtastic reliably communicates at -100 dBm RSSI and 0 dB SNR, so thresholds are more permissive than WiFi standards.
 
 ### User Interface Controls (Admin-Controlled)
 
@@ -568,6 +594,23 @@ If you omit home coordinates in the config, the system automatically learns the 
 Once a position is learned, movement alerts are triggered relative to that first position. The origin updates if you later add home coordinates to the config.
 
 **Movement Alerts**: Green dashed ring shows threshold boundary. Red solid ring appears when node moves beyond threshold from home position.
+
+**LPU and SoL Timing Thresholds**: The LPU (Last Position Update) and SoL (Sign of Life) timing indicators use independent thresholds configured in `[special_nodes_settings]`:
+
+```ini
+[special_nodes_settings]
+# LPU thresholds: color based on time since last GPS position packet
+lpu_blue_threshold_hours = 3       # Green/blue within 3 hours
+lpu_orange_threshold_hours = 8     # Orange between 3-8 hours
+# Red if older than 8 hours
+
+# SoL thresholds: color based on time since any packet (telemetry, position, etc.)
+sol_blue_threshold_hours = 2       # Green/blue within 2 hours
+sol_orange_threshold_hours = 6     # Orange between 2-6 hours
+# Red if older than 6 hours
+```
+
+Tune these to your buoy's update interval — the defaults assume ~2-hour position updates and ~1-hour telemetry.
 
 **Email Alerts**: Configure email notifications when nodes move outside the fence (see Email Alerts section below).
 
@@ -997,6 +1040,24 @@ Special nodes are configured in `tracker.config` for enhanced tracking:
 
 - **`POST /api/config/battery-threshold`** 🔐
   Update low battery alert threshold (percentage)
+
+- **`POST /api/alerts/toggle`** 🔐
+  Toggle email alerts on/off without restarting the server (email kill switch)
+  ```json
+  Response: {"status": "ok", "alerts_enabled": false, "message": "Alerts disabled"}
+  ```
+
+- **`GET /api/alerts/status`** 🔐
+  Get current alert enabled/disabled state
+  ```json
+  {"alerts_enabled": true}
+  ```
+
+- **`POST /api/server/restart`** 🔐
+  Gracefully restart the server process, clearing all in-memory cache (trails, deduplication data, gateway connections). Returns `202 Accepted` before the process shuts down. Page auto-reloads after 3 seconds.
+  ```json
+  Response: {"status": "ok", "message": "Server restarting..."}
+  ```
 
 🔐 = Requires API key authentication
 

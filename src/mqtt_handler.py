@@ -1024,6 +1024,35 @@ def on_nodeinfo(json_data):
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
 
+def _validate_position_precision(payload):
+    """
+    Validate GPS position precision to reject corrupted packets.
+    
+    Meshtastic precision_bits field indicates GPS accuracy:
+    - 32 bits = standard full precision (~1.2-10m accuracy) - VALID
+    - <32 bits = reduced precision, corrupted data - INVALID
+    - 0 bits = field not set, no GPS fix - INVALID
+    
+    Args:
+        payload: Position packet payload dict
+        
+    Returns:
+        True if position precision is valid (>= 32 bits), False otherwise
+    """
+    MIN_PRECISION_BITS = 32  # Hard-coded requirement for standard GPS precision
+    precision_bits = payload.get('precision_bits', 0)
+
+    try:
+        if precision_bits < MIN_PRECISION_BITS:
+            logger.warning(f'Rejected position packet with low precision_bits: {precision_bits} (requires >= {MIN_PRECISION_BITS})')
+            return False
+    except TypeError:
+        logger.warning(f'Rejected position packet with non-numeric precision_bits: {precision_bits!r}')
+        return False
+
+    return True
+
+
 def on_position(json_data):
     """Process position messages - update node coordinates."""
     global message_received, last_message_time
@@ -1034,6 +1063,11 @@ def on_position(json_data):
         node_id = json_data.get("from")
         channel = json_data.get("channel")
         payload = json_data["decoded"]["payload"]
+
+        # Validate position precision early - reject corrupted packets before any processing
+        if not _validate_position_precision(payload):
+            logger.info(f'Skipped position packet for node {node_id} due to insufficient precision')
+            return
 
         # Extract channel name once
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"

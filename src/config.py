@@ -88,14 +88,15 @@ def parse_coordinate(coord_str: str) -> float:
     raise ValueError(f"Invalid coordinate format: '{coord_str}'\nExpected: decimal (37.5637125) or degrees-minutes (N37° 33.81')")
 
 # Load configuration
-config = configparser.ConfigParser()
+# inline_comment_prefixes strips trailing # comments from values (e.g. "3  # note" → "3")
+config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
 if CONFIG_FILE.exists():
     config.read(CONFIG_FILE)
 else:
     raise FileNotFoundError(f"Configuration file not found: {CONFIG_FILE}")
 
 # Load secrets configuration if it exists (overrides public config)
-secrets_config = configparser.ConfigParser()
+secrets_config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
 if CONFIG_SECRETS_FILE.exists():
     secrets_config.read(CONFIG_SECRETS_FILE)
     # Merge secrets into main config (secrets take precedence)
@@ -172,6 +173,32 @@ _status_blue_threshold_hours = config.getint('webapp', 'status_blue_threshold', 
 STATUS_BLUE_THRESHOLD = _status_blue_threshold_hours * 3600
 _status_orange_threshold_hours = config.getint('webapp', 'status_orange_threshold', fallback=12)
 STATUS_ORANGE_THRESHOLD = _status_orange_threshold_hours * 3600
+
+# Special Nodes Status Thresholds (LPU = Last Position Update, SoL = Sign of Life)
+# LPU tracks GPS position packets (typically ~2 hours apart)
+# SoL tracks any packet activity (typically ~1 hour for telemetry)
+# SoL thresholds should be tighter (more frequent) than LPU thresholds
+_lpu_blue_threshold_hours = config.getint('special_nodes_settings', 'lpu_blue_threshold_hours', fallback=3)
+LPU_BLUE_THRESHOLD = _lpu_blue_threshold_hours * 3600
+_lpu_orange_threshold_hours = config.getint('special_nodes_settings', 'lpu_orange_threshold_hours', fallback=8)
+LPU_ORANGE_THRESHOLD = _lpu_orange_threshold_hours * 3600
+
+_sol_blue_threshold_hours = config.getint('special_nodes_settings', 'sol_blue_threshold_hours', fallback=2)
+SOL_BLUE_THRESHOLD = _sol_blue_threshold_hours * 3600
+_sol_orange_threshold_hours = config.getint('special_nodes_settings', 'sol_orange_threshold_hours', fallback=6)
+SOL_ORANGE_THRESHOLD = _sol_orange_threshold_hours * 3600
+
+# Signal Quality Thresholds (RSSI in dBm, SNR in dB)
+# Meshtastic reliable communication at -100 dBm RSSI and 0 dB SNR
+# Thresholds: green (excellent) -> yellow (acceptable) -> red (poor)
+RSSI_GREEN_THRESHOLD = config.getint('signal_quality', 'rssi_green_threshold', fallback=-90)    # Excellent: -90 dBm or better
+RSSI_YELLOW_THRESHOLD = config.getint('signal_quality', 'rssi_yellow_threshold', fallback=-110)  # Acceptable: -90 to -110 dBm
+# Below -110 dBm is red (poor signal)
+
+SNR_GREEN_THRESHOLD = config.getfloat('signal_quality', 'snr_green_threshold', fallback=5.0)      # Excellent: 5+ dB
+SNR_YELLOW_THRESHOLD = config.getfloat('signal_quality', 'snr_yellow_threshold', fallback=-5.0)  # Acceptable: -5 to 5 dB
+# Below -5 dB is red (poor signal)
+
 # API Polling Interval - single unified interval for all endpoints
 # Read from config (defaults to 60 seconds if not specified)
 _api_polling_interval_seconds = config.getint('webapp', 'api_polling_interval', fallback=60)

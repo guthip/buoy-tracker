@@ -73,7 +73,24 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
 
         # Get node details
         node_name = node_data.get("long_name", "Unknown")
-        battery = node_data.get("battery_level", node_data.get("battery", "Unknown"))
+        # Get battery value - stored under "battery" key after telemetry processing
+        # For power sensor nodes this is voltage (volts), for others it's percentage (%)
+        battery_value = node_data.get("battery", "Unknown")
+        
+        # Format battery display based on type
+        if battery_value == "Unknown":
+            battery_display = "No telemetry"
+        elif isinstance(battery_value, (int, float)):
+            # Check if this looks like voltage (typically 3.0-4.2V for LiPo)
+            # or percentage (0-100%)
+            if battery_value > 1.5 and battery_value < 5.0:
+                # Likely voltage value
+                battery_display = f"{battery_value:.2f}V"
+            else:
+                # Likely percentage value
+                battery_display = f"{int(battery_value)}%"
+        else:
+            battery_display = str(battery_value)
 
         # Special node label
         special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
@@ -87,16 +104,17 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
             f"Buoy: {special_label}\n\n"
             f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
             f"ALERT DETAILS:\n  Distance from home: {int(distance_m)} meters\n  Safe zone threshold: {config.SPECIAL_MOVEMENT_THRESHOLD_METERS} meters\n\n"
-            f"TELEMETRY:\n  Battery Level: {battery}%\n\n"
+            f"TELEMETRY:\n  Battery: {battery_display}\n\n"
             f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
             f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN}s (next alert after this time)"
         )
 
+        # Update last sent time BEFORE sending to prevent duplicate alerts
+        # from rapid duplicate packets passing the cooldown check simultaneously
+        last_alert_sent[node_id] = now
+
         # Send email
         _send_email(to_addresses=config.ALERT_EMAIL_TO, subject=subject, body=body)
-
-        # Update last sent time
-        last_alert_sent[node_id] = now
         logger.info(f"Sent movement alert for {special_label} ({int(distance_m)}m)")
 
     except Exception as e:
@@ -162,11 +180,11 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
             f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN / 3600:.1f} hours between alerts"
         )
 
+        # Update last sent time BEFORE sending to prevent duplicate alerts
+        last_alert_sent[alert_key] = now
+
         # Send email
         _send_email(to_addresses=config.ALERT_EMAIL_TO, subject=subject, body=body)
-
-        # Update last sent time
-        last_alert_sent[alert_key] = now
         logger.info(f"Sent battery alert for {special_label} ({battery_level}{log_unit})")
 
     except Exception as e:

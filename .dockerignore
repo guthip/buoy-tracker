@@ -29,6 +29,8 @@ logs/
 .idea/
 .DS_Store
 Thumbs.db
+# macOS resource fork / AppleDouble files
+._*
 
 # Test files
 tests/
@@ -57,6 +59,10 @@ DOCKER_HUB_SETUP.md
 MESHTASTIC_SIGNAL_METRICS.md
 SIGNAL_ANALYSIS_PLAN.md
 effort_assessment.md
+
+# Runtime directories (mounted as volumes, not part of image)
+config/
+data/
 
 # Configuration files (must be created from templates during deployment)
 # Both tracker.config and secret.config should NOT be in the image

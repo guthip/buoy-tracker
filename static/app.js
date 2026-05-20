@@ -268,7 +268,7 @@
      */
     function getRssiStatus(rssi) {
       if (rssi == null) return {color: 'gray', text: '?'};
-      var color = rssi > -70 ? 'green' : rssi > -90 ? 'yellow' : 'red';
+      var color = rssi > rssiGreenThreshold ? 'green' : rssi > rssiYellowThreshold ? 'yellow' : 'red';
       var text = rssi + 'dBm';
       return {color: color, text: text};
     }
@@ -280,7 +280,7 @@
      */
     function getSnrStatus(snr) {
       if (snr == null) return {color: 'gray', text: '?'};
-      var color = snr > 5 ? 'green' : snr > -5 ? 'yellow' : 'red';
+      var color = snr > snrGreenThreshold ? 'green' : snr > snrYellowThreshold ? 'yellow' : 'red';
       var text = Math.round(snr * 10) / 10 + 'dB';
       return {color: color, text: text};
     }
@@ -753,6 +753,112 @@
     };
   }
   
+  // Toggle email alerts on/off
+  window.toggleAlerts = function toggleAlerts() {
+    try {
+      makeApiRequest('POST', 'api/alerts/toggle', function(xhr) {
+        try {
+          if (xhr.status === 200) {
+            var data = JSON.parse(xhr.responseText);
+            var btn = document.getElementById('toggleAlertsBtn');
+            var status = document.getElementById('alertStatus');
+            
+            if (data.alerts_enabled) {
+              btn.style.background = '#4CAF50';
+              btn.textContent = '⚠️ Alerts Enabled';
+              if (status) status.textContent = 'Alerts are ON - will send notifications on movement';
+            } else {
+              btn.style.background = '#f44336';
+              btn.textContent = '⚠️ Alerts Disabled';
+              if (status) status.textContent = 'Alerts are OFF - no notifications will be sent';
+            }
+            
+            console.log('[Alerts] Toggled: ' + (data.alerts_enabled ? 'ON' : 'OFF'));
+          } else {
+            alert('Failed to toggle alerts: ' + xhr.statusText);
+          }
+        } catch(e) {
+          console.error('Error parsing alert toggle response:', e);
+          alert('Error toggling alerts');
+        }
+      });
+    } catch(e) {
+      console.error('API request error:', e);
+      alert('Failed to toggle alerts');
+    }
+  }
+  
+  // Load alert status on page initialization
+  function loadAlertStatus() {
+    try {
+      makeApiRequest('GET', 'api/alerts/status', function(xhr) {
+        try {
+          if (xhr.status === 200) {
+            var data = JSON.parse(xhr.responseText);
+            var btn = document.getElementById('toggleAlertsBtn');
+            var status = document.getElementById('alertStatus');
+            
+            if (data.alerts_enabled) {
+              btn.style.background = '#4CAF50';
+              btn.textContent = '⚠️ Alerts Enabled';
+              if (status) status.textContent = 'Alerts are ON - will send notifications on movement';
+            } else {
+              btn.style.background = '#f44336';
+              btn.textContent = '⚠️ Alerts Disabled';
+              if (status) status.textContent = 'Alerts are OFF - no notifications will be sent';
+            }
+          }
+        } catch(e) {
+          // Silent - use default state
+        }
+      });
+    } catch(e) {
+      // Silent - use default state
+    }
+  }
+  
+  // Restart the server
+  window.restartServer = function restartServer() {
+    if (!confirm('Restart server? This will clear all trail data and briefly disconnect all clients. Are you sure?')) {
+      return;
+    }
+    
+    try {
+      var btn = document.getElementById('restartServerBtn');
+      var status = document.getElementById('restartStatus');
+      
+      if (btn) btn.disabled = true;
+      if (status) status.textContent = 'Restarting server...';
+      
+      makeApiRequest('POST', 'api/server/restart', function(xhr) {
+        try {
+          if (xhr.status === 202 || xhr.status === 200) {
+            if (status) status.textContent = 'Server is restarting... page will refresh automatically.';
+            
+            // Wait 3 seconds then try to reconnect
+            setTimeout(function() {
+              location.reload();
+            }, 3000);
+          } else {
+            if (status) status.textContent = 'Error: ' + xhr.statusText;
+            if (btn) btn.disabled = false;
+          }
+        } catch(e) {
+          // Expected to fail since server is shutting down
+          if (status) status.textContent = 'Server is restarting... page will refresh automatically.';
+          setTimeout(function() {
+            location.reload();
+          }, 3000);
+        }
+      });
+    } catch(e) {
+      console.error('API request error:', e);
+      alert('Failed to restart server');
+      var btn = document.getElementById('restartServerBtn');
+      if (btn) btn.disabled = false;
+    }
+  }
+  
   var map = null;
   var markers = {};
   var gatewayMarkers = {}; // markers for gateways receiving special node packets
@@ -930,6 +1036,21 @@
   // Configuration thresholds (in seconds) - will be loaded from server
   var statusBlueThreshold = 3600; // default: 1 hour (will be overwritten by config from API)
   var statusOrangeThreshold = 43200; // default: 12 hours (will be overwritten by config from API)
+  
+  // LPU (Last Position Update) thresholds - for GPS position packets (~2 hours apart)
+  var lpuBlueThreshold = 10800; // default: 3 hours
+  var lpuOrangeThreshold = 28800; // default: 8 hours
+  
+  // SoL (Sign of Life) thresholds - for any packet activity (more frequent)
+  var solBlueThreshold = 7200; // default: 2 hours
+  var solOrangeThreshold = 21600; // default: 6 hours
+  
+  // Signal quality thresholds
+  var rssiGreenThreshold = -90; // dBm
+  var rssiYellowThreshold = -110; // dBm
+  var snrGreenThreshold = 5.0; // dB
+  var snrYellowThreshold = -5.0; // dB
+  
   var specialMovementThreshold = 50; // default: 50m (will be overwritten by config from API)
   
   // Load thresholds from server config on startup
@@ -946,6 +1067,30 @@
               }
               if (data.config.status_orange_threshold) {
                 statusOrangeThreshold = data.config.status_orange_threshold;
+              }
+              if (data.config.lpu_blue_threshold) {
+                lpuBlueThreshold = data.config.lpu_blue_threshold;
+              }
+              if (data.config.lpu_orange_threshold) {
+                lpuOrangeThreshold = data.config.lpu_orange_threshold;
+              }
+              if (data.config.sol_blue_threshold) {
+                solBlueThreshold = data.config.sol_blue_threshold;
+              }
+              if (data.config.sol_orange_threshold) {
+                solOrangeThreshold = data.config.sol_orange_threshold;
+              }
+              if (data.config.rssi_green_threshold) {
+                rssiGreenThreshold = data.config.rssi_green_threshold;
+              }
+              if (data.config.rssi_yellow_threshold) {
+                rssiYellowThreshold = data.config.rssi_yellow_threshold;
+              }
+              if (data.config.snr_green_threshold) {
+                snrGreenThreshold = data.config.snr_green_threshold;
+              }
+              if (data.config.snr_yellow_threshold) {
+                snrYellowThreshold = data.config.snr_yellow_threshold;
               }
               if (data.config.special_movement_threshold) {
                 specialMovementThreshold = data.config.special_movement_threshold;
@@ -974,6 +1119,8 @@
       }
       // Set up tooltip event delegation (once on init, eliminates memory leak)
       setupTooltipDelegation();
+      // Load initial alert status
+      loadAlertStatus();
     });
   } else {
     // Already loaded
@@ -984,6 +1131,8 @@
     }
     // Set up tooltip event delegation (once on init, eliminates memory leak)
     setupTooltipDelegation();
+    // Load initial alert status
+    loadAlertStatus();
   }
 
 
@@ -1507,8 +1656,8 @@
 
     // Calculate all indicator statuses using helper functions
     var batteryColor = getBatteryColor(bat, voltage);
-    var lpuStatus = getAgeStatus(node.last_position_update, statusBlueThreshold, statusOrangeThreshold);
-    var solStatus = getAgeStatus(node.last_seen, 3600, 12*3600);
+    var lpuStatus = getAgeStatus(node.last_position_update, lpuBlueThreshold, lpuOrangeThreshold);
+    var solStatus = getAgeStatus(node.last_seen, solBlueThreshold, solOrangeThreshold);
     var distStatus = getDistanceStatus(
       node.is_special ? node.distance_from_origin_m : null,
       specialMovementThreshold

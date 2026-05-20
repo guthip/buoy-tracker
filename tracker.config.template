@@ -4,7 +4,7 @@
 
 [app]
 title = SYC buoy tracker
-version = 1.01
+version = 1.03
 
 [mqtt]
 # MQTT broker settings
@@ -50,6 +50,22 @@ default_zoom = 13
 # Older than status_orange_threshold = red (very stale)
 status_blue_threshold = 3
 status_orange_threshold = 12
+
+# Signal quality thresholds for packet reception
+# These indicate the quality of radio communication
+# RSSI (signal strength): -90 dBm (excellent) to -110 dBm (acceptable) to -200 dBm (unusable)
+# SNR (signal-to-noise): 5+ dB (excellent) to -5 dB (acceptable) to -20 dB (unusable)
+# Meshtastic reliably communicates at -100 dBm RSSI and 0 dB SNR
+[signal_quality]
+# RSSI thresholds (in dBm, negative values, closer to 0 is stronger)
+# Excellent: >= -90 dBm (green); acceptable: -90 to -110 dBm (yellow); poor: < -110 dBm (red)
+rssi_green_threshold = -90
+rssi_yellow_threshold = -110
+
+# SNR thresholds (in dB, higher is better)
+# Excellent: >= 5 dB (green); acceptable: -5 to 5 dB (yellow); poor: < -5 dB (red)
+snr_green_threshold = 5.0
+snr_yellow_threshold = -5.0
 
 # Data polling interval (in seconds)
 # How often the client polls the server for updates
@@ -101,6 +117,19 @@ special_symbol = ⭐
 # Use 24 for daily snapshots
 data_limit_time = 0.25
 
+# LPU (Last Position Update) thresholds - for GPS position packets (typically ~2 hours apart)
+# These control the color indicator for how recently the buoy transmitted a position
+# Blue/green within 3 hours; orange 3-8 hours; red after 8 hours
+lpu_blue_threshold_hours = 3
+lpu_orange_threshold_hours = 8
+
+# SoL (Sign of Life) thresholds - for any packet activity (telemetry ~1 hour)
+# These control the color indicator for general node activity (not just position)
+# SoL thresholds are tighter than LPU because telemetry packets are more frequent
+# Blue/green within 2 hours; orange 2-6 hours; red after 6 hours
+sol_blue_threshold_hours = 2
+sol_orange_threshold_hours = 6
+
 [special_nodes]
 # Highlight specific nodes with custom symbols and home positions
 # Movement threshold: radius in meters beyond which movement alerts trigger
@@ -125,12 +154,13 @@ movement_threshold = 150
 #   3681533965 = SYCS,N37° 33.81',W122° 13.13',true          (with INA260 sensor, defaults to ch3_voltage)
 #   3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch1_voltage  (with sensor, monitor input voltage)
 #
-# Primary 4 SYC nodes
-3681533965 = SYCS,N37° 33.81',W122° 13.13',true
-492590216 = SYCE,N37° 34.81',W122° 13.07'
-2512106321 = SYCA,N37° 31.94',W122° 10.31'
-2009991947 = SYCX,N37° 34.23',W122° 12.13'
-# Additional nodes, add as needed
+# Primary SYC nodes
+3681533965 = SYCS, 37.561962, -122.214979, true
+492590216  = SYCE, N37° 34.81', W122° 13.07', true
+2512106321 = SYCA, 37.529302, -122.167868, true
+2009991947 = SYCX, N37° 34.23', W122° 12.13', true
+3280278694 = SYCO, N37° 33.61', W122° 11.16', true
+800188038  = SYCP, N37° 33.51', W122° 11.27', true
 
 [alerts]
 # Email alert settings for movement notifications
