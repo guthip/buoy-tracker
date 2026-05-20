@@ -23,6 +23,10 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
 
 **Data flow:** Buoys → Mesh Network → Gateways → MQTT Broker → Backend → Dashboard → Alerts
 
+## A Note on This Code
+
+This project is **100% vibe coded** — an exercise in exploring what Anthropic Claude can build when given a real-world problem and free rein. According to the human involved, the code is horrendous, but functional. Use it, fork it, improve it, or laugh at it. No guarantees, no warranties, no promises. It works well enough to track buoys in San Francisco Bay, and that was the goal.
+
 ## Features
 
 ### Basic Interface
@@ -48,7 +52,7 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
   - **LPU** (Last Position Update): Time since last GPS position packet
   - **SoL** (Sign of Life): Time since any packet received
   - **Position History**: Deduplicated by packet timestamp to show only unique positions (retransmitted packets are automatically filtered)
-  - **Position Trail Display**: Shows movement history on map with markers colored: green (oldest), red (newest), gray outline (intermediate)
+  - **Position Trail Display**: Shows movement history on map with markers fading from light blue (oldest) to dark blue (newest); size increases with recency
   - **Server-side Deduplication**: Position data reduced to one point per time window (configurable via `data_limit_time` in `tracker.config`)
     - Default: 1.0 hour (one point per hour)
     - Reduces 700+ daily points to ~24, saving 84% bandwidth
@@ -198,15 +202,13 @@ Access the web interface at **http://localhost:5103**
   - Useful for debugging and monitoring
 
 **Making Changes to Configuration:**
-After editing files in `./config/`:
-1. **Without restart** (recommended):
-   ```bash
-   curl -X POST http://localhost:5103/api/config/reload
-   ```
-2. **With restart** (if reload doesn't work):
-   ```bash
-   docker compose restart buoy-tracker
-   ```
+After editing files in `./config/`, restart the container to pick up changes:
+
+```bash
+docker compose restart buoy-tracker
+```
+
+Alternatively, use the **Server Restart** button in the Control Menu (🔐 requires API key) — this restarts the process via the web UI and clears all in-memory state.
 
 **Building Custom Images**
 
@@ -413,7 +415,7 @@ trail_history_hours = 168      # Adjustable in UI
 
 API rate limits are **automatically calculated** based on polling interval and number of special nodes:
 - **Formula**: `(3600 / polling_seconds) * (3_base_endpoints + N_special_nodes) * 2.0_safety_margin`, rounded up to nearest 10
-- **Base endpoints**: `api/status`, `api/nodes`, `api/special/packets` = 3 requests per interval
+- **Base endpoints**: `/health`, `api/nodes`, `api/special/packets` = 3 requests per interval
 - **Per special node**: `api/special/history` request when trails enabled = N additional requests
 - **Safety multiplier**: 2.0x provides headroom for traffic spikes
 - **Examples** (assuming 4 special nodes configured):
@@ -861,10 +863,10 @@ buoy_tracker/
 │   └── simple.html          # Web UI (Leaflet map)
 ├── static/
 │   └── app.js               # Frontend JavaScript
-├── data/                    # Data directory (in-memory only, not persisted)
+├── data/                    # Application data (persisted; special node history)
 ├── tests/                   # Test suite
 ├── tracker.config.template  # Template (copy to tracker.config during setup)
-├── secret.config.example    # Template (copy to secret.config during setup)
+├── secret.config.template   # Template (copy to secret.config during setup)
 ├── run.py                   # Application runner
 └── requirements.txt         # Python dependencies
 ```
@@ -885,187 +887,6 @@ pytest tests/
 - Meshtastic MQTT JSON library
 - Leaflet.js + OpenStreetMap
 - paho-mqtt for MQTT client
-
-## License
-
-[Add license information here]
-
-## Development
-
-The application provides a RESTful API for programmatic access to node data:
-
-### Status Endpoints
-
-- **`GET /api/status`**  
-  Returns MQTT connection status and node counts
-  ```json
-  {
-    "mqtt_connected": true,
-    "nodes_tracked": 42,
-    "nodes_with_position": 38
-  }
-  ```
-
-- **`GET /health`**  
-  Simple health check endpoint
-  ```json
-  {"status": "ok"}
-  ```
-
-### Node Data Endpoints
-
-- **`GET /api/nodes`**  
-  Returns all tracked nodes with their current status, position, battery, and channel information
-  ```json
-  {
-    "nodes": [
-      {
-        "id": 123456789,
-        "name": "Node Name",
-        "short": "NODE",
-        "lat": 37.7749,
-        "lon": -122.4194,
-        "alt": 10,
-        "hw_model": "TBEAM",
-        "channel": 0,
-        "channel_name": "MediumFast",
-        "modem_preset": "MEDIUM_FAST",
-        "role": "CLIENT",
-        "battery": 85,
-        "status": "blue",
-        "is_special": false,
-        "has_fix": true,
-        "age_min": 5
-      }
-    ],
-    "count": 1
-  }
-  ```
-
-- **`GET /api/recent_messages?limit=100`**  
-  Returns recent raw MQTT messages for debugging
-  ```json
-  {
-    "recent": [...],
-    "count": 100
-  }
-  ```
-
-### Special Node Endpoints
-
-Special nodes are configured in `tracker.config` for enhanced tracking:
-
-- **`GET /api/special/history/batch?hours=<hours>`**
-  Get position history for all special nodes in a single batch request (replaces deprecated single-node endpoint)
-  - `hours` (optional): Hours of history (default: 24)
-  ```json
-  {
-    "hours": 24,
-    "histories": {
-      "123456789": [
-        {
-          "timestamp": 1699999999.123,
-          "latitude": 37.7749,
-          "longitude": -122.4194,
-          "altitude": 10
-        }
-      ]
-    }
-  }
-  ```
-
-- **`GET /api/special/packets?limit=<n>`**  
-  Get recent packets for all special nodes (default limit: 50)
-  ```json
-  {
-    "packets": {
-      "123456789": [
-        {
-          "timestamp": 1699999999.123,
-          "packet_type": "position",
-          "latitude": 37.7749,
-          "longitude": -122.4194,
-          "battery_level": 85,
-          "voltage": 4.1,
-          "channel_utilization": 5.2,
-          "air_util_tx": 1.3
-        }
-      ]
-    },
-    "count": 1
-  }
-  ```
-
-- **`GET /api/special/packets/<node_id>?limit=<n>`**  
-  Get recent packets for a specific special node
-  ```json
-  {
-    "node_id": 123456789,
-    "packets": [...],
-    "count": 1
-  }
-  ```
-
-### MQTT Control Endpoints
-
-- **`POST /api/mqtt/connect`** 🔐
-  Manually connect to MQTT broker
-
-- **`POST /api/mqtt/disconnect`** 🔐
-  Disconnect from MQTT broker
-
-- **`GET /api/mqtt/status`**
-  Get MQTT connection details
-
-### Configuration Endpoints
-
-- **`POST /api/config/show-gateways`** 🔐
-  Update show_gateways setting and reload MQTT subscriptions dynamically
-  ```json
-  {
-    "show_gateways": true
-  }
-  ```
-  Response:
-  ```json
-  {
-    "success": true,
-    "show_gateways": true,
-    "subscriptions_reloaded": true
-  }
-  ```
-
-- **`POST /api/config/movement-threshold`** 🔐
-  Update movement alert threshold (in meters)
-
-- **`POST /api/config/battery-threshold`** 🔐
-  Update low battery alert threshold (percentage)
-
-- **`POST /api/alerts/toggle`** 🔐
-  Toggle email alerts on/off without restarting the server (email kill switch)
-  ```json
-  Response: {"status": "ok", "alerts_enabled": false, "message": "Alerts disabled"}
-  ```
-
-- **`GET /api/alerts/status`** 🔐
-  Get current alert enabled/disabled state
-  ```json
-  {"alerts_enabled": true}
-  ```
-
-- **`POST /api/server/restart`** 🔐
-  Gracefully restart the server process, clearing all in-memory cache (trails, deduplication data, gateway connections). Returns `202 Accepted` before the process shuts down. Page auto-reloads after 3 seconds.
-  ```json
-  Response: {"status": "ok", "message": "Server restarting..."}
-  ```
-
-🔐 = Requires API key authentication
-
-### Running Tests
-
-```bash
-pytest tests/
-```
 
 ### Code Style
 

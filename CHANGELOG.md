@@ -2,6 +2,21 @@
 
 All notable changes to the Buoy Tracker project are documented here.
 
+## [2026-05-20] - v1.03 patch - Security Hardening & UI Fixes
+
+### Security
+
+- **Authentication on all mutating endpoints** — `POST /api/alerts/toggle`, `GET /api/alerts/status`, `POST /api/server/restart` now require Bearer token; unauthenticated requests return 401
+- **Rate limiting before auth check** — swapped decorator order on all 7 protected endpoints so brute-force key attempts consume rate limit tokens
+- **Robust JSON body handling** — `update_movement_threshold`, `update_battery_threshold`, `update_show_gateways` use `get_json(silent=True) or {}`; missing/malformed body returns 400 not 500
+- **Test coverage** — new `TestAlertsToggleAuth` and `TestServerRestartAuth` classes; autouse fixture prevents `ALERT_ENABLED` state leak between tests
+
+### Fixed
+
+- **Alert toggle and server restart buttons** — functions were defined inside IIFE and not reachable from `onclick=` attributes; exposed as `window.toggleAlerts` / `window.restartServer`; corrected URL paths; replaced undefined `logger.info()` with `console.log()` in JavaScript
+
+---
+
 ## [2026-05-19] - v1.03 - Data Quality, Alert Controls & Signal Thresholds
 
 ### Added
