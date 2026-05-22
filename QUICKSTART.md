@@ -37,13 +37,12 @@ Requires Python 3.13+ and pip:
 # Install dependencies
 pip install -r requirements.txt
 
-nano tracker.config
-nano secret.config
+# Create config files from templates
+cp tracker.config.template tracker.config
+cp secret.config.template secret.config
 
 # (Optional) Customize settings - app works with defaults
-cp tracker.config.template tracker.config
 nano tracker.config
-cp secret.config.example secret.config
 nano secret.config
 
 # Run the application

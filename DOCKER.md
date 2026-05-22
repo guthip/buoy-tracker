@@ -1,6 +1,6 @@
 # Buoy Tracker — Docker Deployment Guide
 
-Complete instructions for deploying Buoy Tracker v0.96 with Docker.
+Complete instructions for deploying Buoy Tracker v1.1 with Docker.
 
 ## Platform Support
 
@@ -218,7 +218,7 @@ lsof -i :5103
 docker exec buoy-tracker ping mqtt.bayme.sh
 
 # Check config
-docker exec buoy-tracker cat /app/tracker.config
+docker exec buoy-tracker cat /app/config/tracker.config
 ```
 
 ### Data not persisting
@@ -231,15 +231,15 @@ docker inspect buoy-tracker | grep -A 10 Mounts
 
 1. **Use environment variables for secrets** (MQTT password, SMTP credentials) - keeps sensitive data out of config files and enables secrets to be managed by your container orchestration platform (Docker secrets, Kubernetes secrets, etc.)
 2. **Set up reverse proxy** (nginx) with SSL for secure HTTPS access
-3. **Monitor health endpoint** (`/api/status`) for alerts
+3. **Monitor health endpoint** (`/health`) for alerts
 4. **Use Docker restart policies**: `--restart unless-stopped`
 
 ## Email Distribution Template
 
 ```
-Subject: Buoy Tracker v0.96 - Docker Container
+Subject: Buoy Tracker v1.1 - Docker Container
 
-Buoy Tracker v0.96 Docker image for real-time Meshtastic node tracking.
+Buoy Tracker v1.1 Docker image for real-time Meshtastic node tracking.
 
 Quick Start:
 1. mkdir buoy-tracker && cd buoy-tracker

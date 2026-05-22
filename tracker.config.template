@@ -4,7 +4,7 @@
 
 [app]
 title = SYC buoy tracker
-version = 1.03
+version = 1.1
 
 [mqtt]
 # MQTT broker settings
@@ -52,27 +52,26 @@ status_blue_threshold = 3
 status_orange_threshold = 12
 
 # Signal quality thresholds for packet reception
-# These indicate the quality of radio communication
-# RSSI (signal strength): -90 dBm (excellent) to -110 dBm (acceptable) to -200 dBm (unusable)
-# SNR (signal-to-noise): 5+ dB (excellent) to -5 dB (acceptable) to -20 dB (unusable)
-# Meshtastic reliably communicates at -100 dBm RSSI and 0 dB SNR
+# These indicate the quality of radio communication.
+# LoRa sensitivity is ~-130 dBm; Meshtastic spread-spectrum decodes well below 0 dB SNR.
+# These thresholds reflect LoRa realities, not WiFi norms.
 [signal_quality]
 # RSSI thresholds (in dBm, negative values, closer to 0 is stronger)
-# Excellent: >= -90 dBm (green); acceptable: -90 to -110 dBm (yellow); poor: < -110 dBm (red)
-rssi_green_threshold = -90
-rssi_yellow_threshold = -110
+# Excellent: >= -100 dBm (green); acceptable: -100 to -120 dBm (yellow); poor: < -120 dBm (red)
+rssi_green_threshold = -100
+rssi_yellow_threshold = -120
 
-# SNR thresholds (in dB, higher is better)
-# Excellent: >= 5 dB (green); acceptable: -5 to 5 dB (yellow); poor: < -5 dB (red)
-snr_green_threshold = 5.0
-snr_yellow_threshold = -5.0
+# SNR thresholds (in dB, higher is better; LoRa decodes at negative SNR)
+# Excellent: >= 0 dB (green); acceptable: -10 to 0 dB (yellow); poor: < -10 dB (red)
+snr_green_threshold = 0.0
+snr_yellow_threshold = -10.0
 
 # Data polling interval (in seconds)
 # How often the client polls the server for updates
 # ⚠️ IMPORTANT: Recommended range is 5-60 seconds
 #    - Rate limits auto-scale based on this value and number of special nodes
 # Actual requests per polling interval:
-#   - api/status, api/nodes, api/special/packets = 3 base
+#   - /health, api/nodes, api/special/packets = 3 base
 #   - api/special/history (1 per special node) = N additional
 #   - Total: 3 + N special nodes
 # Rate limit formula: (3600 / polling_interval_seconds) * (3 + N_special_nodes) * 2.0

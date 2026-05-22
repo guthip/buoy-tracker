@@ -350,8 +350,8 @@ def _build_packet_info(node_id, packet_type, json_data, current_time):
         packet_info.update({
             'role': payload.get('role'),
             'hw_model': payload.get('hw_model'),
-            'long_name': payload.get('long_name'),
-            'short_name': payload.get('short_name')
+            'long_name': _sanitize_display_text(payload.get('long_name')),
+            'short_name': _sanitize_display_text(payload.get('short_name'))
         })
     elif packet_type == 'POSITION_APP':
         lat_i = payload.get('latitude_i')
@@ -748,6 +748,23 @@ def _haversine_m(lat1, lon1, lat2, lon2):
     except Exception:
         return None
 
+# Characters stripped from MQTT-sourced display text (node/channel names).
+# Defense-in-depth against stored XSS — the web frontend also escapes at render time.
+_UNSAFE_DISPLAY_CHARS = {ord(c): None for c in '<>"\''}
+
+
+def _sanitize_display_text(text):
+    """Strip HTML/JS breakout characters from MQTT-sourced display text.
+
+    Node and channel names arrive from untrusted MQTT packets and are rendered
+    in the web UI. Removing < > " ' neutralizes HTML tag injection and
+    attribute/JS-string breakout before the value is ever stored.
+    """
+    if not isinstance(text, str):
+        return text
+    return text.translate(_UNSAFE_DISPLAY_CHARS)
+
+
 def _extract_node_name_from_payload(payload):
     """
     Extract node name from nodeinfo payload (handles various formats).
@@ -869,7 +886,7 @@ def _extract_channel_from_topic(node_id):
                 channel = parts[e_idx + 1]
                 # Make sure it's not a node id part (starts with !)
                 if not channel.startswith('!'):
-                    return channel
+                    return _sanitize_display_text(channel)
     except Exception as e:
         logger.debug(f"Error extracting channel from topic {topic}: {e}")
 
@@ -937,12 +954,12 @@ def _store_node_names(node_id, payload, extracted_name):
 
     # Safely extract fields from payload (might be dict or string)
     if isinstance(payload, dict):
-        nodes_data[node_id]["long_name"] = extracted_name or payload.get("long_name") or "Unknown"
-        nodes_data[node_id]["short_name"] = short or payload.get("short_name") or "?"
+        nodes_data[node_id]["long_name"] = _sanitize_display_text(extracted_name or payload.get("long_name") or "Unknown")
+        nodes_data[node_id]["short_name"] = _sanitize_display_text(short or payload.get("short_name") or "?")
         nodes_data[node_id]["hw_model"] = payload.get("hw_model") or "Unknown"
     else:
-        nodes_data[node_id]["long_name"] = extracted_name or "Unknown"
-        nodes_data[node_id]["short_name"] = short or "?"
+        nodes_data[node_id]["long_name"] = _sanitize_display_text(extracted_name or "Unknown")
+        nodes_data[node_id]["short_name"] = _sanitize_display_text(short or "?")
         nodes_data[node_id]["hw_model"] = "Unknown"
 
 
@@ -1004,11 +1021,27 @@ def on_nodeinfo(json_data):
             _store_node_names(node_id, payload, name)
             nodes_data[node_id]["last_seen"] = time.time()
             
-            # Store signal quality metrics if available
-            if "rx_rssi" in json_data:
-                nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
-            if "rx_snr" in json_data:
-                nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
+            # Store best signal quality within a rolling 1-hour window.
+            # Multiple gateways each publish their own copy of a packet, so we keep
+            # the best (highest) RSSI/SNR seen within the window rather than last-received.
+            # After the window expires the next packet resets the baseline so stale
+            # best-ever values don't linger as the network topology changes over time.
+            _SIGNAL_WINDOW = 3600
+            now_sig = time.time()
+            new_rssi = json_data.get("rx_rssi")
+            new_snr  = json_data.get("rx_snr")
+            if new_rssi is not None:
+                prev      = nodes_data[node_id].get("rx_rssi")
+                prev_age  = now_sig - nodes_data[node_id].get("rx_rssi_ts", 0)
+                if prev is None or prev_age > _SIGNAL_WINDOW or new_rssi > prev:
+                    nodes_data[node_id]["rx_rssi"]    = new_rssi
+                    nodes_data[node_id]["rx_rssi_ts"] = now_sig
+            if new_snr is not None:
+                prev      = nodes_data[node_id].get("rx_snr")
+                prev_age  = now_sig - nodes_data[node_id].get("rx_snr_ts", 0)
+                if prev is None or prev_age > _SIGNAL_WINDOW or new_snr > prev:
+                    nodes_data[node_id]["rx_snr"]    = new_snr
+                    nodes_data[node_id]["rx_snr_ts"] = now_sig
             
             logger.info(f'Updated nodeinfo for {node_id}: {nodes_data[node_id]["long_name"]}')
 
@@ -1024,22 +1057,35 @@ def on_nodeinfo(json_data):
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
 
-def _validate_position_precision(payload):
+def _validate_position_precision(payload, node_id=None):
     """
     Validate GPS position precision to reject corrupted packets.
-    
-    Meshtastic precision_bits field indicates GPS accuracy:
-    - 32 bits = standard full precision (~1.2-10m accuracy) - VALID
-    - <32 bits = reduced precision, corrupted data - INVALID
-    - 0 bits = field not set, no GPS fix - INVALID
-    
+
+    Two checks:
+    1. precision_bits field >= 32 (Meshtastic standard for full GPS fix)
+    2. Actual coordinate integers have 32 significant bits.
+       Relay nodes preserve the source's precision_bits=32 but quantize the
+       coordinates to fewer bits for privacy/efficiency. A 13-bit relay packet
+       has 19 trailing zero bits in latitude_i/longitude_i even though the
+       field still claims 32 — that is what this check catches.
+
+    When a quantized packet is from a special node, a warning is logged to
+    help identify which relay nodes are modifying our buoy position packets.
+
     Args:
         payload: Position packet payload dict
-        
+        node_id: Source node ID for logging (optional)
+
     Returns:
-        True if position precision is valid (>= 32 bits), False otherwise
+        True if position precision is valid, False otherwise
     """
-    MIN_PRECISION_BITS = 32  # Hard-coded requirement for standard GPS precision
+    MIN_PRECISION_BITS = 32
+    # Relay nodes quantize coordinates by zeroing lower bits while leaving precision_bits=32.
+    # A 13-bit relay packet has 19 trailing zeros; a real GPS fix has 1-4.
+    # Threshold of 24 (= max 8 trailing zeros, ~2.8m grid) safely separates
+    # real GPS readings from relay-quantized coordinates.
+    MIN_ACTUAL_COORD_BITS = 24
+
     precision_bits = payload.get('precision_bits', 0)
 
     try:
@@ -1049,6 +1095,26 @@ def _validate_position_precision(payload):
     except TypeError:
         logger.warning(f'Rejected position packet with non-numeric precision_bits: {precision_bits!r}')
         return False
+
+    # Check actual coordinate precision regardless of the precision_bits claim.
+    # Meshtastic encodes lat/lon as int32 = degrees * 1e7.
+    # Reduced-precision relays zero the lower bits: 13-bit coords have 19 trailing zeros.
+    lat_i = payload.get('latitude_i', 0)
+    lon_i = payload.get('longitude_i', 0)
+    if lat_i and lon_i:
+        lat_trailing = (lat_i & -lat_i).bit_length() - 1
+        lon_trailing = (lon_i & -lon_i).bit_length() - 1
+        actual_bits = 32 - max(lat_trailing, lon_trailing)
+        if actual_bits < MIN_ACTUAL_COORD_BITS:
+            if node_id and _is_special_node(node_id):
+                precision_lost = MIN_PRECISION_BITS - actual_bits
+                timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                logger.error(
+                    f'[PRECISION] {timestamp} | node {node_id} | '
+                    f'claims precision_bits={precision_bits} but actual={actual_bits} bits '
+                    f'({precision_lost} bits lost) | lat_i={lat_i}, lon_i={lon_i}'
+                )
+            return False
 
     return True
 
@@ -1065,7 +1131,7 @@ def on_position(json_data):
         payload = json_data["decoded"]["payload"]
 
         # Validate position precision early - reject corrupted packets before any processing
-        if not _validate_position_precision(payload):
+        if not _validate_position_precision(payload, node_id=node_id):
             logger.info(f'Skipped position packet for node {node_id} due to insufficient precision')
             return
 
@@ -1148,11 +1214,27 @@ def on_position(json_data):
             nodes_data[node_id]["last_seen"] = time.time()
             nodes_data[node_id]["last_position_update"] = time.time()  # Track position updates separately
 
-            # Store signal quality metrics if available
-            if "rx_rssi" in json_data:
-                nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
-            if "rx_snr" in json_data:
-                nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
+            # Store best signal quality within a rolling 1-hour window.
+            # Multiple gateways each publish their own copy of a packet, so we keep
+            # the best (highest) RSSI/SNR seen within the window rather than last-received.
+            # After the window expires the next packet resets the baseline so stale
+            # best-ever values don't linger as the network topology changes over time.
+            _SIGNAL_WINDOW = 3600
+            now_sig = time.time()
+            new_rssi = json_data.get("rx_rssi")
+            new_snr  = json_data.get("rx_snr")
+            if new_rssi is not None:
+                prev      = nodes_data[node_id].get("rx_rssi")
+                prev_age  = now_sig - nodes_data[node_id].get("rx_rssi_ts", 0)
+                if prev is None or prev_age > _SIGNAL_WINDOW or new_rssi > prev:
+                    nodes_data[node_id]["rx_rssi"]    = new_rssi
+                    nodes_data[node_id]["rx_rssi_ts"] = now_sig
+            if new_snr is not None:
+                prev      = nodes_data[node_id].get("rx_snr")
+                prev_age  = now_sig - nodes_data[node_id].get("rx_snr_ts", 0)
+                if prev is None or prev_age > _SIGNAL_WINDOW or new_snr > prev:
+                    nodes_data[node_id]["rx_snr"]    = new_snr
+                    nodes_data[node_id]["rx_snr_ts"] = now_sig
 
             # If this is a gateway, update its position in all special node connections
             if node_is_gateway.get(node_id, False):
@@ -1377,11 +1459,27 @@ def on_telemetry(json_data):
 
             logger.info(f'Updated telemetry for {node_id}: battery={battery}%')
             
-            # Store signal quality metrics if available
-            if "rx_rssi" in json_data:
-                nodes_data[node_id]["rx_rssi"] = json_data["rx_rssi"]
-            if "rx_snr" in json_data:
-                nodes_data[node_id]["rx_snr"] = json_data["rx_snr"]
+            # Store best signal quality within a rolling 1-hour window.
+            # Multiple gateways each publish their own copy of a packet, so we keep
+            # the best (highest) RSSI/SNR seen within the window rather than last-received.
+            # After the window expires the next packet resets the baseline so stale
+            # best-ever values don't linger as the network topology changes over time.
+            _SIGNAL_WINDOW = 3600
+            now_sig = time.time()
+            new_rssi = json_data.get("rx_rssi")
+            new_snr  = json_data.get("rx_snr")
+            if new_rssi is not None:
+                prev      = nodes_data[node_id].get("rx_rssi")
+                prev_age  = now_sig - nodes_data[node_id].get("rx_rssi_ts", 0)
+                if prev is None or prev_age > _SIGNAL_WINDOW or new_rssi > prev:
+                    nodes_data[node_id]["rx_rssi"]    = new_rssi
+                    nodes_data[node_id]["rx_rssi_ts"] = now_sig
+            if new_snr is not None:
+                prev      = nodes_data[node_id].get("rx_snr")
+                prev_age  = now_sig - nodes_data[node_id].get("rx_snr_ts", 0)
+                if prev is None or prev_age > _SIGNAL_WINDOW or new_snr > prev:
+                    nodes_data[node_id]["rx_snr"]    = new_snr
+                    nodes_data[node_id]["rx_snr_ts"] = now_sig
 
             # Add telemetry to special node history (if applicable)
             _add_telemetry_to_history(node_id, json_data)
@@ -1471,9 +1569,9 @@ def on_mapreport(json_data):
             
             # Also extract other useful info from MAP_REPORT
             if "longName" in payload or "long_name" in payload:
-                nodes_data[node_id]["long_name"] = payload.get("longName") or payload.get("long_name")
+                nodes_data[node_id]["long_name"] = _sanitize_display_text(payload.get("longName") or payload.get("long_name"))
             if "shortName" in payload or "short_name" in payload:
-                nodes_data[node_id]["short_name"] = payload.get("shortName") or payload.get("short_name")
+                nodes_data[node_id]["short_name"] = _sanitize_display_text(payload.get("shortName") or payload.get("short_name"))
             if "hwModel" in payload or "hw_model" in payload:
                 nodes_data[node_id]["hw_model"] = payload.get("hwModel") or payload.get("hw_model")
             if "firmwareVersion" in payload or "firmware_version" in payload:
@@ -1502,7 +1600,7 @@ def _extract_channel_from_mqtt_topic(topic: str) -> str:
             if e_idx + 1 < len(parts):
                 channel = parts[e_idx + 1]
                 if not channel.startswith('!'):
-                    return channel
+                    return _sanitize_display_text(channel)
     except Exception as e:
         logger.debug(f"Error extracting channel from topic {topic}: {e}")
     return "Unknown"

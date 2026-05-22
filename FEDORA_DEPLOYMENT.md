@@ -1,7 +1,7 @@
 # Fedora Linux Deployment Guide for Buoy Tracker
 
 **Date**: January 2, 2026
-**Container Version**: v1.01 or later
+**Container Version**: v1.1 or later
 **Target OS**: Fedora Linux (tested on Fedora 39+)
 
 ---
@@ -100,7 +100,7 @@ Add environment variable to your `docker-compose.yml`:
 ```yaml
 services:
   buoy-tracker:
-    image: dokwerker8891/buoy-tracker:0.97d
+    image: dokwerker8891/buoy-tracker:latest
     environment:
       - DOCKER_GID=${DOCKER_GID:-978}  # Use your actual GID
     volumes:
@@ -180,7 +180,7 @@ Add to your `docker-compose.yml`:
 ```yaml
 services:
   buoy-tracker:
-    image: dokwerker8891/buoy-tracker:0.97d
+    image: dokwerker8891/buoy-tracker:latest
     environment:
       - DOCKER_GID=978  # Replace with your actual docker group GID
     volumes:
@@ -211,8 +211,7 @@ services:
 
 This approach uses PUID/PGID environment variables (like LinuxServer.io containers).
 
-**Status**: Not yet implemented in Buoy Tracker
-**Future Enhancement**: See FIXOWNERSHIP.md for implementation details
+**Status**: Not yet implemented in Buoy Tracker — use Option 1 or Option 2.
 
 ---
 
@@ -256,7 +255,7 @@ version: '3.8'
 
 services:
   buoy-tracker:
-    image: dokwerker8891/buoy-tracker:0.97d
+    image: dokwerker8891/buoy-tracker:latest
     container_name: buoy-tracker
     volumes:
       - ./config:/app/config
@@ -273,7 +272,7 @@ version: '3.8'
 
 services:
   buoy-tracker:
-    image: dokwerker8891/buoy-tracker:0.97d
+    image: dokwerker8891/buoy-tracker:latest
     container_name: buoy-tracker
     environment:
       - DOCKER_GID=978  # Replace with your actual GID
@@ -545,4 +544,4 @@ If you encounter issues deploying on Fedora:
 
 **Last Updated**: January 2, 2026
 **Tested On**: Fedora 39, Fedora 40
-**Container Version**: v1.01
+**Container Version**: v1.1

@@ -98,6 +98,8 @@
     function buildTrailPopup(point, index, total, node) {
       var lines = [];
 
+      lines.push('<b>' + escapeHtml(node.name) + '</b>');
+
       // Position info
       var posText = 'Pos #' + (index + 1) + ' / ' + total;
       if (index === 0) posText += ' (OLDEST)';
@@ -309,7 +311,7 @@
      * @returns {string} HTML popup content
      */
     function buildMapPopup(node, displayInfo) {
-      var popup = '<b>' + displayInfo.name + '</b>' + displayInfo.label + displayInfo.stale + displayInfo.noFix + '<br>' + displayInfo.short;
+      var popup = '<b>' + escapeHtml(displayInfo.name) + '</b>' + displayInfo.label + displayInfo.stale + displayInfo.noFix + '<br>' + escapeHtml(displayInfo.short);
 
       // Node ID in decimal and hex
       var nodeIdHex = '!' + node.id.toString(16).padStart(8, '0');
@@ -337,17 +339,17 @@
 
       // Channel
       if (displayInfo.channel) {
-        popup += '<br>Channel: ' + displayInfo.channel;
+        popup += '<br>Channel: ' + escapeHtml(displayInfo.channel);
       }
 
       // Hardware model
       if (node.hw_model && node.hw_model !== 'Unknown') {
-        popup += '<br>Hardware: ' + node.hw_model;
+        popup += '<br>Hardware: ' + escapeHtml(node.hw_model);
       }
 
       // Role
       if (node.role && node.role !== 'Unknown') {
-        popup += '<br>Role: ' + node.role.replace('CLIENT_', '');
+        popup += '<br>Role: ' + escapeHtml(node.role.replace('CLIENT_', ''));
       }
 
       // Gateway: Show which special nodes it's receiving from
@@ -381,7 +383,7 @@
             var hopInfo = snConnection.hops_traveled !== null ? ' (' + snConnection.hops_traveled + 'h)' : '';
             var rssiStr = snConnection.rssi !== undefined ? ' ' + snConnection.rssi + 'dBm' : '';
             var snrStr = snConnection.snr !== undefined ? ' SNR:' + snConnection.snr.toFixed(1) : '';
-            popup += '<br>├─ ' + snConnection.name + hopInfo + rssiStr + snrStr + bestMarker;
+            popup += '<br>├─ ' + escapeHtml(snConnection.name) + hopInfo + rssiStr + snrStr + bestMarker;
           }
         }
       }
@@ -423,7 +425,7 @@
           var rssiStr = gwConn.rssi !== undefined ? ' RSSI:' + gwConn.rssi + 'dBm' : '';
           var snrStr = gwConn.snr !== undefined ? ' SNR:' + gwConn.snr.toFixed(2) + 'dB' : '';
           var noPos = (gwConn.lat == null || gwConn.lon == null) ? ' 📍?' : '';
-          popup += '<br>├─ ' + gwConn.name + rssiStr + snrStr + noPos + bestMarker;
+          popup += '<br>├─ ' + escapeHtml(gwConn.name) + rssiStr + snrStr + noPos + bestMarker;
         }
       }
 
@@ -1646,7 +1648,7 @@
     }
     var header = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
                  specialSymbol +
-                 '<div class="node-name">' + displayName + '</div>' +
+                 '<div class="node-name">' + escapeHtml(displayName) + '</div>' +
                  historyButton +
                  '</div>';
 
@@ -1945,7 +1947,7 @@
                 var hasOrigin = (originLat != null && originLon != null && !isNaN(originLat) && !isNaN(originLon));
                 
                 // Prepare tooltip text for rings
-                var tooltipText = node.name || 'Unknown';
+                var tooltipText = escapeHtml(node.name || 'Unknown');
                 if (node.is_special && node.special_label) {
                   tooltipText = tooltipText + ' (' + node.special_label + ')';
                 }
@@ -2072,7 +2074,7 @@
                       // Update popup with gateway info
                       var rssiStr = gw.rssi !== undefined ? ' RSSI:' + gw.rssi : '';
                       var snrStr = gw.snr !== undefined ? ' SNR:' + gw.snr.toFixed(2) : '';
-                      var popup = 'Signal: ' + gw.name + rssiStr + snrStr;
+                      var popup = 'Signal: ' + escapeHtml(gw.name) + rssiStr + snrStr;
                       gatewayLines[lineKey].bindPopup(popup);
 
                       // Hover effects
@@ -2090,7 +2092,7 @@
                       var confidenceTag = gw.confidence_level === 'direct' ? '✅ DIRECT' : '⚠️ PARTIAL';
                       var fillColor = gw.confidence_level === 'direct' ? '#2196F3' : '#4CAF50';
 
-                      var gwMarkerPopup = '<strong>📡 ' + gw.name + '</strong><br>' +
+                      var gwMarkerPopup = '<strong>📡 ' + escapeHtml(gw.name) + '</strong><br>' +
                                          'ID: ' + gw.id + '<br>' +
                                          'Confidence: ' + confidenceTag + '<br>' +
                                          'Reliability Score: ' + reliabilityScore + '/100<br>' +
@@ -2641,7 +2643,7 @@
     // Gateway identification
     details += '<strong>Gateway ID:</strong> ' + gatewayId + ' (0x' + gatewayId.toString(16).toUpperCase() + ')<br>';
     if (gatewayNode.name) {
-      details += '<strong>Name:</strong> ' + gatewayNode.name + '<br>';
+      details += '<strong>Name:</strong> ' + escapeHtml(gatewayNode.name) + '<br>';
     }
     
     // Position if available
@@ -2654,7 +2656,7 @@
       details += '<strong>Hardware:</strong> ' + gatewayNode.hardware_model + '<br>';
     }
     if (gatewayNode.role) {
-      details += '<strong>Role:</strong> ' + gatewayNode.role + '<br>';
+      details += '<strong>Role:</strong> ' + escapeHtml(gatewayNode.role) + '<br>';
     }
     if (gatewayNode.is_online !== undefined) {
       details += '<strong>Status:</strong> ' + (gatewayNode.is_online ? '<span style="color:green;">🟢 Online</span>' : '<span style="color:red;">🔴 Offline</span>') + '<br>';

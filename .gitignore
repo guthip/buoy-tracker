@@ -84,6 +84,7 @@ data/special_nodes.json
 # Project documentation (local/development only - not for public GitHub)
 PROJECT_LEARNINGS.md
 CHANGELOG.md
+DEPLOYMENT.md
 DEPLOYMENT_CHECKLIST.md
 RATE_LIMIT_TESTING.md
 HOP_PROTOCOL_RESEARCH.md

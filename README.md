@@ -372,17 +372,17 @@ Traffic light colors for RSSI and SNR indicators are configurable to match your 
 ```ini
 [signal_quality]
 # RSSI thresholds (dBm, closer to 0 is stronger)
-rssi_green_threshold = -90      # Excellent signal (>= -90 dBm)
-rssi_yellow_threshold = -110    # Acceptable signal (-90 to -110 dBm)
-# Below -110 dBm = red (poor)
+rssi_green_threshold = -100     # Excellent signal (>= -100 dBm)
+rssi_yellow_threshold = -120    # Acceptable signal (-100 to -120 dBm)
+# Below -120 dBm = red (marginal, near LoRa sensitivity floor)
 
-# SNR thresholds (dB, higher is better)
-snr_green_threshold = 5.0       # Excellent SNR (>= 5 dB)
-snr_yellow_threshold = -5.0     # Acceptable SNR (-5 to 5 dB)
-# Below -5 dB = red (poor)
+# SNR thresholds (dB, higher is better; LoRa decodes at negative SNR)
+snr_green_threshold = 0.0       # Excellent SNR (>= 0 dB)
+snr_yellow_threshold = -10.0    # Acceptable SNR (-10 to 0 dB)
+# Below -10 dB = red (poor)
 ```
 
-These defaults reflect typical Meshtastic LoRa operation. Meshtastic reliably communicates at -100 dBm RSSI and 0 dB SNR, so thresholds are more permissive than WiFi standards.
+These thresholds reflect LoRa/Meshtastic realities, not WiFi norms. LoRa uses spread-spectrum encoding that can decode well below the noise floor (sensitivity ~-130 dBm, negative SNR acceptable). A reading of -108 dBm / -2 dB SNR is a solid, working link with 20+ dB of margin.
 
 ### User Interface Controls (Admin-Controlled)
 
