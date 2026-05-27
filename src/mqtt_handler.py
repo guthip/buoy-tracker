@@ -293,6 +293,18 @@ def _check_battery_alert(node_id):
 # Track best packets by ID for deduplication
 _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_index}}}
 
+# Pending movement-alert buffer per special node.
+# A special-node broadcast is a "burst": one packet_id, many gateway-published
+# copies arriving within seconds. We hold the burst open for _ALERT_WINDOW_S
+# seconds so all gateway copies can land, then take coordinate-consensus.
+# All copies of a given packet_id should report identical lat_i/lon_i since
+# they're the same broadcast; if one copy diverges, that's a mutation in one
+# relay/gateway path and gets outvoted by the consensus group. A burst of one
+# copy IS the consensus and is trusted. A real drift event (e.g. 17 gateways
+# all agreeing on a far-from-home position) fires normally.
+_pending_movement_alerts = {}  # node_id -> {first_seen_ts, threshold_m, home_lat, home_lon, copies: [...]}
+_ALERT_WINDOW_S = 60.0   # window length: covers a full broadcast burst
+
 def _get_signal_quality_score(json_data):
     """Calculate signal quality score for a packet.
     Higher score = better signal quality.
@@ -1069,7 +1081,7 @@ def _validate_position_precision(payload, node_id=None):
        has 19 trailing zero bits in latitude_i/longitude_i even though the
        field still claims 32 — that is what this check catches.
 
-    When a quantized packet is from a special node, a warning is logged to
+    When a quantized packet is from a special node, an ERROR is logged to
     help identify which relay nodes are modifying our buoy position packets.
 
     Args:
@@ -1119,12 +1131,144 @@ def _validate_position_precision(payload, node_id=None):
     return True
 
 
+def _add_copy_to_alert_buffer(node_id, json_data, payload, distance_m,
+                              observed_lat, observed_lon, home_lat, home_lon,
+                              threshold_m, is_far):
+    """Append one received copy to the pending alert buffer for this node.
+
+    Opens a new buffer if none exists for this node. Each entry records the
+    distance, position, signal-quality score, packet_id, and gateway/hop
+    context — everything needed for cross-gateway dedup, the vote at window
+    close, and post-hoc forensic analysis.
+    """
+    if node_id not in _pending_movement_alerts:
+        _pending_movement_alerts[node_id] = {
+            'first_seen_ts': time.time(),
+            'threshold_m': threshold_m,
+            'home_lat': home_lat,
+            'home_lon': home_lon,
+            'copies': [],
+        }
+    topic = json_data.get('mqtt_topic')
+    _pending_movement_alerts[node_id]['copies'].append({
+        'ts': time.time(),
+        'packet_id': json_data.get('id'),
+        'distance_m': distance_m,
+        'observed_lat': observed_lat,
+        'observed_lon': observed_lon,
+        'signal_score': _get_signal_quality_score(json_data),
+        'is_far': is_far,
+        'gateway_id': _extract_gateway_node_id_from_topic(topic) if topic else None,
+        'mqtt_topic': topic,
+        'hop_start': json_data.get('hop_start'),
+        'hop_limit': json_data.get('hop_limit'),
+        'rx_rssi': json_data.get('rx_rssi'),
+        'rx_snr': json_data.get('rx_snr'),
+        'payload_snapshot': payload,
+    })
+
+
+def _check_expired_alert_buffers():
+    """Close any buffers whose window has elapsed and decide alert/suppress."""
+    now = time.time()
+    expired = [
+        nid for nid, info in _pending_movement_alerts.items()
+        if now - info['first_seen_ts'] >= _ALERT_WINDOW_S
+    ]
+    for nid in expired:
+        info = _pending_movement_alerts.pop(nid)
+        _evaluate_alert_buffer(nid, info)
+
+
+def _evaluate_alert_buffer(node_id, info):
+    """Close one burst's buffer: for each packet_id, take coordinate consensus
+    across gateway copies, then fire the alert if the consensus says "far."
+    Outlier copies (typically Gap-B-style mutations) get outvoted by the
+    consensus group and are recorded in the forensic JSONL as `dissent_count`.
+    """
+    copies = info.get('copies') or []
+    if not copies:
+        return
+
+    from collections import defaultdict
+
+    # Process each packet_id separately (buffer usually contains 1, but handle multiple).
+    fire_candidates = []   # [(packet_id, representative_copy, consensus_size, dissent_size)]
+    suppressed_candidates = []
+    for pid in {c['packet_id'] for c in copies if c.get('packet_id') is not None}:
+        pcopies = [c for c in copies if c.get('packet_id') == pid]
+
+        # Group by (lat_i, lon_i). All copies of one broadcast should share the
+        # same coords; divergence means at least one relay/gateway path mutated
+        # this copy. Largest group wins; ties broken by highest aggregate signal.
+        coord_groups = defaultdict(list)
+        for c in pcopies:
+            payload = c.get('payload_snapshot') or {}
+            key = (payload.get('latitude_i'), payload.get('longitude_i'))
+            coord_groups[key].append(c)
+
+        def _group_strength(group):
+            return (len(group), sum(c['signal_score'] for c in group))
+        consensus_key = max(coord_groups, key=lambda k: _group_strength(coord_groups[k]))
+        consensus = coord_groups[consensus_key]
+        dissent = [c for k, g in coord_groups.items() if k != consensus_key for c in g]
+        rep = max(consensus, key=lambda c: c['signal_score'])
+
+        if rep['is_far']:
+            fire_candidates.append((pid, rep, len(consensus), len(dissent)))
+        elif any(c['is_far'] for c in pcopies):
+            # Consensus says close but some dissenters said far — that's
+            # exactly the Gap-B scenario being neutralized. Record it.
+            most_far = max((c for c in pcopies if c['is_far']),
+                           key=lambda c: c['distance_m'])
+            suppressed_candidates.append((pid, rep, most_far, len(consensus), len(dissent)))
+
+    ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+
+    if fire_candidates:
+        # Pick the best (highest signal) far representative across all packet_ids
+        best_pid, best_rep, csize, dsize = max(
+            fire_candidates, key=lambda x: x[1]['signal_score']
+        )
+        logger.error(
+            f'[ALERT_FIRE] {ts} | node {node_id} | window={_ALERT_WINDOW_S:.0f}s'
+            f' | packet_id={best_pid} | distance={int(best_rep["distance_m"])}m'
+            f' | consensus={csize} gateway copies, dissent={dsize}'
+            f' | best.gateway={best_rep["gateway_id"]}'
+        )
+        if getattr(config, 'ALERT_ENABLED', False):
+            try:
+                alerts.send_movement_alert(node_id, nodes_data.get(node_id, {}), best_rep['distance_m'])
+            except Exception as alert_err:
+                logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
+
+    elif suppressed_candidates:
+        # Consensus said close, but dissenters tried to claim far → Gap B caught.
+        best_pid, rep, most_far, csize, dsize = max(
+            suppressed_candidates, key=lambda x: x[3]   # rank by consensus_size
+        )
+        logger.warning(
+            f'[ALERT_SUPPRESSED] {ts} | node {node_id} | reason=coord_outlier'
+            f' | packet_id={best_pid}'
+            f' | consensus={csize} copies @ {int(rep["distance_m"])}m (close)'
+            f' | dissent={dsize} copies (one claimed {int(most_far["distance_m"])}m)'
+            f' | suspected single-gateway mutation'
+        )
+
+
 def on_position(json_data):
     """Process position messages - update node coordinates."""
     global message_received, last_message_time
     message_received = True
     last_message_time = time.time()
-    
+
+    # Close any pending alert buffers whose window has elapsed.
+    # Done at entry so decisions don't lag behind incoming traffic.
+    try:
+        _check_expired_alert_buffers()
+    except Exception as e:
+        logger.debug(f'_check_expired_alert_buffers failed: {e}')
+
     try:
         node_id = json_data.get("from")
         channel = json_data.get("channel")
@@ -1190,15 +1334,25 @@ def on_position(json_data):
                     if o_lat is not None and o_lon is not None:
                         dist = _haversine_m(o_lat, o_lon, lat, lon)
                         nodes_data[node_id]["distance_from_origin_m"] = dist
-                        moved_far = bool(dist is not None and dist >= getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0))
-                        
-                        # Send email alert if node is outside threshold (cooldown prevents spam)
-                        if moved_far and getattr(config, 'ALERT_ENABLED', False):
+                        threshold_m = getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0)
+                        moved_far = bool(dist is not None and dist >= threshold_m)
+
+                        # Alert decision is BUFFERED, not immediate.
+                        # Each received copy (far OR close) is appended to a per-node
+                        # buffer when either (a) this copy is moved_far, or (b) a buffer
+                        # is already open for this node — close-to-home copies in the
+                        # same window count as "close" votes against firing the alert.
+                        # The buffer is evaluated when its window elapses (see
+                        # _check_expired_alert_buffers / _evaluate_alert_buffer).
+                        if moved_far or node_id in _pending_movement_alerts:
                             try:
-                                alerts.send_movement_alert(node_id, nodes_data[node_id], dist)
-                            except Exception as alert_err:
-                                logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
-                        
+                                _add_copy_to_alert_buffer(
+                                    node_id, json_data, payload, dist,
+                                    lat, lon, o_lat, o_lon, threshold_m, moved_far
+                                )
+                            except Exception as buf_err:
+                                logger.error(f'Failed to buffer movement copy for {node_id}: {buf_err}')
+
                         nodes_data[node_id]["moved_far"] = moved_far
             except Exception as e:
                 logger.debug(f"Error processing movement alerts for {node_id}: {e}")
