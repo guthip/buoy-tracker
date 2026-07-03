@@ -63,6 +63,14 @@ logger.info(f'=== BUOY TRACKER STARTED at {time.strftime("%Y-%m-%d %H:%M:%S")} (
 # Open the SQLite durable store (node settings; mutes survive restarts)
 storage.init()
 
+if getattr(config, 'DEBUG_SIMULATION_ENABLED', False):
+    logger.warning('=' * 64)
+    logger.warning('⚠️  SIMULATION MODE ENABLED — /api/debug/* endpoints are active')
+    logger.warning(f'    Alert emails: {"REAL" if config.DEBUG_SEND_REAL_EMAILS else "DRY-RUN (logged, not sent)"}')
+    logger.warning(f'    Alert window: {config.DEBUG_ALERT_WINDOW_S or 60.0:.0f}s | cooldown: {config.ALERT_COOLDOWN}s')
+    logger.warning('    Do not enable on production deployments.')
+    logger.warning('=' * 64)
+
 # Suppress verbose Flask/Werkzeug HTTP request logging
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
@@ -717,6 +725,154 @@ def test_alert() -> Response:
 
     except Exception as e:
         logger.exception('Failed to send test alert')
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# Debug / Simulation API (PROPOSAL_V2.0.md §7)
+# Double-gated: 404 unless [debug] enable_simulation = true, AND Bearer auth.
+# The simulation gate runs before auth so a disabled deployment reveals
+# nothing (404, not 401) when the endpoints are probed.
+# ============================================================================
+
+def require_simulation_enabled(f: Callable) -> Callable:
+    """Return 404 unless simulation mode is enabled in config."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not getattr(config, 'DEBUG_SIMULATION_ENABLED', False):
+            return jsonify({'error': 'Not found'}), 404
+        return f(*args, **kwargs)
+    return decorated
+
+
+@api_bp.route('/api/debug/inject', methods=['POST'])
+@check_rate_limit
+@require_simulation_enabled
+@require_api_key
+def debug_inject() -> Response:
+    """
+    Inject one synthetic packet through the real handler pipeline.
+
+    Body (raw form):      {'type': 'position', 'packet': {...json_packet...}}
+    Body (builder form):  {'type': 'position', 'node_id': int,
+                           'lat': float, 'lon': float,   # or 'distance_m' offset from home
+                           'gateway': '!hex', 'packet_id': int, 'rssi': int, 'snr': float}
+                          {'type': 'telemetry', 'node_id': int, 'voltage': float}
+    """
+    from . import simulation
+    try:
+        data = request.get_json(silent=True) or {}
+        ptype = data.get('type', 'position')
+
+        if 'packet' in data:
+            packet = data['packet']
+        else:
+            try:
+                node_id = int(data.get('node_id'))
+            except (TypeError, ValueError):
+                return jsonify({'error': 'node_id (int) is required'}), 400
+            kwargs = {}
+            for key in ('gateway_hex', 'packet_id', 'rssi', 'snr', 'hop_start', 'hop_limit'):
+                if key in data:
+                    kwargs[key] = data[key]
+            if 'gateway' in data:
+                kwargs['gateway_hex'] = data['gateway']
+            if ptype == 'position':
+                if 'lat' in data and 'lon' in data:
+                    lat, lon = float(data['lat']), float(data['lon'])
+                else:
+                    home_lat, home_lon = simulation._home_of(node_id)
+                    lat = home_lat + float(data.get('distance_m', 0)) / simulation._M_PER_DEG_LAT
+                    lon = home_lon
+                if 'precision_bits' in data:
+                    kwargs['precision_bits'] = int(data['precision_bits'])
+                packet = simulation.build_position_packet(node_id, lat, lon, **kwargs)
+            elif ptype == 'telemetry':
+                if 'voltage' not in data:
+                    return jsonify({'error': 'voltage is required for telemetry'}), 400
+                packet = simulation.build_telemetry_packet(node_id, float(data['voltage']), **kwargs)
+            else:
+                return jsonify({'error': f'builder form supports position/telemetry, not {ptype}'}), 400
+
+        simulation.inject(ptype, packet)
+        return jsonify({'success': True, 'type': ptype,
+                        'packet_id': packet.get('id'), 'from': packet.get('from')})
+    except Exception as e:
+        logger.exception('debug inject failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/debug/scenario', methods=['POST'])
+@check_rate_limit
+@require_simulation_enabled
+@require_api_key
+def debug_scenario() -> Response:
+    """
+    Run a named scenario generator.
+
+    Body: {'name': 'drift'|'mutation'|'battery_drain'|'gap', 'node_id': int,
+           ...scenario-specific params (distance_m, copies, start_v, hours, ...)}
+    """
+    from . import simulation
+    try:
+        data = request.get_json(silent=True) or {}
+        name = data.get('name')
+        if name not in simulation.SCENARIOS:
+            return jsonify({'error': f'unknown scenario; available: {sorted(simulation.SCENARIOS)}'}), 400
+        try:
+            node_id = int(data.get('node_id'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'node_id (int) is required'}), 400
+        if node_id not in config.SPECIAL_NODE_IDS:
+            return jsonify({'error': f'node {node_id} is not a special node'}), 400
+
+        params = {k: v for k, v in data.items() if k not in ('name', 'node_id')}
+        result = simulation.SCENARIOS[name](node_id, **params)
+        logger.warning(f'[SIM] scenario {name} started for node {node_id} by {get_client_ip()}')
+        return jsonify({'success': True, **result})
+    except TypeError as e:
+        return jsonify({'error': f'bad scenario parameters: {e}'}), 400
+    except Exception as e:
+        logger.exception('debug scenario failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/debug/replay', methods=['POST'])
+@check_rate_limit
+@require_simulation_enabled
+@require_api_key
+def debug_replay() -> Response:
+    """
+    Replay a JSONL fixture from fixtures/ with time compression.
+
+    Body: {'file': 'name.jsonl', 'speed': 60}
+    """
+    from . import simulation
+    try:
+        data = request.get_json(silent=True) or {}
+        filename = data.get('file')
+        if not filename:
+            return jsonify({'error': 'file is required'}), 400
+        result = simulation.replay_file(filename, speed=float(data.get('speed', 60.0)))
+        return jsonify({'success': True, **result})
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        logger.exception('debug replay failed')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/debug/state', methods=['GET'])
+@check_rate_limit
+@require_simulation_enabled
+@require_api_key
+def debug_state() -> Response:
+    """Snapshot of internal alert/mute state for asserting scenario outcomes."""
+    from . import simulation
+    try:
+        return jsonify(simulation.get_state())
+    except Exception as e:
+        logger.exception('debug state failed')
         return jsonify({'error': str(e)}), 500
 
 

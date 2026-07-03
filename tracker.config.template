@@ -88,6 +88,26 @@ api_polling_interval = 30
 # PRODUCTION DEPLOYMENT: Set to WARNING or ERROR for minimal output
 log_level = ERROR
 
+# --- Simulation mode (v2.0) ---------------------------------------------
+# Enables the /api/debug/* endpoints (inject, scenario, replay, state) for
+# feeding synthetic packet streams through the real pipeline — compresses
+# alert-debugging cycles from days to minutes. Endpoints return 404 when
+# disabled and always require the API key when enabled.
+# DO NOT ENABLE ON PRODUCTION DEPLOYMENTS.
+enable_simulation = false
+
+# While simulation is enabled, alert emails are DRY-RUN by default: rendered
+# and written to the log, but not sent. Set true to actually deliver them.
+send_real_emails = false
+
+# Time-constant overrides for fast debug cycles (0 / unset = normal values).
+# alert_window_s: movement-alert consensus window (normally 60 seconds)
+# alert_cooldown_s: minimum seconds between alert emails per node
+#   (normally alert_cooldown hours from [alerts])
+# Example debug values: alert_window_s = 5, alert_cooldown_s = 60
+alert_window_s = 0
+alert_cooldown_s = 0
+
 [battery]
 # Battery monitoring settings
 # Battery level below this percentage triggers low battery indicator

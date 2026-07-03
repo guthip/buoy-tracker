@@ -252,7 +252,9 @@ _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_inde
 # copy IS the consensus and is trusted. A real drift event (e.g. 17 gateways
 # all agreeing on a far-from-home position) fires normally.
 _pending_movement_alerts = {}  # node_id -> {first_seen_ts, threshold_m, home_lat, home_lon, copies: [...]}
-_ALERT_WINDOW_S = 60.0   # window length: covers a full broadcast burst
+# Window length: covers a full broadcast burst. Debug configs may shrink it
+# via [debug] alert_window_s so simulation cycles don't wait a full minute.
+_ALERT_WINDOW_S = getattr(config, 'DEBUG_ALERT_WINDOW_S', 0.0) or 60.0
 
 def _get_signal_quality_score(json_data):
     """Calculate signal quality score for a packet.

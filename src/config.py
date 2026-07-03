@@ -370,6 +370,21 @@ SPECIAL_HISTORY_PERSIST_PATH = str(DATA_DIR / 'special_nodes.json')
 # SQLite durable store (node settings; time-series tables arrive in v2.0 Phase 3)
 DB_PATH = str(DATA_DIR / 'buoy_tracker.db')
 
+# Debug / Simulation (PROPOSAL_V2.0.md §7)
+# Hard-off by default: /api/debug/* endpoints return 404 unless enabled.
+# When simulation is enabled, alert emails are DRY-RUN (rendered + logged,
+# not sent) unless send_real_emails is also set.
+DEBUG_SIMULATION_ENABLED = config.getboolean('debug', 'enable_simulation', fallback=False)
+DEBUG_SEND_REAL_EMAILS = config.getboolean('debug', 'send_real_emails', fallback=False)
+# Time-constant overrides so debug cycles don't wait on wall-clock windows:
+# alert_window_s shrinks the movement-alert consensus window (default 60s);
+# alert_cooldown_s overrides the hour-scale alert cooldown.
+DEBUG_ALERT_WINDOW_S = config.getfloat('debug', 'alert_window_s', fallback=0.0)  # 0 = default 60s
+_debug_cooldown_s = config.getint('debug', 'alert_cooldown_s', fallback=0)
+if _debug_cooldown_s > 0:
+    ALERT_COOLDOWN = _debug_cooldown_s
+    logger.warning(f'[DEBUG] alert cooldown overridden to {ALERT_COOLDOWN}s')
+
 # Security Configuration
 # Environment: 'development' (localhost allowed) or 'production' (strict security)
 ENV = os.getenv('FLASK_ENV', config.get('security', 'environment', fallback='development'))

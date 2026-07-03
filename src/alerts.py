@@ -168,6 +168,16 @@ def _send_email(to_addresses: Union[str, List[str]], subject: str, body: str) ->
         subject: Email subject
         body: Email body (plain text)
     """
+    # Simulation mode: dry-run by default — render + log the email, don't send.
+    # Set [debug] send_real_emails = true to actually deliver during simulation.
+    if getattr(config, "DEBUG_SIMULATION_ENABLED", False) and not getattr(
+        config, "DEBUG_SEND_REAL_EMAILS", False
+    ):
+        logger.warning(
+            f"[DRY-RUN EMAIL] to={to_addresses} | subject={subject}\n{body}"
+        )
+        return
+
     # Normalize to list
     if isinstance(to_addresses, str):
         to_addresses = [addr.strip() for addr in to_addresses.split(",")]
