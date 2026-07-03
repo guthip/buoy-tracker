@@ -25,6 +25,24 @@ from meshtastic import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
 from . import config
 from . import alerts
 from . import storage
+from .topics import sanitize_display_text, channel_from_topic, gateway_id_from_topic
+from .movement import (
+    _haversine_m,
+    _get_signal_quality_score,
+    _validate_position_precision,
+    _add_copy_to_alert_buffer,
+    _check_expired_alert_buffers,
+    _evaluate_alert_buffer,
+    _update_homecoming,
+    _pending_movement_alerts,
+    _homecoming_progress,
+    _ALERT_WINDOW_S,
+)
+
+# Back-compat aliases: existing call sites use the old private names
+_sanitize_display_text = sanitize_display_text
+_extract_channel_from_mqtt_topic = channel_from_topic
+_extract_gateway_node_id_from_topic = gateway_id_from_topic
 
 logger = logging.getLogger(__name__)
 
@@ -302,53 +320,6 @@ def _check_battery_alert(node_id, simulated=False):
 # Track best packets by ID for deduplication
 _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_index}}}
 
-# Pending movement-alert buffer per special node.
-# A special-node broadcast is a "burst": one packet_id, many gateway-published
-# copies arriving within seconds. We hold the burst open for _ALERT_WINDOW_S
-# seconds so all gateway copies can land, then take coordinate-consensus.
-# All copies of a given packet_id should report identical lat_i/lon_i since
-# they're the same broadcast; if one copy diverges, that's a mutation in one
-# relay/gateway path and gets outvoted by the consensus group. A burst of one
-# copy IS the consensus and is trusted. A real drift event (e.g. 17 gateways
-# all agreeing on a far-from-home position) fires normally.
-_pending_movement_alerts = {}  # node_id -> {first_seen_ts, threshold_m, home_lat, home_lon, copies: [...]}
-# Window length: covers a full broadcast burst. Debug configs may shrink it
-# via [debug] alert_window_s so simulation cycles don't wait a full minute.
-_ALERT_WINDOW_S = getattr(config, 'DEBUG_ALERT_WINDOW_S', 0.0) or 60.0
-
-def _get_signal_quality_score(json_data):
-    """Calculate signal quality score for a packet.
-    Higher score = better signal quality.
-    
-    Scoring logic:
-    1. Direct-hop packets (hop_start == hop_limit) score higher than relayed packets
-    2. Among same hop type: higher SNR score (max 15)
-    3. Among same SNR: higher RSSI score (in range -120 to -80 dBm)
-    """
-    score = 0
-    
-    # Primary factor: is this a direct-hop packet (not retransmitted through mesh)?
-    hop_start = json_data.get('hop_start')
-    hop_limit = json_data.get('hop_limit')
-    is_direct_hop = (hop_start is not None and hop_limit is not None and hop_start == hop_limit)
-    
-    if is_direct_hop:
-        score += 1000  # Direct-hop packets score 1000+ (all direct-hops beat all relayed)
-    
-    # Secondary factor: SNR (signal-to-noise ratio)
-    snr = json_data.get('rx_snr')
-    if snr is not None:
-        # SNR typically ranges -20 to +10, we'll normalize to 0-50 scale
-        score += max(0, min(50, int((snr + 20) * 2.5)))
-    
-    # Tertiary factor: RSSI (received signal strength indicator)
-    rssi = json_data.get('rx_rssi')
-    if rssi is not None:
-        # RSSI typically ranges -120 to -80 dBm (higher is better, so normalize inversely)
-        # -80 dBm → 40 points, -120 dBm → 0 points
-        score += max(0, min(40, int((rssi + 120))))
-    
-    return score
 
 def _build_packet_info(node_id, packet_type, json_data, current_time):
     """Build packet info dictionary with all relevant fields."""
@@ -480,7 +451,6 @@ def _track_special_node_packet(node_id, packet_type, json_data):
     
     # Log special node packet arrival
     logger.info(f'SPECIAL NODE PACKET: {config.SPECIAL_NODES.get(node_id, node_id)} - {packet_type} (ID: {packet_id}, score: {new_signal_score})')
-
 
 
 # Note: All packet decryption and protobuf parsing is handled automatically
@@ -755,38 +725,6 @@ def _prune_history(node_id, now_ts=None):
     while dq and dq[0]['ts'] < cutoff:
         dq.popleft()
 
-def _haversine_m(lat1, lon1, lat2, lon2):
-    """Return distance in meters between two lat/lon points."""
-    try:
-        # convert degrees to radians
-        rlat1 = math.radians(lat1)
-        rlon1 = math.radians(lon1)
-        rlat2 = math.radians(lat2)
-        rlon2 = math.radians(lon2)
-        dlat = rlat2 - rlat1
-        dlon = rlon2 - rlon1
-        a = math.sin(dlat/2.0)**2 + math.cos(rlat1)*math.cos(rlat2)*math.sin(dlon/2.0)**2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-        return 6371000.0 * c
-    except Exception:
-        return None
-
-# Characters stripped from MQTT-sourced display text (node/channel names).
-# Defense-in-depth against stored XSS — the web frontend also escapes at render time.
-_UNSAFE_DISPLAY_CHARS = {ord(c): None for c in '<>"\''}
-
-
-def _sanitize_display_text(text):
-    """Strip HTML/JS breakout characters from MQTT-sourced display text.
-
-    Node and channel names arrive from untrusted MQTT packets and are rendered
-    in the web UI. Removing < > " ' neutralizes HTML tag injection and
-    attribute/JS-string breakout before the value is ever stored.
-    """
-    if not isinstance(text, str):
-        return text
-    return text.translate(_UNSAFE_DISPLAY_CHARS)
-
 
 def _extract_node_name_from_payload(payload):
     """
@@ -860,8 +798,6 @@ def _load_gateways_from_saved_data(node_id, gateways_dict):
     # Update gateway caches for all loaded gateways
     for gw_id in gateways_with_int_keys.keys():
         _update_gateway_reliability_cache_for_gateway(gw_id)
-
-
 
 
 def _extract_modem_preset(obj):
@@ -1078,246 +1014,6 @@ def on_nodeinfo(json_data):
 
     except Exception as e:
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
-
-
-def _validate_position_precision(payload, node_id=None):
-    """
-    Validate GPS position precision to reject corrupted packets.
-
-    Two checks:
-    1. precision_bits field >= 32 (Meshtastic standard for full GPS fix)
-    2. Actual coordinate integers have 32 significant bits.
-       Relay nodes preserve the source's precision_bits=32 but quantize the
-       coordinates to fewer bits for privacy/efficiency. A 13-bit relay packet
-       has 19 trailing zero bits in latitude_i/longitude_i even though the
-       field still claims 32 — that is what this check catches.
-
-    When a quantized packet is from a special node, an ERROR is logged to
-    help identify which relay nodes are modifying our buoy position packets.
-
-    Args:
-        payload: Position packet payload dict
-        node_id: Source node ID for logging (optional)
-
-    Returns:
-        True if position precision is valid, False otherwise
-    """
-    MIN_PRECISION_BITS = 32
-    # Relay nodes quantize coordinates by zeroing lower bits while leaving precision_bits=32.
-    # A 13-bit relay packet has 19 trailing zeros; a real GPS fix has 1-4.
-    # Threshold of 24 (= max 8 trailing zeros, ~2.8m grid) safely separates
-    # real GPS readings from relay-quantized coordinates.
-    MIN_ACTUAL_COORD_BITS = 24
-
-    precision_bits = payload.get('precision_bits', 0)
-
-    try:
-        if precision_bits < MIN_PRECISION_BITS:
-            logger.warning(f'Rejected position packet with low precision_bits: {precision_bits} (requires >= {MIN_PRECISION_BITS})')
-            return False
-    except TypeError:
-        logger.warning(f'Rejected position packet with non-numeric precision_bits: {precision_bits!r}')
-        return False
-
-    # Check actual coordinate precision regardless of the precision_bits claim.
-    # Meshtastic encodes lat/lon as int32 = degrees * 1e7.
-    # Reduced-precision relays zero the lower bits: 13-bit coords have 19 trailing zeros.
-    lat_i = payload.get('latitude_i', 0)
-    lon_i = payload.get('longitude_i', 0)
-    if lat_i and lon_i:
-        lat_trailing = (lat_i & -lat_i).bit_length() - 1
-        lon_trailing = (lon_i & -lon_i).bit_length() - 1
-        actual_bits = 32 - max(lat_trailing, lon_trailing)
-        if actual_bits < MIN_ACTUAL_COORD_BITS:
-            if node_id and _is_special_node(node_id):
-                precision_lost = MIN_PRECISION_BITS - actual_bits
-                timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-                logger.error(
-                    f'[PRECISION] {timestamp} | node {node_id} | '
-                    f'claims precision_bits={precision_bits} but actual={actual_bits} bits '
-                    f'({precision_lost} bits lost) | lat_i={lat_i}, lon_i={lon_i}'
-                )
-            return False
-
-    return True
-
-
-def _add_copy_to_alert_buffer(node_id, json_data, payload, distance_m,
-                              observed_lat, observed_lon, home_lat, home_lon,
-                              threshold_m, is_far):
-    """Append one received copy to the pending alert buffer for this node.
-
-    Opens a new buffer if none exists for this node. Each entry records the
-    distance, position, signal-quality score, packet_id, and gateway/hop
-    context — everything needed for cross-gateway dedup, the vote at window
-    close, and post-hoc forensic analysis.
-    """
-    if node_id not in _pending_movement_alerts:
-        _pending_movement_alerts[node_id] = {
-            'first_seen_ts': time.time(),
-            'threshold_m': threshold_m,
-            'home_lat': home_lat,
-            'home_lon': home_lon,
-            'copies': [],
-        }
-    topic = json_data.get('mqtt_topic')
-    _pending_movement_alerts[node_id]['copies'].append({
-        'ts': time.time(),
-        'packet_id': json_data.get('id'),
-        'distance_m': distance_m,
-        'observed_lat': observed_lat,
-        'observed_lon': observed_lon,
-        'signal_score': _get_signal_quality_score(json_data),
-        'is_far': is_far,
-        'gateway_id': _extract_gateway_node_id_from_topic(topic) if topic else None,
-        'mqtt_topic': topic,
-        'hop_start': json_data.get('hop_start'),
-        'hop_limit': json_data.get('hop_limit'),
-        'rx_rssi': json_data.get('rx_rssi'),
-        'rx_snr': json_data.get('rx_snr'),
-        'payload_snapshot': payload,
-        'simulated': bool(json_data.get('simulated')),
-    })
-
-
-def _check_expired_alert_buffers():
-    """Close any buffers whose window has elapsed and decide alert/suppress."""
-    now = time.time()
-    expired = [
-        nid for nid, info in _pending_movement_alerts.items()
-        if now - info['first_seen_ts'] >= _ALERT_WINDOW_S
-    ]
-    for nid in expired:
-        info = _pending_movement_alerts.pop(nid)
-        _evaluate_alert_buffer(nid, info)
-
-
-def _evaluate_alert_buffer(node_id, info):
-    """Close one burst's buffer: for each packet_id, take coordinate consensus
-    across gateway copies, then fire the alert if the consensus says "far."
-    Outlier copies (typically Gap-B-style mutations) get outvoted by the
-    consensus group and are recorded in the forensic JSONL as `dissent_count`.
-    """
-    copies = info.get('copies') or []
-    if not copies:
-        return
-
-    from collections import defaultdict
-
-    # Process each packet_id separately (buffer usually contains 1, but handle multiple).
-    fire_candidates = []   # [(packet_id, representative_copy, consensus_size, dissent_size)]
-    suppressed_candidates = []
-    for pid in {c['packet_id'] for c in copies if c.get('packet_id') is not None}:
-        pcopies = [c for c in copies if c.get('packet_id') == pid]
-
-        # Group by (lat_i, lon_i). All copies of one broadcast should share the
-        # same coords; divergence means at least one relay/gateway path mutated
-        # this copy. Largest group wins; ties broken by highest aggregate signal.
-        coord_groups = defaultdict(list)
-        for c in pcopies:
-            payload = c.get('payload_snapshot') or {}
-            key = (payload.get('latitude_i'), payload.get('longitude_i'))
-            coord_groups[key].append(c)
-
-        def _group_strength(group):
-            return (len(group), sum(c['signal_score'] for c in group))
-        consensus_key = max(coord_groups, key=lambda k: _group_strength(coord_groups[k]))
-        consensus = coord_groups[consensus_key]
-        dissent = [c for k, g in coord_groups.items() if k != consensus_key for c in g]
-        rep = max(consensus, key=lambda c: c['signal_score'])
-
-        if rep['is_far']:
-            fire_candidates.append((pid, rep, len(consensus), len(dissent)))
-        elif any(c['is_far'] for c in pcopies):
-            # Consensus says close but some dissenters said far — that's
-            # exactly the Gap-B scenario being neutralized. Record it.
-            most_far = max((c for c in pcopies if c['is_far']),
-                           key=lambda c: c['distance_m'])
-            suppressed_candidates.append((pid, rep, most_far, len(consensus), len(dissent)))
-
-    ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
-
-    if fire_candidates:
-        # Pick the best (highest signal) far representative across all packet_ids
-        best_pid, best_rep, csize, dsize = max(
-            fire_candidates, key=lambda x: x[1]['signal_score']
-        )
-        logger.error(
-            f'[ALERT_FIRE] {ts} | node {node_id} | window={_ALERT_WINDOW_S:.0f}s'
-            f' | packet_id={best_pid} | distance={int(best_rep["distance_m"])}m'
-            f' | consensus={csize} gateway copies, dissent={dsize}'
-            f' | best.gateway={best_rep["gateway_id"]}'
-        )
-        _sim = any(c.get('simulated') for c in copies)
-        if storage.is_movement_muted(node_id):
-            # Detection stands (the [ALERT_FIRE] record above is the audit trail);
-            # only the email is suppressed while an admin mute is active.
-            logger.warning(
-                f'[ALERT_MUTED] {ts} | node {node_id} | movement email suppressed (admin mute)'
-                f' | packet_id={best_pid} | distance={int(best_rep["distance_m"])}m'
-            )
-            storage.record_alert_event(
-                'movement_muted', node_id, distance_m=best_rep['distance_m'],
-                details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize},
-                simulated=_sim)
-        elif getattr(config, 'ALERT_ENABLED', False):
-            storage.record_alert_event(
-                'movement_fired', node_id, distance_m=best_rep['distance_m'],
-                details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
-                         'gateway': best_rep['gateway_id']},
-                simulated=_sim)
-            try:
-                alerts.send_movement_alert(node_id, nodes_data.get(node_id, {}), best_rep['distance_m'])
-            except Exception as alert_err:
-                logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
-
-    elif suppressed_candidates:
-        # Consensus said close, but dissenters tried to claim far → Gap B caught.
-        best_pid, rep, most_far, csize, dsize = max(
-            suppressed_candidates, key=lambda x: x[3]   # rank by consensus_size
-        )
-        logger.warning(
-            f'[ALERT_SUPPRESSED] {ts} | node {node_id} | reason=coord_outlier'
-            f' | packet_id={best_pid}'
-            f' | consensus={csize} copies @ {int(rep["distance_m"])}m (close)'
-            f' | dissent={dsize} copies (one claimed {int(most_far["distance_m"])}m)'
-            f' | suspected single-gateway mutation'
-        )
-        storage.record_alert_event(
-            'movement_suppressed', node_id, distance_m=most_far['distance_m'],
-            details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
-                     'consensus_distance_m': rep['distance_m']},
-            simulated=any(c.get('simulated') for c in copies))
-
-
-# Auto-unmute on homecoming (PROPOSAL_V2.0.md §2): a muted node that reports
-# _HOMECOMING_UNMUTE_COUNT consecutive distinct in-home broadcasts clears its
-# own mute — being re-moored is the natural end of a maintenance window.
-# Gateway copies of the same broadcast share a packet_id and count once.
-_HOMECOMING_UNMUTE_COUNT = 3
-_homecoming_progress = {}  # node_id -> {'count': int, 'last_packet_id': int}
-
-
-def _update_homecoming(node_id, packet_id, moved_far):
-    """Track consecutive in-home broadcasts for muted nodes; auto-unmute at N."""
-    if not storage.is_movement_muted(node_id):
-        _homecoming_progress.pop(node_id, None)
-        return
-    if moved_far:
-        _homecoming_progress.pop(node_id, None)
-        return
-    prog = _homecoming_progress.get(node_id)
-    if prog and packet_id is not None and prog.get('last_packet_id') == packet_id:
-        return  # another gateway copy of the same broadcast — already counted
-    count = (prog['count'] if prog else 0) + 1
-    if count >= _HOMECOMING_UNMUTE_COUNT:
-        _homecoming_progress.pop(node_id, None)
-        storage.set_movement_muted(node_id, False, note='auto-unmute: homecoming')
-        logger.warning(
-            f'[MUTE] node {node_id} auto-unmuted after {count} consecutive in-home broadcasts'
-        )
-    else:
-        _homecoming_progress[node_id] = {'count': count, 'last_packet_id': packet_id}
 
 
 def on_position(json_data):
@@ -1764,45 +1460,6 @@ def on_mapreport(json_data):
             
     except Exception as e:
         logger.error(f'Error processing mapreport: {e}')
-
-
-def _extract_channel_from_mqtt_topic(topic: str) -> str:
-    """
-    Extract channel name from MQTT topic path.
-    Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
-    Returns channel name or "Unknown" if not found.
-    """
-    try:
-        parts = topic.split('/')
-        if 'e' in parts:
-            e_idx = parts.index('e')
-            if e_idx + 1 < len(parts):
-                channel = parts[e_idx + 1]
-                if not channel.startswith('!'):
-                    return _sanitize_display_text(channel)
-    except Exception as e:
-        logger.debug(f"Error extracting channel from topic {topic}: {e}")
-    return "Unknown"
-
-
-def _extract_gateway_node_id_from_topic(topic: str) -> int:
-    """
-    Extract the gateway node ID from MQTT topic path.
-    Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
-    The node ID after the '!' is the gateway that the message came through.
-    Returns the node ID (int) or None if not found.
-    """
-    try:
-        parts = topic.split('/')
-        for part in parts:
-            if part.startswith('!'):
-                # Extract hex node ID (e.g., "!4049c6f4" -> 0x4049c6f4)
-                hex_id = part[1:]  # Remove the '!'
-                node_id = int(hex_id, 16)
-                return node_id
-    except Exception as e:
-        logger.debug(f"Error extracting gateway node ID from topic {topic}: {e}")
-    return None
 
 
 def _decrypt_message_packet(mp, key_bytes):

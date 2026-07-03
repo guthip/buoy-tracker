@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 from . import config
+from . import movement
 from . import mqtt_handler
 
 logger = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ def scenario_drift(node_id, distance_m=250.0, copies=4):
     return {
         'scenario': 'drift', 'node_id': node_id, 'packet_id': pid,
         'copies': copies, 'distance_m': distance_m,
-        'expect': f'[ALERT_FIRE] after the {mqtt_handler._ALERT_WINDOW_S:.0f}s buffer window closes',
+        'expect': f'[ALERT_FIRE] after the {movement._ALERT_WINDOW_S:.0f}s buffer window closes',
     }
 
 
@@ -144,7 +145,7 @@ def scenario_mutation(node_id, copies=4, outlier_distance_m=2349000.0):
     return {
         'scenario': 'mutation', 'node_id': node_id, 'packet_id': pid,
         'copies': copies, 'outlier_distance_m': outlier_distance_m,
-        'expect': f'[ALERT_SUPPRESSED] after the {mqtt_handler._ALERT_WINDOW_S:.0f}s buffer window closes',
+        'expect': f'[ALERT_SUPPRESSED] after the {movement._ALERT_WINDOW_S:.0f}s buffer window closes',
     }
 
 
@@ -233,15 +234,15 @@ def get_state():
             'copies': len(info.get('copies', [])),
             'open_for_s': round(time.time() - info.get('first_seen_ts', 0), 1),
         }
-        for nid, info in mqtt_handler._pending_movement_alerts.items()
+        for nid, info in movement._pending_movement_alerts.items()
     }
     return {
         'simulation_enabled': True,
-        'alert_window_s': mqtt_handler._ALERT_WINDOW_S,
+        'alert_window_s': movement._ALERT_WINDOW_S,
         'alert_cooldown_s': config.ALERT_COOLDOWN,
         'emails': 'real' if getattr(config, 'DEBUG_SEND_REAL_EMAILS', False) else 'dry-run',
         'pending_movement_alerts': pending,
         'alert_cooldowns': {str(k): int(v) for k, v in alerts.last_alert_sent.items()},
-        'homecoming_progress': {str(k): v for k, v in mqtt_handler._homecoming_progress.items()},
+        'homecoming_progress': {str(k): v for k, v in movement._homecoming_progress.items()},
         'mutes': storage.get_all_mutes(),
     }
