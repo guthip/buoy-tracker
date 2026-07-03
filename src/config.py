@@ -362,13 +362,15 @@ ALERT_SMTP_PASSWORD = os.getenv('ALERT_SMTP_PASSWORD') or config.get('alerts', '
 ALERT_EMAIL_FROM = config.get('alerts', 'email_from', fallback='norepy@sequoiayc.org')
 ALERT_EMAIL_TO = config.get('alerts', 'email_to', fallback='admin@example.com')
 
-# Special nodes data persistence
-ENABLE_PERSISTENCE = config.getboolean('app_features', 'enable_persistence', fallback=True)
+# Data directory (SQLite store lives here; special_nodes.json persistence
+# was replaced by the positions table in v2.0)
 DATA_DIR = Path(__file__).parent.parent / 'data'
-SPECIAL_HISTORY_PERSIST_PATH = str(DATA_DIR / 'special_nodes.json')
 
-# SQLite durable store (node settings; time-series tables arrive in v2.0 Phase 3)
+# SQLite durable store: positions/telemetry/alert_events time series,
+# runtime app settings, per-node settings, and the node registry snapshot.
 DB_PATH = str(DATA_DIR / 'buoy_tracker.db')
+# Measurement retention (settings and node registry are kept indefinitely)
+DB_RETENTION_DAYS = config.getint('database', 'retention_days', fallback=90)
 
 # Debug / Simulation (PROPOSAL_V2.0.md §7)
 # Hard-off by default: /api/debug/* endpoints return 404 unless enabled.

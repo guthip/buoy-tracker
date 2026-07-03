@@ -108,6 +108,14 @@ send_real_emails = false
 alert_window_s = 0
 alert_cooldown_s = 0
 
+[database]
+# SQLite durable store (data/buoy_tracker.db): positions, telemetry, alert
+# events, runtime settings, node registry. Open it read-only with any
+# SQLite-capable analysis tool (DBeaver, pandas, DuckDB, Datasette, Grafana).
+# Measurements older than retention_days are pruned; settings and the node
+# registry are kept indefinitely.
+retention_days = 90
+
 [battery]
 # Battery monitoring settings
 # Battery level below this percentage triggers low battery indicator

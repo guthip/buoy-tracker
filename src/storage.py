@@ -31,7 +31,65 @@ CREATE TABLE IF NOT EXISTS node_settings (
     muted_at              INTEGER,
     note                  TEXT
 );
+
+CREATE TABLE IF NOT EXISTS positions (
+    id                   INTEGER PRIMARY KEY,
+    node_id              INTEGER NOT NULL,
+    ts                   INTEGER NOT NULL,
+    lat                  REAL,
+    lon                  REAL,
+    alt                  REAL,
+    distance_from_home_m REAL,
+    packet_id            INTEGER,
+    gateway_id           INTEGER,
+    rssi                 REAL,
+    snr                  REAL,
+    simulated            INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_positions_node_ts ON positions(node_id, ts);
+
+CREATE TABLE IF NOT EXISTS telemetry (
+    id          INTEGER PRIMARY KEY,
+    node_id     INTEGER NOT NULL,
+    ts          INTEGER NOT NULL,
+    voltage     REAL,
+    battery_pct INTEGER,
+    rssi        REAL,
+    snr         REAL,
+    simulated   INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_telemetry_node_ts ON telemetry(node_id, ts);
+
+CREATE TABLE IF NOT EXISTS alert_events (
+    id         INTEGER PRIMARY KEY,
+    ts         INTEGER NOT NULL,
+    node_id    INTEGER,
+    kind       TEXT NOT NULL,
+    distance_m REAL,
+    details    TEXT,
+    simulated  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_alert_events_ts ON alert_events(ts);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key        TEXT PRIMARY KEY,
+    value      TEXT,
+    updated_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS nodes (
+    node_id    INTEGER PRIMARY KEY,
+    label      TEXT,
+    home_lat   REAL,
+    home_lon   REAL,
+    updated_at INTEGER
+);
 """
+
+# Measurement tables subject to time-based retention (settings/registry are kept)
+_RETENTION_TABLES = ('positions', 'telemetry', 'alert_events')
+_PRUNE_INTERVAL_S = 6 * 3600  # re-check retention a few times a day
+_last_prune_ts = 0.0
 
 
 def init(db_path: Union[str, Path, None] = None) -> None:
@@ -47,6 +105,8 @@ def init(db_path: Union[str, Path, None] = None) -> None:
         _conn.executescript(_SCHEMA)
         _conn.commit()
         _load_mute_cache_locked()
+        _sync_nodes_registry_locked()
+        _prune_locked()
     if _mute_cache:
         logger.warning(
             f'[MUTE] {len(_mute_cache)} node(s) have movement alerts muted: {sorted(_mute_cache)}'
@@ -108,3 +168,162 @@ def set_movement_muted(node_id: int, muted: bool, note: Optional[str] = None) ->
         f'[MUTE] Movement alerts {"MUTED" if muted else "UNMUTED"} for node {node_id}'
         + (f' ({note})' if note else '')
     )
+
+
+# ---------------------------------------------------------------------------
+# Time-series recording (positions, telemetry, alert events)
+# All writes are append-only and happen off the receive hot path only in the
+# sense of being single INSERTs under WAL — microseconds at this data rate.
+# ---------------------------------------------------------------------------
+
+def record_position(node_id, ts, lat, lon, alt=None, distance_from_home_m=None,
+                    packet_id=None, gateway_id=None, rssi=None, snr=None,
+                    simulated=False) -> None:
+    with _lock:
+        if _conn is None:
+            return
+        _conn.execute(
+            'INSERT INTO positions (node_id, ts, lat, lon, alt, distance_from_home_m,'
+            ' packet_id, gateway_id, rssi, snr, simulated)'
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (node_id, int(ts), lat, lon, alt, distance_from_home_m,
+             packet_id, gateway_id, rssi, snr, 1 if simulated else 0),
+        )
+        _conn.commit()
+        _maybe_prune_locked()
+
+
+def record_telemetry(node_id, ts, voltage=None, battery_pct=None,
+                     rssi=None, snr=None, simulated=False) -> None:
+    with _lock:
+        if _conn is None:
+            return
+        _conn.execute(
+            'INSERT INTO telemetry (node_id, ts, voltage, battery_pct, rssi, snr, simulated)'
+            ' VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (node_id, int(ts), voltage, battery_pct, rssi, snr, 1 if simulated else 0),
+        )
+        _conn.commit()
+        _maybe_prune_locked()
+
+
+def record_alert_event(kind, node_id=None, distance_m=None, details=None,
+                       simulated=False) -> None:
+    """Append one alert-pipeline decision (movement_fired / movement_suppressed /
+    movement_muted / battery_low / ...). `details` may be any JSON-serializable value."""
+    import json as _json
+    with _lock:
+        if _conn is None:
+            return
+        _conn.execute(
+            'INSERT INTO alert_events (ts, node_id, kind, distance_m, details, simulated)'
+            ' VALUES (?, ?, ?, ?, ?, ?)',
+            (int(time.time()), node_id, kind, distance_m,
+             _json.dumps(details) if details is not None else None,
+             1 if simulated else 0),
+        )
+        _conn.commit()
+
+
+def get_positions_since(node_id, since_ts, include_simulated=False):
+    """Position rows for one node since a timestamp, oldest first.
+    Used to rebuild in-memory trails at startup."""
+    with _lock:
+        if _conn is None:
+            return []
+        sim_clause = '' if include_simulated else ' AND simulated = 0'
+        rows = _conn.execute(
+            f'SELECT ts, lat, lon, alt, rssi, snr FROM positions'
+            f' WHERE node_id = ? AND ts >= ?{sim_clause} ORDER BY ts',
+            (node_id, int(since_ts)),
+        ).fetchall()
+    return [
+        {'ts': ts, 'lat': lat, 'lon': lon, 'alt': alt, 'rssi': rssi, 'snr': snr}
+        for ts, lat, lon, alt, rssi, snr in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Runtime app settings (DB is master; config file supplies defaults at startup
+# for keys with no override row — review decision Q9)
+# ---------------------------------------------------------------------------
+
+def get_setting(key: str) -> Optional[str]:
+    with _lock:
+        if _conn is None:
+            return None
+        row = _conn.execute('SELECT value FROM app_settings WHERE key = ?', (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_setting(key: str, value) -> None:
+    with _lock:
+        if _conn is None:
+            raise RuntimeError('storage.init() has not been called')
+        _conn.execute(
+            'INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)'
+            ' ON CONFLICT(key) DO UPDATE SET value = excluded.value,'
+            ' updated_at = excluded.updated_at',
+            (key, str(value), int(time.time())),
+        )
+        _conn.commit()
+    logger.info(f'[SETTINGS] {key} = {value} (DB override)')
+
+
+def all_settings() -> Dict[str, str]:
+    with _lock:
+        if _conn is None:
+            return {}
+        rows = _conn.execute('SELECT key, value FROM app_settings').fetchall()
+    return dict(rows)
+
+
+def reset_settings() -> int:
+    """Delete all app_settings overrides (the Control Menu 'reset to config
+    defaults' action). Returns the number of overrides removed."""
+    with _lock:
+        if _conn is None:
+            return 0
+        cur = _conn.execute('DELETE FROM app_settings')
+        _conn.commit()
+    logger.warning(f'[SETTINGS] {cur.rowcount} override(s) reset to config defaults')
+    return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
+# Node registry snapshot + retention
+# ---------------------------------------------------------------------------
+
+def _sync_nodes_registry_locked() -> None:
+    """Mirror config.SPECIAL_NODES into the nodes table (for analysis JOINs)."""
+    now = int(time.time())
+    for node_id, sn in getattr(config, 'SPECIAL_NODES', {}).items():
+        _conn.execute(
+            'INSERT INTO nodes (node_id, label, home_lat, home_lon, updated_at)'
+            ' VALUES (?, ?, ?, ?, ?)'
+            ' ON CONFLICT(node_id) DO UPDATE SET label = excluded.label,'
+            ' home_lat = excluded.home_lat, home_lon = excluded.home_lon,'
+            ' updated_at = excluded.updated_at',
+            (node_id, sn.get('label'), sn.get('home_lat'), sn.get('home_lon'), now),
+        )
+    _conn.commit()
+
+
+def _prune_locked() -> None:
+    """Enforce time-based retention on measurement tables. Caller holds _lock."""
+    global _last_prune_ts
+    retention_days = getattr(config, 'DB_RETENTION_DAYS', 90)
+    cutoff = int(time.time() - retention_days * 86400)
+    total = 0
+    for table in _RETENTION_TABLES:
+        cur = _conn.execute(f'DELETE FROM {table} WHERE ts < ?', (cutoff,))  # noqa: S608 — table names from module constant
+        total += cur.rowcount
+    _conn.commit()
+    _last_prune_ts = time.time()
+    if total:
+        logger.info(f'[RETENTION] pruned {total} rows older than {retention_days} days')
+
+
+def _maybe_prune_locked() -> None:
+    if time.time() - _last_prune_ts >= _PRUNE_INTERVAL_S:
+        _prune_locked()

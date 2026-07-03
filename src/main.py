@@ -60,8 +60,43 @@ root_logger.addHandler(file_handler)
 logger = logging.getLogger(__name__)
 logger.info(f'=== BUOY TRACKER STARTED at {time.strftime("%Y-%m-%d %H:%M:%S")} (log_level={config.LOG_LEVEL}) ===')
 
-# Open the SQLite durable store (node settings; mutes survive restarts)
+# Open the SQLite durable store (settings + time series; survives restarts)
 storage.init()
+# Rebuild in-memory position trails from the durable store
+mqtt_handler.rebuild_history_from_db()
+
+# ----------------------------------------------------------------------------
+# Runtime-tunable settings (review decision Q9): the config file supplies each
+# default at startup; a DB override row — created when an admin changes the
+# value in the UI — wins from then on, including across restarts and later
+# config-file edits. "Reset to config defaults" deletes the override rows.
+# ----------------------------------------------------------------------------
+_CONFIG_FILE_DEFAULTS = {
+    'movement_threshold_m': config.SPECIAL_MOVEMENT_THRESHOLD_METERS,
+    'low_battery_threshold': config.LOW_BATTERY_THRESHOLD,
+    'show_gateways': config.SHOW_GATEWAYS,
+    'alerts_enabled': config.ALERT_ENABLED,
+}
+
+_TRUTHY = (True, 'True', 'true', '1', 1)
+
+
+def _apply_setting(key: str, value) -> None:
+    """Apply one runtime setting value to the live config module."""
+    if key == 'movement_threshold_m':
+        config.SPECIAL_MOVEMENT_THRESHOLD_METERS = float(value)
+    elif key == 'low_battery_threshold':
+        config.LOW_BATTERY_THRESHOLD = int(float(value))
+    elif key == 'show_gateways':
+        config.SHOW_GATEWAYS = value in _TRUTHY
+    elif key == 'alerts_enabled':
+        config.ALERT_ENABLED = value in _TRUTHY
+
+
+for _key, _value in storage.all_settings().items():
+    if _key in _CONFIG_FILE_DEFAULTS:
+        _apply_setting(_key, _value)
+        logger.info(f'[SETTINGS] DB override applied: {_key} = {_value}')
 
 if getattr(config, 'DEBUG_SIMULATION_ENABLED', False):
     logger.warning('=' * 64)
@@ -438,7 +473,8 @@ def toggle_alerts() -> Response:
         # Toggle the status
         new_status = not current_status
         config.ALERT_ENABLED = new_status
-        
+        storage.set_setting('alerts_enabled', new_status)
+
         logger.info(f"Alerts toggled: {'ENABLED' if new_status else 'DISABLED'} by {request.remote_addr}")
         
         return jsonify({
@@ -552,12 +588,16 @@ def restart_server() -> Response:
             'message': 'Server restarting...'
         }
         
-        # Schedule restart for 1 second from now to allow response to be sent
+        # Schedule restart for 1 second from now to allow response to be sent.
+        # Bind the kill function and pid NOW (not at fire time) so the action
+        # is fixed at schedule time regardless of later interpreter state.
+        kill_fn, pid = os.kill, os.getpid()
+
         def restart_after_delay():
             import time
             time.sleep(1)
             logger.info("Initiating graceful shutdown for server restart")
-            os.kill(os.getpid(), signal.SIGTERM)
+            kill_fn(pid, signal.SIGTERM)
         
         import threading
         restart_thread = threading.Thread(target=restart_after_delay, daemon=True)
@@ -635,8 +675,9 @@ def update_movement_threshold() -> Response:
         threshold = float(data.get('threshold', 80))
         if threshold <= 0:
             return jsonify({'error': 'threshold must be positive'}), 400
-        # Update in memory
+        # Update in memory and persist as a DB override (survives restarts)
         config.SPECIAL_MOVEMENT_THRESHOLD_METERS = threshold
+        storage.set_setting('movement_threshold_m', threshold)
         logger.info(f'Movement threshold updated to {threshold} meters')
         return jsonify({'success': True, 'threshold': threshold})
     except Exception as e:
@@ -653,8 +694,9 @@ def update_battery_threshold() -> Response:
         threshold = int(data.get('threshold', 25))
         if threshold <= 0 or threshold > 100:
             return jsonify({'error': 'threshold must be between 1 and 100'}), 400
-        # Update in memory
+        # Update in memory and persist as a DB override (survives restarts)
         config.LOW_BATTERY_THRESHOLD = threshold
+        storage.set_setting('low_battery_threshold', threshold)
         logger.info(f'Low battery threshold updated to {threshold}%')
         return jsonify({'success': True, 'threshold': threshold})
     except Exception as e:
@@ -670,8 +712,9 @@ def update_show_gateways() -> Response:
         data = request.get_json(silent=True) or {}
         show_gateways = bool(data.get('show_gateways', True))
 
-        # Update in memory
+        # Update in memory and persist as a DB override (survives restarts)
         config.SHOW_GATEWAYS = show_gateways
+        storage.set_setting('show_gateways', show_gateways)
         logger.info(f'show_gateways updated to {show_gateways}')
 
         # Reload MQTT subscriptions with new setting
@@ -693,6 +736,34 @@ def update_show_gateways() -> Response:
     except Exception as e:
         logger.exception('Failed to update show_gateways')
         return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/api/settings/reset', methods=['POST'])
+@check_rate_limit
+@require_api_key
+def reset_runtime_settings() -> Response:
+    """
+    Delete all runtime-setting DB overrides and restore config-file defaults
+    (the Control Menu "reset to config defaults" action).
+    """
+    try:
+        removed = storage.reset_settings()
+        for key, value in _CONFIG_FILE_DEFAULTS.items():
+            _apply_setting(key, value)
+        # show_gateways may have changed back — refresh MQTT subscriptions
+        try:
+            mqtt_handler.reload_mqtt_subscriptions()
+        except Exception as reload_err:
+            logger.warning(f'Subscription reload after reset failed: {reload_err}')
+        logger.warning(f'[SETTINGS] reset to config defaults by {get_client_ip()} ({removed} override(s) removed)')
+        return jsonify({
+            'success': True,
+            'overrides_removed': removed,
+            'defaults': {k: str(v) for k, v in _CONFIG_FILE_DEFAULTS.items()},
+        })
+    except Exception as e:
+        logger.exception('Failed to reset settings')
+        return jsonify({'error': str(e)}), 500
+
 
 @api_bp.route('/api/test-alert', methods=['POST'])
 @check_rate_limit

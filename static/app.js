@@ -829,6 +829,27 @@
     }
   };
 
+  // Reset runtime settings to config-file defaults (deletes DB overrides)
+  window.resetSettings = function resetSettings() {
+    if (!confirm('Reset all runtime settings to the tracker.config defaults?')) {
+      return;
+    }
+    try {
+      makeApiRequest('POST', 'api/settings/reset', function(xhr) {
+        if (xhr.status === 200) {
+          console.log('[Settings] Reset to config defaults');
+          // Reload so the UI re-reads thresholds and toggles from the server
+          location.reload();
+        } else if (xhr.status !== 401) {
+          alert('Failed to reset settings: ' + xhr.statusText);
+        }
+      });
+    } catch(e) {
+      console.error('Settings reset error:', e);
+      alert('Failed to reset settings');
+    }
+  };
+
   // Restart the server
   window.restartServer = function restartServer() {
     if (!confirm('Restart server? This will clear all trail data and briefly disconnect all clients. Are you sure?')) {

@@ -229,7 +229,64 @@ def _add_telemetry_to_history(node_id, json_data):
     # Prune old history entries
     _prune_history(node_id, now_ts=current_ts)
 
-def _check_battery_alert(node_id):
+def rebuild_history_from_db():
+    """Rebuild in-memory position trails from the durable store at startup.
+
+    Replaces the old special_nodes.json persistence: trails survive restarts
+    without any JSON snapshotting because every accepted position is already
+    a row in the positions table."""
+    hours = getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
+    since = time.time() - hours * 3600
+    total = 0
+    for node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
+        try:
+            rows = storage.get_positions_since(node_id, since)
+        except Exception as e:
+            logger.error(f'Trail rebuild failed for {node_id}: {e}')
+            continue
+        if not rows:
+            continue
+        _ensure_history_struct(node_id)
+        for r in rows:
+            special_history[node_id].append({
+                'ts': r['ts'], 'lat': r['lat'], 'lon': r['lon'], 'alt': r['alt'],
+                'voltage': None, 'rssi': r['rssi'], 'snr': r['snr'],
+            })
+        total += len(rows)
+    if total:
+        logger.info(f'Rebuilt {total} trail point(s) from durable store ({hours}h window)')
+
+
+def _append_position_history(node_id, lat, lon, alt, json_data):
+    """Append one accepted position to the in-memory trail and the durable store."""
+    _ensure_history_struct(node_id)
+    entry = {
+        "ts": time.time(),
+        "lat": lat,
+        "lon": lon,
+        "alt": alt,
+        "voltage": _get_node_voltage(node_id),
+        "rssi": json_data.get("rx_rssi"),
+        "snr": json_data.get("rx_snr"),
+    }
+    special_history[node_id].append(entry)
+    _prune_history(node_id, now_ts=entry['ts'])
+
+    try:
+        topic = json_data.get('mqtt_topic')
+        storage.record_position(
+            node_id, entry['ts'], lat, lon, alt=alt,
+            distance_from_home_m=nodes_data.get(node_id, {}).get('distance_from_origin_m'),
+            packet_id=json_data.get('id'),
+            gateway_id=_extract_gateway_node_id_from_topic(topic) if topic else None,
+            rssi=entry['rssi'], snr=entry['snr'],
+            simulated=bool(json_data.get('simulated')),
+        )
+    except Exception as db_err:
+        logger.error(f'Failed to record position for {node_id}: {db_err}')
+
+
+def _check_battery_alert(node_id, simulated=False):
     """Fire a low-battery alert if voltage drops below 3.5 V."""
     if not _is_special_node(node_id):
         return
@@ -237,6 +294,9 @@ def _check_battery_alert(node_id):
     voltage = _get_node_voltage(node_id)
     if voltage is not None and voltage < 3.5:
         from . import alerts
+        storage.record_alert_event('battery_low', node_id,
+                                   details={'voltage': voltage},
+                                   simulated=simulated)
         alerts.send_battery_alert(node_id, nodes_data[node_id])
 
 # Track best packets by ID for deduplication
@@ -1116,6 +1176,7 @@ def _add_copy_to_alert_buffer(node_id, json_data, payload, distance_m,
         'rx_rssi': json_data.get('rx_rssi'),
         'rx_snr': json_data.get('rx_snr'),
         'payload_snapshot': payload,
+        'simulated': bool(json_data.get('simulated')),
     })
 
 
@@ -1187,6 +1248,7 @@ def _evaluate_alert_buffer(node_id, info):
             f' | consensus={csize} gateway copies, dissent={dsize}'
             f' | best.gateway={best_rep["gateway_id"]}'
         )
+        _sim = any(c.get('simulated') for c in copies)
         if storage.is_movement_muted(node_id):
             # Detection stands (the [ALERT_FIRE] record above is the audit trail);
             # only the email is suppressed while an admin mute is active.
@@ -1194,7 +1256,16 @@ def _evaluate_alert_buffer(node_id, info):
                 f'[ALERT_MUTED] {ts} | node {node_id} | movement email suppressed (admin mute)'
                 f' | packet_id={best_pid} | distance={int(best_rep["distance_m"])}m'
             )
+            storage.record_alert_event(
+                'movement_muted', node_id, distance_m=best_rep['distance_m'],
+                details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize},
+                simulated=_sim)
         elif getattr(config, 'ALERT_ENABLED', False):
+            storage.record_alert_event(
+                'movement_fired', node_id, distance_m=best_rep['distance_m'],
+                details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
+                         'gateway': best_rep['gateway_id']},
+                simulated=_sim)
             try:
                 alerts.send_movement_alert(node_id, nodes_data.get(node_id, {}), best_rep['distance_m'])
             except Exception as alert_err:
@@ -1212,6 +1283,11 @@ def _evaluate_alert_buffer(node_id, info):
             f' | dissent={dsize} copies (one claimed {int(most_far["distance_m"])}m)'
             f' | suspected single-gateway mutation'
         )
+        storage.record_alert_event(
+            'movement_suppressed', node_id, distance_m=most_far['distance_m'],
+            details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
+                     'consensus_distance_m': rep['distance_m']},
+            simulated=any(c.get('simulated') for c in copies))
 
 
 # Auto-unmute on homecoming (PROPOSAL_V2.0.md §2): a muted node that reports
@@ -1402,44 +1478,17 @@ def on_position(json_data):
             if is_special:
                 # Extract rxTime from the packet to deduplicate retransmissions
                 rx_time = json_data.get("rxTime")
-                
-                # Initialize deduplication set for this node if needed
+
                 if node_id not in special_node_position_timestamps:
                     special_node_position_timestamps[node_id] = set()
-                
-                # Only add to history if we haven't seen this rxTime before
-                if rx_time is not None and rx_time not in special_node_position_timestamps[node_id]:
-                    _ensure_history_struct(node_id)
-                    entry = {
-                        "ts": time.time(),
-                        "lat": lat,
-                        "lon": lon,
-                        "alt": alt,
-                        "voltage": _get_node_voltage(node_id),
-                        "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr"),
-                    }
-                    special_history[node_id].append(entry)
-                    special_node_position_timestamps[node_id].add(rx_time)
-                    _prune_history(node_id, now_ts=entry['ts'])
 
-                    logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
-                elif rx_time is not None:
+                if rx_time is not None and rx_time in special_node_position_timestamps[node_id]:
                     logger.debug(f'Skipped duplicate position for {node_id} (rxTime: {rx_time} already seen)')
                 else:
-                    # No rxTime available, add anyway (shouldn't happen but be safe)
-                    _ensure_history_struct(node_id)
-                    entry = {
-                        "ts": time.time(),
-                        "lat": lat,
-                        "lon": lon,
-                        "alt": alt,
-                        "voltage": _get_node_voltage(node_id),
-                        "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr"),
-                    }
-                    special_history[node_id].append(entry)
-                    _prune_history(node_id, now_ts=entry['ts'])
+                    if rx_time is not None:
+                        special_node_position_timestamps[node_id].add(rx_time)
+                    _append_position_history(node_id, lat, lon, alt, json_data)
+                    logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
 
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
@@ -1578,6 +1627,16 @@ def on_telemetry(json_data):
             nodes_data[node_id]["voltage"] = voltage
 
             logger.info(f'Updated telemetry for {node_id}: voltage={voltage}V, battery_pct={battery_pct}%')
+
+            if _is_special_node(node_id) and (voltage is not None or battery_pct is not None):
+                try:
+                    storage.record_telemetry(
+                        node_id, time.time(), voltage=voltage, battery_pct=battery_pct,
+                        rssi=json_data.get('rx_rssi'), snr=json_data.get('rx_snr'),
+                        simulated=bool(json_data.get('simulated')),
+                    )
+                except Exception as db_err:
+                    logger.error(f'Failed to record telemetry for {node_id}: {db_err}')
             
             # Store best signal quality within a rolling 1-hour window.
             # Multiple gateways each publish their own copy of a packet, so we keep
@@ -1605,7 +1664,7 @@ def on_telemetry(json_data):
             _add_telemetry_to_history(node_id, json_data)
 
             # Check for low battery alert
-            _check_battery_alert(node_id)
+            _check_battery_alert(node_id, simulated=bool(json_data.get('simulated')))
 
     except Exception as e:
         logger.error(f'❌ Error processing telemetry: {e}', exc_info=True)
