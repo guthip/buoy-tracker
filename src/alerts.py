@@ -16,6 +16,19 @@ logger = logging.getLogger(__name__)
 last_alert_sent = {}  # node_id -> timestamp
 
 
+def _format_battery(node_data: Dict[str, Any]) -> str:
+    """Format node telemetry as "4.00V (82%)", "4.00V", "82%", or "No telemetry"."""
+    voltage = node_data.get("voltage")
+    battery_pct = node_data.get("battery_pct")
+    if isinstance(voltage, (int, float)) and isinstance(battery_pct, (int, float)):
+        return f"{voltage:.2f}V ({int(battery_pct)}%)"
+    if isinstance(voltage, (int, float)):
+        return f"{voltage:.2f}V"
+    if isinstance(battery_pct, (int, float)):
+        return f"{int(battery_pct)}%"
+    return "No telemetry"
+
+
 def _cleanup_alert_history() -> None:
     """Remove stale alert records for nodes that no longer exist or are too old."""
     import time
@@ -71,26 +84,8 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
             logger.debug("Email alerts disabled in config")
             return
 
-        # Get node details
         node_name = node_data.get("long_name", "Unknown")
-        # Get battery value - stored under "battery" key after telemetry processing
-        # For power sensor nodes this is voltage (volts), for others it's percentage (%)
-        battery_value = node_data.get("battery", "Unknown")
-        
-        # Format battery display based on type
-        if battery_value == "Unknown":
-            battery_display = "No telemetry"
-        elif isinstance(battery_value, (int, float)):
-            # Check if this looks like voltage (typically 3.0-4.2V for LiPo)
-            # or percentage (0-100%)
-            if battery_value > 1.5 and battery_value < 5.0:
-                # Likely voltage value
-                battery_display = f"{battery_value:.2f}V"
-            else:
-                # Likely percentage value
-                battery_display = f"{int(battery_value)}%"
-        else:
-            battery_display = str(battery_value)
+        battery_display = _format_battery(node_data)
 
         # Special node label
         special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
@@ -121,23 +116,14 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
         logger.error(f"Failed to send movement alert: {e}", exc_info=True)
 
 
-def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: int) -> None:
-    """
-    Send email alert when a special node has low battery.
-
-    Args:
-        node_id: Node ID with low battery
-        node_data: Dictionary with node information
-        battery_level: Current battery percentage or voltage (for power sensor nodes)
-    """
-    # Check if we should send alert (avoid spam)
+def send_battery_alert(node_id: int, node_data: Dict[str, Any]) -> None:
+    """Send email alert when a special node's battery drops below threshold."""
     import time
 
     now = time.time()
     alert_key = f"{node_id}_battery"
     if alert_key in last_alert_sent:
         time_since_last = now - last_alert_sent[alert_key]
-        # Don't send more than once per cooldown period
         if time_since_last < config.ALERT_COOLDOWN:
             logger.debug(
                 f"Skipping battery alert for node_id {node_id}, last sent {int(time_since_last)}s ago"
@@ -145,29 +131,14 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
             return
 
     try:
-        # Get alert configuration
         if not hasattr(config, "ALERT_ENABLED") or not config.ALERT_ENABLED:
             logger.debug("Email alerts disabled in config")
             return
 
-        # Get node details
         node_name = node_data.get("long_name", "Unknown")
-
-        # Special node label
         special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
+        battery_display = _format_battery(node_data)
 
-        # Determine if this node has a power sensor
-        has_power_sensor = node_data.get("has_power_sensor", False)
-
-        # Format battery display based on sensor type
-        if has_power_sensor:
-            battery_display = f"{battery_level}V"
-            log_unit = "V"
-        else:
-            battery_display = f"{battery_level}%"
-            log_unit = "%"
-
-        # Create email
         subject = f"🔋 {config.APP_TITLE} - Low Battery Alert: {special_label}"
 
         body = (
@@ -180,12 +151,9 @@ def send_battery_alert(node_id: int, node_data: Dict[str, Any], battery_level: i
             f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN / 3600:.1f} hours between alerts"
         )
 
-        # Update last sent time BEFORE sending to prevent duplicate alerts
         last_alert_sent[alert_key] = now
-
-        # Send email
         _send_email(to_addresses=config.ALERT_EMAIL_TO, subject=subject, body=body)
-        logger.info(f"Sent battery alert for {special_label} ({battery_level}{log_unit})")
+        logger.info(f"Sent battery alert for {special_label} ({battery_display})")
 
     except Exception as e:
         logger.error(f"Failed to send battery alert: {e}", exc_info=True)

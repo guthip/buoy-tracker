@@ -650,16 +650,15 @@ def test_alert() -> Response:
         data = request.get_json(force=True, silent=True) or {}
         alert_type = data.get('type', 'movement')
 
-        # Create test node data
         test_node_id = 999999999
         test_node_data = {
             'long_name': 'Test Node',
-            'battery_level': 85
+            'voltage': 3.45,
+            'battery_pct': 45,
         }
 
-        # Send test alert based on type
         if alert_type == 'battery':
-            alerts.send_battery_alert(test_node_id, test_node_data, battery_level=45)
+            alerts.send_battery_alert(test_node_id, test_node_data)
             return jsonify({'success': True, 'message': 'Test battery alert sent'})
         else:
             alerts.send_movement_alert(test_node_id, test_node_data, distance_m=250)

@@ -77,14 +77,8 @@ all_gateway_node_ids = set()
 gateway_info_cache = {}
 
 def _is_special_node(node_id):
-    """Check if a node_id is in the special nodes list."""
+    """Check if a node_id is in the special nodes list. All special nodes are power-sensor buoys."""
     return node_id in config.SPECIAL_NODES
-
-def _has_power_sensor(node_id):
-    """Check if a node has external power monitoring hardware (INA260/INA219)."""
-    if node_id not in config.SPECIAL_NODES:
-        return False
-    return config.SPECIAL_NODES[node_id].get('has_power_sensor', False)
 
 def _get_node_voltage(node_id):
     """
@@ -151,22 +145,9 @@ def _estimate_battery_from_voltage(voltage):
         battery = int(((voltage - 2.8) / (4.25 - 2.8)) * 100)
         return max(0, min(100, battery))  # Clamp to 0-100
 
-def _get_battery_value_for_history(node_id):
-    """
-    Get battery value for history storage.
-    For power sensor nodes: returns voltage in volts
-    For regular nodes: returns battery percentage
-
-    Args:
-        node_id: Node ID to get battery value for
-
-    Returns:
-        Battery value (voltage or percentage) or None
-    """
-    if _has_power_sensor(node_id):
-        return _get_node_voltage(node_id)
-    else:
-        return nodes_data[node_id].get("battery")
+def _get_voltage_for_history(node_id):
+    """Get latest voltage for a special node, used as the canonical history sample."""
+    return _get_node_voltage(node_id)
 
 def _find_recent_history_entry(node_id, current_ts, window_seconds=2):
     """
@@ -188,28 +169,16 @@ def _find_recent_history_entry(node_id, current_ts, window_seconds=2):
         return most_recent
     return None
 
-def _update_history_entry(entry, rssi, snr, battery_value):
-    """
-    Update an existing history entry with best signal values.
-    Only updates if new value is better (higher) than existing.
-
-    Args:
-        entry: History entry dict to update
-        rssi: New RSSI value (or None)
-        snr: New SNR value (or None)
-        battery_value: New battery value (or None)
-    """
-    # Update RSSI if better (RSSI is negative dBm, higher value = better signal, e.g. -50 > -90)
+def _update_history_entry(entry, rssi, snr, voltage):
+    """Update an existing history entry. Keeps the best (highest) RSSI/SNR; replaces voltage with the latest sample."""
     if rssi is not None and (entry.get('rssi') is None or rssi > entry['rssi']):
         entry['rssi'] = rssi
 
-    # Update SNR if better (SNR in dB, higher is better)
     if snr is not None and (entry.get('snr') is None or snr > entry['snr']):
         entry['snr'] = snr
 
-    # Always update battery with latest value
-    if battery_value is not None:
-        entry['battery'] = battery_value
+    if voltage is not None:
+        entry['voltage'] = voltage
 
 def _add_telemetry_to_history(node_id, json_data):
     """
@@ -233,62 +202,41 @@ def _add_telemetry_to_history(node_id, json_data):
     # Ensure history structure exists
     _ensure_history_struct(node_id)
 
-    # Extract telemetry values
     current_ts = time.time()
-    battery_value = _get_battery_value_for_history(node_id)
+    voltage = _get_voltage_for_history(node_id)
     rssi = json_data.get("rx_rssi")
     snr = json_data.get("rx_snr")
 
-    # Check if we have a recent entry to update
     recent_entry = _find_recent_history_entry(node_id, current_ts)
 
     if recent_entry:
-        # Update existing entry with best values
-        _update_history_entry(recent_entry, rssi, snr, battery_value)
-        logger.debug(f'Updated telemetry history for {node_id}: battery={recent_entry["battery"]}, rssi={recent_entry["rssi"]}, snr={recent_entry["snr"]}')
+        _update_history_entry(recent_entry, rssi, snr, voltage)
+        logger.debug(f'Updated telemetry history for {node_id}: voltage={recent_entry.get("voltage")}, rssi={recent_entry["rssi"]}, snr={recent_entry["snr"]}')
     else:
-        # Create new history entry
         entry = {
             "ts": current_ts,
             "lat": lat,
             "lon": lon,
             "alt": nodes_data[node_id].get("alt", 0),
-            "battery": battery_value,  # voltage for power sensor nodes, % for others
+            "voltage": voltage,
             "rssi": rssi,
-            "snr": snr
+            "snr": snr,
         }
         special_history[node_id].append(entry)
-        logger.debug(f'Added telemetry to history for {node_id}: battery={entry["battery"]}, rssi={entry["rssi"]}, snr={entry["snr"]}')
+        logger.debug(f'Added telemetry to history for {node_id}: voltage={entry["voltage"]}, rssi={entry["rssi"]}, snr={entry["snr"]}')
 
     # Prune old history entries
     _prune_history(node_id, now_ts=current_ts)
 
 def _check_battery_alert(node_id):
-    """
-    Check if battery alert should be sent for a special node.
-    Uses voltage threshold for power sensor nodes, percentage for others.
-
-    Args:
-        node_id: Node ID to check
-    """
-    # Only check alerts for special nodes
+    """Fire a low-battery alert if voltage drops below 3.5 V."""
     if not _is_special_node(node_id):
         return
 
-    # Power sensor nodes: use voltage threshold (< 3.5V = low)
-    if _has_power_sensor(node_id):
-        voltage = _get_node_voltage(node_id)
-        if voltage is not None and voltage < 3.5:
-            from . import alerts
-            node_data = nodes_data[node_id]
-            alerts.send_battery_alert(node_id, node_data, voltage)
-    else:
-        # Regular nodes: use battery percentage threshold
-        battery_level = nodes_data[node_id].get("battery")
-        if battery_level is not None and battery_level < config.LOW_BATTERY_THRESHOLD:
-            from . import alerts
-            node_data = nodes_data[node_id]
-            alerts.send_battery_alert(node_id, node_data, battery_level)
+    voltage = _get_node_voltage(node_id)
+    if voltage is not None and voltage < 3.5:
+        from . import alerts
+        alerts.send_battery_alert(node_id, nodes_data[node_id])
 
 # Track best packets by ID for deduplication
 _packet_id_tracking = {}  # {node_id: {packet_id: {best_packet_info, stored_index}}}
@@ -1415,20 +1363,14 @@ def on_position(json_data):
                 # Only add to history if we haven't seen this rxTime before
                 if rx_time is not None and rx_time not in special_node_position_timestamps[node_id]:
                     _ensure_history_struct(node_id)
-                    # For nodes with power sensors, store voltage instead of battery %
-                    if _has_power_sensor(node_id):
-                        battery_value = _get_node_voltage(node_id)
-                    else:
-                        battery_value = nodes_data[node_id].get("battery")
-
                     entry = {
                         "ts": time.time(),
                         "lat": lat,
                         "lon": lon,
                         "alt": alt,
-                        "battery": battery_value,  # voltage for power sensor nodes, % for others
+                        "voltage": _get_node_voltage(node_id),
                         "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr")
+                        "snr": json_data.get("rx_snr"),
                     }
                     special_history[node_id].append(entry)
                     special_node_position_timestamps[node_id].add(rx_time)
@@ -1440,20 +1382,14 @@ def on_position(json_data):
                 else:
                     # No rxTime available, add anyway (shouldn't happen but be safe)
                     _ensure_history_struct(node_id)
-                    # For nodes with power sensors, store voltage instead of battery %
-                    if _has_power_sensor(node_id):
-                        battery_value = _get_node_voltage(node_id)
-                    else:
-                        battery_value = nodes_data[node_id].get("battery")
-
                     entry = {
                         "ts": time.time(),
                         "lat": lat,
                         "lon": lon,
                         "alt": alt,
-                        "battery": battery_value,  # voltage for power sensor nodes, % for others
+                        "voltage": _get_node_voltage(node_id),
                         "rssi": json_data.get("rx_rssi"),
-                        "snr": json_data.get("rx_snr")
+                        "snr": json_data.get("rx_snr"),
                     }
                     special_history[node_id].append(entry)
                     _prune_history(node_id, now_ts=entry['ts'])
@@ -1465,73 +1401,57 @@ def on_position(json_data):
 
 def _extract_battery_and_voltage_from_telemetry(node_id, payload):
     """
-    Extract battery percentage and voltage from telemetry payload.
+    Extract voltage and battery percentage from a telemetry payload.
 
-    Handles both power sensor nodes (INA260/INA219) and regular nodes.
-    Returns normalized values ready for storage.
-
-    Args:
-        node_id: Node ID to extract telemetry for
-        payload: Telemetry payload dictionary
+    For special nodes (all power-sensor buoys): voltage comes from power_metrics
+    on the configured channel. For regular mesh nodes: voltage and battery_level
+    come from device_metrics. Battery percentage is always derived from voltage
+    via _estimate_battery_from_voltage when voltage is available, so the card
+    and the chart can never disagree.
 
     Returns:
-        tuple: (battery_percent, voltage) where:
-            - battery_percent: int 0-100 or None
+        tuple: (battery_pct, voltage)
+            - battery_pct: int 0-100 or None
             - voltage: float or None
     """
-    battery = None
     voltage = None
+    battery_pct = None
 
     try:
         if not isinstance(payload, dict):
             return (None, None)
 
-        # Check if this is a power sensor node
-        if _has_power_sensor(node_id):
-            # Power sensor nodes: extract voltage from power_metrics ONLY
+        if _is_special_node(node_id):
             power_metrics = payload.get("power_metrics", {})
             if isinstance(power_metrics, dict):
-                # Get configured voltage channel (ch3 for battery, ch1 for input)
                 voltage_channel = config.SPECIAL_NODES[node_id].get('voltage_channel', 'ch3_voltage')
-                if voltage_channel == 'ch3_voltage':
-                    voltage = power_metrics.get('ch3_voltage')
-                elif voltage_channel == 'ch1_voltage':
-                    voltage = power_metrics.get('ch1_voltage')
-
-                # Estimate battery percentage from voltage
-                if voltage is not None:
-                    battery = _estimate_battery_from_voltage(voltage)
+                voltage = power_metrics.get(voltage_channel)
         else:
-            # Regular nodes: extract battery percentage from device_metrics
             device_metrics = payload.get("device_metrics", {})
             if isinstance(device_metrics, dict):
-                battery = device_metrics.get("battery_level")
                 voltage = device_metrics.get("voltage")
+                # Only fall back to device-reported battery_level if voltage is missing
+                if voltage is None:
+                    battery_pct = device_metrics.get("battery_level")
 
-                # If we have voltage but no battery, estimate it
-                if battery is None and voltage is not None:
-                    battery = _estimate_battery_from_voltage(voltage)
-
-        # Normalize battery to int and clamp to 0-100
-        if isinstance(battery, str) and battery.isdigit():
-            battery = int(battery)
-        if isinstance(battery, (float, int)):
-            battery = int(battery)
-            battery = max(0, min(100, battery))
-        else:
-            battery = None
-
-        # Normalize voltage
         if voltage is not None and isinstance(voltage, (int, float)):
             voltage = float(voltage)
+            battery_pct = _estimate_battery_from_voltage(voltage)
         else:
             voltage = None
+
+        if isinstance(battery_pct, str) and battery_pct.isdigit():
+            battery_pct = int(battery_pct)
+        if isinstance(battery_pct, (float, int)):
+            battery_pct = max(0, min(100, int(battery_pct)))
+        else:
+            battery_pct = None
 
     except Exception as e:
         logger.debug(f"Error extracting battery/voltage for {node_id}: {e}")
         return (None, None)
 
-    return (battery, voltage)
+    return (battery_pct, voltage)
 
 
 def _merge_telemetry_payload(node_id, payload):
@@ -1606,12 +1526,11 @@ def on_telemetry(json_data):
 
             nodes_data[node_id]["last_seen"] = time.time()
 
-            # Extract battery and voltage using helper (handles both power sensor and regular nodes)
-            battery, voltage = _extract_battery_and_voltage_from_telemetry(node_id, payload)
-            nodes_data[node_id]["battery"] = battery
+            battery_pct, voltage = _extract_battery_and_voltage_from_telemetry(node_id, payload)
+            nodes_data[node_id]["battery_pct"] = battery_pct
             nodes_data[node_id]["voltage"] = voltage
 
-            logger.info(f'Updated telemetry for {node_id}: battery={battery}%')
+            logger.info(f'Updated telemetry for {node_id}: voltage={voltage}V, battery_pct={battery_pct}%')
             
             # Store best signal quality within a rolling 1-hour window.
             # Multiple gateways each publish their own copy of a packet, so we keep
@@ -2419,7 +2338,6 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         "origin_lon": origin_lon,
         "status": status,
         "is_special": is_special,
-        "has_power_sensor": _has_power_sensor(node_id) if is_special else False,
         "stale": stale,
         "has_fix": (data.get("latitude") is not None and data.get("longitude") is not None),
         "special_symbol": special_symbol,
@@ -2427,7 +2345,7 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         "time_since_seen": time_since_seen,
         "last_seen": last_seen,
         "last_position_update": data.get("last_position_update"),
-        "battery": data.get("battery") if data.get("battery") is not None else None,
+        "battery_pct": data.get("battery_pct"),
         "age_min": int(time_since_seen / 60),
         "moved_far": data.get("moved_far", False),
         "distance_from_origin_m": data.get("distance_from_origin_m"),
@@ -2436,17 +2354,16 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         "rx_snr": data.get("rx_snr"),
     }
 
-    # Add power current for power sensor nodes
+    # Add power current for special (power-sensor) nodes
     telemetry = data.get("telemetry", {})
     if isinstance(telemetry, dict):
         power_metrics = telemetry.get("power_metrics", {})
         node_info["power_current"] = power_metrics.get("ch3_current")
 
-    # Check for low battery
-    battery_level = node_info.get("battery")
+    battery_pct = node_info.get("battery_pct")
     node_info["battery_low"] = (
-        battery_level is not None and
-        battery_level < getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
+        battery_pct is not None and
+        battery_pct < getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
     )
 
     # Add gateway connections for special nodes
@@ -2505,7 +2422,7 @@ def _build_gateway_only_node(gateway_id, current_time):
         "time_since_seen": current_time - gw_info.get("last_seen", current_time),
         "last_seen": gw_info.get("last_seen"),
         "last_position_update": None,
-        "battery": None,
+        "battery_pct": None,
         "age_min": int((current_time - gw_info.get("last_seen", current_time)) / 60),
         "moved_far": False,
         "distance_from_origin_m": None,
@@ -2555,32 +2472,35 @@ def get_nodes():
 def get_special_history(node_id: int, hours: int = None):
     """
     Get deduplicated position history for a special node.
-    
-    Deduplication reduces redundant data for slow-moving nodes by keeping only
-    the most recent position within each time window defined by
-    config.special_nodes_settings.data_limit_time (default: 1 hour).
-    
-    For example with data_limit_time=1.0:
-    - Raw data: 700+ points over 24 hours
-    - Returned: ~24 points (one per hour)
-    - Bandwidth: 84% reduction
-    
-    Args:
-        node_id: The node's numeric ID
-        hours: History window in hours (default from config.SPECIAL_HISTORY_HOURS)
-    
+
+    Each returned point carries both `voltage` (raw sample) and `battery_pct`
+    (derived from voltage via the single _estimate_battery_from_voltage curve),
+    so clients never need to recompute percentages.
+
     Returns:
-        List of position dictionaries with ts, lat, lon, alt, battery, rssi, snr
+        List of dicts: {ts, lat, lon, alt, voltage, battery_pct, rssi, snr}
     """
     hours = hours or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
     cutoff = time.time() - (hours * 3600)
 
-    # Get position history from in-memory cache
     dq = special_history.get(node_id, deque())
     filtered = [e for e in dq if e['ts'] >= cutoff]
+    deduped = _deduplicate_by_hour(filtered)
 
-    # Deduplicate to one per data_limit_time window for slow-moving special nodes
-    return _deduplicate_by_hour(filtered)
+    result = []
+    for e in deduped:
+        v = e.get('voltage')
+        result.append({
+            'ts': e['ts'],
+            'lat': e.get('lat'),
+            'lon': e.get('lon'),
+            'alt': e.get('alt'),
+            'voltage': v,
+            'battery_pct': _estimate_battery_from_voltage(v) if v is not None else None,
+            'rssi': e.get('rssi'),
+            'snr': e.get('snr'),
+        })
+    return result
 
 def _deduplicate_by_hour(points):
     """Keep only the most recent point per time window for slow-moving special nodes.
