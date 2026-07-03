@@ -4,7 +4,8 @@
 
 [app]
 title = SYC buoy tracker
-version = 1.2
+# NOTE (v2.0): the application version now lives in code (src/__init__.py).
+# A legacy "version" key here is ignored and can be removed from deployed configs.
 
 [mqtt]
 # MQTT broker settings

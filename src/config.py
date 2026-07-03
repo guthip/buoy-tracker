@@ -108,7 +108,9 @@ if CONFIG_SECRETS_FILE.exists():
 
 # App Metadata
 APP_TITLE = config.get('app', 'title', fallback='Buoy Tracker')
-APP_VERSION = config.get('app', 'version', fallback='0.1')
+# Version lives in code (src/__init__.py), not user config; a legacy
+# [app] version key in deployed configs is ignored.
+from . import __version__ as APP_VERSION  # noqa: E402
 
 # MQTT Configuration
 MQTT_BROKER = config.get('mqtt', 'broker', fallback='mqtt.bayme.sh')
