@@ -781,6 +781,54 @@
     }
   }
   
+  // -------------------------------------------------------------------
+  // Per-buoy movement-alert mutes (v2.0 Phase 1)
+  // Mute state arrives with each node in /api/nodes (movement_alerts_muted);
+  // the Controls-tab list renders from the latest special-node snapshot.
+  // -------------------------------------------------------------------
+  var lastSpecialNodes = [];
+
+  function renderMuteList() {
+    var el = document.getElementById('muteList');
+    if (!el) return;
+    if (!lastSpecialNodes.length) {
+      el.textContent = 'No special nodes seen yet.';
+      return;
+    }
+    var html = '';
+    lastSpecialNodes.forEach(function(n) {
+      var muted = !!n.movement_alerts_muted;
+      var label = n.special_label || n.name || String(n.id);
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;">' +
+              '<span>' + escapeHtml(label) + '</span>' +
+              '<button onclick="toggleMute(' + n.id + ')" style="border:none;border-radius:4px;cursor:pointer;padding:3px 10px;color:#fff;font-weight:bold;background:' + (muted ? '#f44336' : '#4CAF50') + ';">' +
+              (muted ? '🔕 Muted' : '🔔 Active') + '</button></div>';
+    });
+    el.innerHTML = html;
+  }
+
+  window.toggleMute = function toggleMute(nodeId) {
+    var node = null;
+    for (var i = 0; i < lastSpecialNodes.length; i++) {
+      if (lastSpecialNodes[i].id === nodeId) { node = lastSpecialNodes[i]; break; }
+    }
+    var newMuted = node ? !node.movement_alerts_muted : true;
+    try {
+      makeApiRequest('POST', 'api/alerts/mute', function(xhr) {
+        if (xhr.status === 200) {
+          if (node) node.movement_alerts_muted = newMuted;
+          renderMuteList();
+          console.log('[Mute] node ' + nodeId + ' -> ' + (newMuted ? 'muted' : 'active'));
+        } else if (xhr.status !== 401) {
+          alert('Failed to update mute: ' + xhr.statusText);
+        }
+      }, JSON.stringify({ node_id: nodeId, muted: newMuted }));
+    } catch(e) {
+      console.error('Mute toggle error:', e);
+      alert('Failed to update mute');
+    }
+  };
+
   // Restart the server
   window.restartServer = function restartServer() {
     if (!confirm('Restart server? This will clear all trail data and briefly disconnect all clients. Are you sure?')) {
@@ -1567,9 +1615,14 @@
       // Gateway nodes get a "View details" button to show which special nodes they receive from
       historyButton = '<button onclick="showGatewayDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" style="background:none;border:none;font-size:1.1em;cursor:pointer;padding:2px 4px;color:#4CAF50;opacity:0.7;transition:opacity 0.2s;" title="View gateway details">ℹ️</button>';
     }
+    var muteBadge = '';
+    if (node.is_special && node.movement_alerts_muted) {
+      muteBadge = '<span title="Movement alerts muted" style="font-size:1.0em;">🔕</span>';
+    }
     var header = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
                  specialSymbol +
                  '<div class="node-name">' + escapeHtml(displayName) + '</div>' +
+                 muteBadge +
                  historyButton +
                  '</div>';
 
@@ -1704,6 +1757,9 @@
               return 0;
             });
             list = special.concat(gateway);
+            // Keep latest special-node snapshot for the Controls-tab mute list
+            lastSpecialNodes = special;
+            renderMuteList();
             // Clear existing nodes and update with DocumentFragment (eliminates layout thrashing)
             var nodesContainer = document.getElementById('nodes');
             var fragment = document.createDocumentFragment();

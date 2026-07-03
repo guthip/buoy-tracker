@@ -116,3 +116,8 @@ kill_server.sh
 SECURITY.md
 build_output.txt
 data/special_nodes.json
+
+# SQLite durable store (v2.0) — includes WAL/SHM sidecar files
+data/buoy_tracker.db
+data/buoy_tracker.db-wal
+data/buoy_tracker.db-shm

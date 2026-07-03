@@ -15,8 +15,9 @@ if __name__ == '__main__':
     import src.mqtt_handler as mqtt_handler
     import src.config as config
     import src.alerts as alerts
+    import src.storage as storage
 else:
-    from . import mqtt_handler, config, alerts
+    from . import mqtt_handler, config, alerts, storage
 import time
 from collections import defaultdict
 
@@ -58,6 +59,9 @@ root_logger.addHandler(file_handler)
 
 logger = logging.getLogger(__name__)
 logger.info(f'=== BUOY TRACKER STARTED at {time.strftime("%Y-%m-%d %H:%M:%S")} (log_level={config.LOG_LEVEL}) ===')
+
+# Open the SQLite durable store (node settings; mutes survive restarts)
+storage.init()
 
 # Suppress verbose Flask/Werkzeug HTTP request logging
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -461,6 +465,53 @@ def get_alerts_status() -> Response:
         })
     except Exception as e:
         logger.exception('Failed to get alert status')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/alerts/mutes', methods=['GET'])
+@check_rate_limit
+def get_alert_mutes() -> Response:
+    """
+    Get per-node movement-alert mute states (public read).
+
+    Returns:
+        {'mutes': {node_id_str: {'muted_at': int, 'note': str}}}
+    """
+    try:
+        return jsonify({'mutes': storage.get_all_mutes()})
+    except Exception as e:
+        logger.exception('Failed to get alert mutes')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/alerts/mute', methods=['POST'])
+@check_rate_limit
+@require_api_key
+def set_alert_mute() -> Response:
+    """
+    Mute or unmute movement-alert emails for one special node.
+
+    Body: {'node_id': int, 'muted': bool}
+    Muting affects movement emails only — battery alerts and the UI
+    out-of-position indication stay active. Auto-unmutes when the node
+    reports consecutive in-home positions (homecoming).
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        try:
+            node_id = int(data.get('node_id'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'node_id (int) is required'}), 400
+        if node_id not in config.SPECIAL_NODE_IDS:
+            return jsonify({'error': f'node {node_id} is not a special node'}), 400
+        muted = data.get('muted')
+        if not isinstance(muted, bool):
+            return jsonify({'error': 'muted (true/false) is required'}), 400
+
+        storage.set_movement_muted(node_id, muted, note=f'via API from {get_client_ip()}')
+        return jsonify({'success': True, 'node_id': node_id, 'muted': muted})
+    except Exception as e:
+        logger.exception('Failed to set alert mute')
         return jsonify({'error': str(e)}), 500
 
 

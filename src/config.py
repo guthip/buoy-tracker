@@ -367,6 +367,9 @@ ENABLE_PERSISTENCE = config.getboolean('app_features', 'enable_persistence', fal
 DATA_DIR = Path(__file__).parent.parent / 'data'
 SPECIAL_HISTORY_PERSIST_PATH = str(DATA_DIR / 'special_nodes.json')
 
+# SQLite durable store (node settings; time-series tables arrive in v2.0 Phase 3)
+DB_PATH = str(DATA_DIR / 'buoy_tracker.db')
+
 # Security Configuration
 # Environment: 'development' (localhost allowed) or 'production' (strict security)
 ENV = os.getenv('FLASK_ENV', config.get('security', 'environment', fallback='development'))

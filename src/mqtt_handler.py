@@ -24,6 +24,7 @@ from meshtastic import mesh_pb2, mqtt_pb2, portnums_pb2, telemetry_pb2
 
 from . import config
 from . import alerts
+from . import storage
 
 logger = logging.getLogger(__name__)
 
@@ -1184,7 +1185,14 @@ def _evaluate_alert_buffer(node_id, info):
             f' | consensus={csize} gateway copies, dissent={dsize}'
             f' | best.gateway={best_rep["gateway_id"]}'
         )
-        if getattr(config, 'ALERT_ENABLED', False):
+        if storage.is_movement_muted(node_id):
+            # Detection stands (the [ALERT_FIRE] record above is the audit trail);
+            # only the email is suppressed while an admin mute is active.
+            logger.warning(
+                f'[ALERT_MUTED] {ts} | node {node_id} | movement email suppressed (admin mute)'
+                f' | packet_id={best_pid} | distance={int(best_rep["distance_m"])}m'
+            )
+        elif getattr(config, 'ALERT_ENABLED', False):
             try:
                 alerts.send_movement_alert(node_id, nodes_data.get(node_id, {}), best_rep['distance_m'])
             except Exception as alert_err:
@@ -1202,6 +1210,36 @@ def _evaluate_alert_buffer(node_id, info):
             f' | dissent={dsize} copies (one claimed {int(most_far["distance_m"])}m)'
             f' | suspected single-gateway mutation'
         )
+
+
+# Auto-unmute on homecoming (PROPOSAL_V2.0.md §2): a muted node that reports
+# _HOMECOMING_UNMUTE_COUNT consecutive distinct in-home broadcasts clears its
+# own mute — being re-moored is the natural end of a maintenance window.
+# Gateway copies of the same broadcast share a packet_id and count once.
+_HOMECOMING_UNMUTE_COUNT = 3
+_homecoming_progress = {}  # node_id -> {'count': int, 'last_packet_id': int}
+
+
+def _update_homecoming(node_id, packet_id, moved_far):
+    """Track consecutive in-home broadcasts for muted nodes; auto-unmute at N."""
+    if not storage.is_movement_muted(node_id):
+        _homecoming_progress.pop(node_id, None)
+        return
+    if moved_far:
+        _homecoming_progress.pop(node_id, None)
+        return
+    prog = _homecoming_progress.get(node_id)
+    if prog and packet_id is not None and prog.get('last_packet_id') == packet_id:
+        return  # another gateway copy of the same broadcast — already counted
+    count = (prog['count'] if prog else 0) + 1
+    if count >= _HOMECOMING_UNMUTE_COUNT:
+        _homecoming_progress.pop(node_id, None)
+        storage.set_movement_muted(node_id, False, note='auto-unmute: homecoming')
+        logger.warning(
+            f'[MUTE] node {node_id} auto-unmuted after {count} consecutive in-home broadcasts'
+        )
+    else:
+        _homecoming_progress[node_id] = {'count': count, 'last_packet_id': packet_id}
 
 
 def on_position(json_data):
@@ -1284,6 +1322,13 @@ def on_position(json_data):
                         nodes_data[node_id]["distance_from_origin_m"] = dist
                         threshold_m = getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0)
                         moved_far = bool(dist is not None and dist >= threshold_m)
+
+                        # Auto-unmute check: muted nodes seen back home clear
+                        # their own mute after enough distinct broadcasts.
+                        try:
+                            _update_homecoming(node_id, json_data.get('id'), moved_far)
+                        except Exception as hc_err:
+                            logger.error(f'Homecoming check failed for {node_id}: {hc_err}')
 
                         # Alert decision is BUFFERED, not immediate.
                         # Each received copy (far OR close) is appended to a per-node
@@ -2349,6 +2394,7 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         "age_min": int(time_since_seen / 60),
         "moved_far": data.get("moved_far", False),
         "distance_from_origin_m": data.get("distance_from_origin_m"),
+        "movement_alerts_muted": storage.is_movement_muted(node_id) if is_special else False,
         "voltage": _get_node_voltage(node_id),
         "rx_rssi": data.get("rx_rssi"),
         "rx_snr": data.get("rx_snr"),
