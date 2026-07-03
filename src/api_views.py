@@ -110,8 +110,6 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         "distance_from_origin_m": data.get("distance_from_origin_m"),
         "movement_alerts_muted": storage.is_movement_muted(node_id) if is_special else False,
         "voltage": mh._get_node_voltage(node_id),
-        "rx_rssi": data.get("rx_rssi"),
-        "rx_snr": data.get("rx_snr"),
     }
 
     # Add power current for special (power-sensor) nodes
@@ -187,8 +185,6 @@ def _build_gateway_only_node(gateway_id, current_time):
         "distance_from_origin_m": None,
         "voltage": None,
         "power_current": None,
-        "rx_rssi": gw_info.get("rssi"),
-        "rx_snr": gw_info.get("snr"),
         "is_gateway": True,
         "gateway_connections": [],
         "reliability_score": cached_reliability.get("score", 0),
@@ -235,7 +231,7 @@ def get_special_history(node_id: int, hours: int = None):
     so clients never need to recompute percentages.
 
     Returns:
-        List of dicts: {ts, lat, lon, alt, voltage, battery_pct, rssi, snr}
+        List of dicts: {ts, lat, lon, alt, voltage, battery_pct}
     """
     hours = hours or getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
     cutoff = time.time() - (hours * 3600)
@@ -254,8 +250,6 @@ def get_special_history(node_id: int, hours: int = None):
             'alt': e.get('alt'),
             'voltage': v,
             'battery_pct': mh._estimate_battery_from_voltage(v) if v is not None else None,
-            'rssi': e.get('rssi'),
-            'snr': e.get('snr'),
         })
     return result
 
@@ -312,8 +306,6 @@ def get_all_gateways():
                 "longitude": node_info.get("longitude"),
                 "is_online": bool(node_info.get("last_seen")),
                 "last_seen_ts": node_info.get("last_seen"),
-                "signal_strength": node_info.get("rx_rssi"),
-                "snr": node_info.get("rx_snr"),
                 "receiving_from": [],
             }
     

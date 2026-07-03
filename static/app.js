@@ -115,13 +115,6 @@
         lines.push('Battery: ' + batteryStr);
       }
 
-      // Signal quality
-      if (point.rssi !== null && point.rssi !== undefined) {
-        lines.push('RSSI: ' + point.rssi + ' dBm');
-      }
-      if (point.snr !== null && point.snr !== undefined) {
-        lines.push('SNR: ' + (Math.round(point.snr * 10) / 10) + ' dB');
-      }
 
       return lines.join('<br>');
     }
@@ -236,46 +229,7 @@
       return {color: color, text: text};
     }
 
-    /**
-     * Calculate signal strength (RSSI) traffic light color and text
-     * @param {number} rssi - Signal strength in dBm (e.g. -70)
-     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '-70dBm'|'?'}
-     */
-    function getRssiStatus(rssi) {
-      if (rssi == null) return {color: 'gray', text: '?'};
-      var color = rssi > rssiGreenThreshold ? 'green' : rssi > rssiYellowThreshold ? 'yellow' : 'red';
-      var text = rssi + 'dBm';
-      return {color: color, text: text};
-    }
 
-    /**
-     * Calculate signal-to-noise ratio (SNR) traffic light color and text
-     * @param {number} snr - SNR in dB
-     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '5.2dB'|'?'}
-     */
-    function getSnrStatus(snr) {
-      if (snr == null) return {color: 'gray', text: '?'};
-      var color = snr > snrGreenThreshold ? 'green' : snr > snrYellowThreshold ? 'yellow' : 'red';
-      var text = Math.round(snr * 10) / 10 + 'dB';
-      return {color: color, text: text};
-    }
-
-    /**
-     * Build a single traffic light indicator HTML
-     * @param {string} tooltip - Tooltip text
-     * @param {string} color - Traffic light color name
-     * @param {string} text - Display text below dot
-     * @returns {string} HTML string for indicator
-     */
-    function buildIndicator(tooltip, color, text) {
-      return '<div style="text-align:center;font-size:0.7em;">' +
-             '<div class="traffic-light-dot" data-tooltip="' + tooltip + '">' +
-             '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' +
-             trafficLightColor(color) +
-             ';border:1px solid #888;cursor:help;"></span></div>' +
-             '<div style="margin-top:2px;color:#666;min-height:12px;line-height:1.2;">' + text + '</div>' +
-             '</div>';
-    }
 
     /**
      * Build map marker popup HTML for a node
@@ -343,9 +297,7 @@
             var snConnection = specialNodesReceivingViaThis[snrIdx];
             var bestMarker = snConnection.is_best ? ' ⭐' : '';
             var hopInfo = snConnection.hops_traveled !== null ? ' (' + snConnection.hops_traveled + 'h)' : '';
-            var rssiStr = snConnection.rssi !== undefined ? ' ' + snConnection.rssi + 'dBm' : '';
-            var snrStr = snConnection.snr !== undefined ? ' SNR:' + snConnection.snr.toFixed(1) : '';
-            popup += '<br>├─ ' + escapeHtml(snConnection.name) + hopInfo + rssiStr + snrStr + bestMarker;
+            popup += '<br>├─ ' + escapeHtml(snConnection.name) + hopInfo + bestMarker;
           }
         }
       }
@@ -384,10 +336,9 @@
           var gwConn = node.gateway_connections[gwPopupIdx];
           var isBest = node.best_gateway && node.best_gateway.id === gwConn.id;
           var bestMarker = isBest ? ' ⭐' : '';
-          var rssiStr = gwConn.rssi !== undefined ? ' RSSI:' + gwConn.rssi + 'dBm' : '';
-          var snrStr = gwConn.snr !== undefined ? ' SNR:' + gwConn.snr.toFixed(2) + 'dB' : '';
+
           var noPos = (gwConn.lat == null || gwConn.lon == null) ? ' 📍?' : '';
-          popup += '<br>├─ ' + escapeHtml(gwConn.name) + rssiStr + snrStr + noPos + bestMarker;
+          popup += '<br>├─ ' + escapeHtml(gwConn.name) + noPos + bestMarker;
         }
       }
 
@@ -502,14 +453,7 @@
           }, JSON.stringify({show_gateways: newValue}));
 
           // Update legend visibility
-          var legendRSSI = document.getElementById('legendRSSI');
-          var legendSNR = document.getElementById('legendSNR');
           var trafficLightLegend = document.getElementById('trafficLightLegend');
-          if (legendRSSI) legendRSSI.style.display = newValue ? 'block' : 'none';
-          if (legendSNR) legendSNR.style.display = newValue ? 'block' : 'none';
-          if (trafficLightLegend) {
-            trafficLightLegend.style.gridTemplateColumns = newValue ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
-          }
           updateLegendVisibility();
           updateNodes();
         };
@@ -1061,10 +1005,6 @@
   var solOrangeThreshold = 21600; // default: 6 hours
   
   // Signal quality thresholds
-  var rssiGreenThreshold = -90; // dBm
-  var rssiYellowThreshold = -110; // dBm
-  var snrGreenThreshold = 5.0; // dB
-  var snrYellowThreshold = -5.0; // dB
   
   var specialMovementThreshold = 50; // default: 50m (will be overwritten by config from API)
   
@@ -1094,18 +1034,6 @@
               }
               if (data.config.sol_orange_threshold) {
                 solOrangeThreshold = data.config.sol_orange_threshold;
-              }
-              if (data.config.rssi_green_threshold) {
-                rssiGreenThreshold = data.config.rssi_green_threshold;
-              }
-              if (data.config.rssi_yellow_threshold) {
-                rssiYellowThreshold = data.config.rssi_yellow_threshold;
-              }
-              if (data.config.snr_green_threshold) {
-                snrGreenThreshold = data.config.snr_green_threshold;
-              }
-              if (data.config.snr_yellow_threshold) {
-                snrYellowThreshold = data.config.snr_yellow_threshold;
               }
               if (data.config.special_movement_threshold) {
                 specialMovementThreshold = data.config.special_movement_threshold;
@@ -1193,14 +1121,7 @@
           appFeatures = data.features;
           console.log('[FEATURES] Loaded from server:', appFeatures);
           // Update legend visibility based on show_gateways
-          var legendRSSI = document.getElementById('legendRSSI');
-          var legendSNR = document.getElementById('legendSNR');
           var trafficLightLegend = document.getElementById('trafficLightLegend');
-          if (legendRSSI) legendRSSI.style.display = appFeatures.show_gateways ? 'block' : 'none';
-          if (legendSNR) legendSNR.style.display = appFeatures.show_gateways ? 'block' : 'none';
-          if (trafficLightLegend) {
-            trafficLightLegend.style.gridTemplateColumns = appFeatures.show_gateways ? 'repeat(6, 1fr)' : 'repeat(4, 1fr)';
-          }
           // Initialize control menu checkboxes immediately
           // show_all_nodes removed - now config-only setting
           if (document.getElementById('showGatewaysInput')) {
@@ -1273,20 +1194,12 @@
     }
   };
 
-  // Toggle sidebar visibility on mobile
-  window.toggleSidebar = function(){
+  // v2.0 bottom sheet: expand/collapse the fleet list on mobile
+  window.toggleSheet = function(){
     var sidebar = document.getElementById('sidebar');
-    var overlay = document.getElementById('sidebar-overlay');
-    if (sidebar) {
-      if (sidebar.classList.contains('visible')) {
-        sidebar.classList.remove('visible');
-        if (overlay) overlay.style.display = 'none';
-      } else {
-        sidebar.classList.add('visible');
-        if (overlay && window.innerWidth <= 768) overlay.style.display = 'block';
-      }
-    }
+    if (sidebar) sidebar.classList.toggle('expanded');
   };
+  window.toggleSidebar = window.toggleSheet;  // legacy name still used by stubs
 
   // Attach event listeners to traffic light dots for JavaScript-based tooltips
   function createTooltipElements() {
@@ -1337,14 +1250,14 @@
     if (window.innerWidth <= 768) {  // Only on mobile
       var sidebar = document.getElementById('sidebar');
       var overlay = document.getElementById('sidebar-overlay');
-      if (sidebar && sidebar.classList.contains('visible')) {
+      if (sidebar && sidebar.classList.contains('expanded')) {
         // If touch is outside sidebar and not on FAB/menu buttons, close sidebar
         if (!sidebar.contains(e.target) &&
             e.target.id !== 'menu-fab' &&
             e.target.id !== 'menu-btn' &&
             !e.target.closest('#menu-fab') &&
             !e.target.closest('#menu-btn')) {
-          sidebar.classList.remove('visible');
+          sidebar.classList.remove('expanded');
           if (overlay) overlay.style.display = 'none';
         }
       }
@@ -1421,164 +1334,65 @@
 
 
   function buildSignalHistogramSVG(historyPoints) {
-    /**
-     * SVG line chart of voltage, RSSI, and SNR over time.
-     * historyPoints: array of {ts, voltage, battery_pct, rssi, snr} (server-provided)
-     */
+    // Battery-voltage line chart (RSSI/SNR removed in v2.0).
+    // historyPoints: [{ts, voltage, battery_pct}] from the server.
     if (!historyPoints || historyPoints.length === 0) {
-      return '<div style="padding: 10px; color: #999; text-align: center;">No signal history yet</div>';
+      return '<div style="padding:10px;color:var(--ink-2);text-align:center;">No battery history yet</div>';
     }
-
-    // Aggregate by 1-minute window: best RSSI/SNR, most recent voltage/battery_pct
-    var oneMinute = 60;
-    var aggregatedData = {};
+    var byMinute = {};
     for (var i = 0; i < historyPoints.length; i++) {
       var p = historyPoints[i];
-      var minuteKey = Math.floor(p.ts / oneMinute);
-      if (!aggregatedData[minuteKey]) {
-        aggregatedData[minuteKey] = {
-          ts: p.ts,
-          voltage: p.voltage,
-          battery_pct: p.battery_pct,
-          rssi: p.rssi,
-          snr: p.snr,
-          count: 1
-        };
+      if (p.voltage == null) continue;
+      var key = Math.floor(p.ts / 60);
+      if (!byMinute[key]) {
+        byMinute[key] = { ts: p.ts, voltage: p.voltage, battery_pct: p.battery_pct, count: 1 };
       } else {
-        if (p.rssi != null && (aggregatedData[minuteKey].rssi == null || p.rssi > aggregatedData[minuteKey].rssi)) {
-          aggregatedData[minuteKey].rssi = p.rssi;
+        byMinute[key].count++;
+        if (p.ts >= byMinute[key].ts) {
+          byMinute[key].ts = p.ts;
+          byMinute[key].voltage = p.voltage;
+          byMinute[key].battery_pct = p.battery_pct;
         }
-        if (p.snr != null && (aggregatedData[minuteKey].snr == null || p.snr > aggregatedData[minuteKey].snr)) {
-          aggregatedData[minuteKey].snr = p.snr;
-        }
-        if (p.voltage != null && (aggregatedData[minuteKey].voltage == null || p.ts >= aggregatedData[minuteKey].ts)) {
-          aggregatedData[minuteKey].voltage = p.voltage;
-          aggregatedData[minuteKey].battery_pct = p.battery_pct;
-          aggregatedData[minuteKey].ts = p.ts;
-        }
-        aggregatedData[minuteKey].count++;
       }
     }
-    // Convert to sorted array
-    var plotData = Object.keys(aggregatedData).map(function(key) { return aggregatedData[key]; }).sort(function(a, b) { return a.ts - b.ts; });
-    
-    // Responsive sizing: compact, similar to card size
-    // Match actual card dimensions (~280px wide, ~150px tall for content)
-    var containerWidth = window.innerWidth * 0.85;
-    var width = Math.min(containerWidth, 280);
-    var height = 100; // Very compact
-    var padding = 22;
-    var plotWidth = width - padding * 2;
-    var plotHeight = height - padding * 2;
-    
-    // Get time range from actual data (show all available data points)
-    var minTime = Math.min.apply(null, plotData.map(function(p) { return p.ts; }));
-    var maxTime = Math.max.apply(null, plotData.map(function(p) { return p.ts; }));
-    var startTime = minTime;
-    var timeSpan = Math.max(1, maxTime - minTime); // At least 1 second to avoid division by zero
-    
-    // Normalize values to 0-100 scale for plotting
-    // Battery: 0-100 (already percentage)
-    // RSSI: -120 to -50 (map to 0-100, higher = better)
-    // SNR: -20 to 10 (map to 0-100, higher = better)
-    
-    var scaleX = function(ts) {
-      return padding + ((ts - startTime) / timeSpan) * plotWidth;
+    var plotData = Object.keys(byMinute).map(function(k){ return byMinute[k]; }).sort(function(a, b){ return a.ts - b.ts; });
+    if (!plotData.length) {
+      return '<div style="padding:10px;color:var(--ink-2);text-align:center;">No battery history yet</div>';
+    }
+    var width = Math.min(window.innerWidth * 0.85, 300), height = 110, padding = 24;
+    var plotWidth = width - padding * 2, plotHeight = height - padding * 2;
+    var minTime = plotData[0].ts;
+    var timeSpan = Math.max(1, plotData[plotData.length - 1].ts - minTime);
+    var scaleX = function(ts){ return padding + ((ts - minTime) / timeSpan) * plotWidth; };
+    var scaleY = function(v){
+      var n = Math.max(0, Math.min(1, (v - 2.8) / (4.3 - 2.8)));
+      return padding + plotHeight - n * plotHeight;
     };
-    
-    var scaleY = function(val, min, max) {
-      var normalized = (val - min) / (max - min);
-      normalized = Math.max(0, Math.min(1, normalized));
-      return padding + plotHeight - (normalized * plotHeight);
-    };
-    
-    // Build SVG with explicit CSS to constrain size
-    var svg = '<svg width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" style="border: 1px solid #ddd; font-family: monospace; font-size: 11px; max-width: 100%; height: auto; display: block;">';
-    
-    // Background
-    svg += '<rect width="' + width + '" height="' + height + '" fill="#fafafa"/>';
-    
-    // Grid lines
-    for (var i = 0; i <= 4; i++) {
-      var y = padding + (plotHeight / 4) * i;
-      svg += '<line x1="' + padding + '" y1="' + y + '" x2="' + (width - padding) + '" y2="' + y + '" stroke="#eee" stroke-width="1"/>';
+    var svg = '<svg width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" style="max-width:100%;height:auto;display:block;font-family:ui-monospace,monospace;font-size:10px;">';
+    svg += '<rect width="' + width + '" height="' + height + '" fill="var(--panel-2)" rx="6"/>';
+    var marks = [4.2, 3.8, 3.4, 3.0];
+    for (var g = 0; g < marks.length; g++) {
+      var gy = scaleY(marks[g]);
+      svg += '<line x1="' + padding + '" y1="' + gy + '" x2="' + (width - padding) + '" y2="' + gy + '" stroke="var(--line)" stroke-width="1"/>';
+      svg += '<text x="2" y="' + (gy + 3) + '" fill="var(--ink-2)">' + marks[g].toFixed(1) + '</text>';
     }
-    
-    // Plot lines for each metric
-    var batteryPoints = '', rssiPoints = '', snrPoints = '';
-    for (var i = 0; i < plotData.length; i++) {
-      var p = plotData[i];
-      var x = scaleX(p.ts);
-      
-      // Voltage line (green) — always voltage now, 2.8–4.3V range
-      if (p.voltage != null) {
-        var batY = scaleY(p.voltage, 2.8, 4.3);
-        batteryPoints += (i === 0 ? 'M' : 'L') + x + ',' + batY + ' ';
-      }
-      
-      // RSSI (blue line, -120 to -50)
-      if (p.rssi != null) {
-        var rssiY = scaleY(p.rssi, -120, -50);
-        rssiPoints += (i === 0 ? 'M' : 'L') + x + ',' + rssiY + ' ';
-      }
-      
-      // SNR (purple line, -20 to 10)
-      if (p.snr != null) {
-        var snrY = scaleY(p.snr, -20, 10);
-        snrPoints += (i === 0 ? 'M' : 'L') + x + ',' + snrY + ' ';
-      }
+    var path = '';
+    for (var j = 0; j < plotData.length; j++) {
+      path += (j === 0 ? 'M' : 'L') + scaleX(plotData[j].ts) + ',' + scaleY(plotData[j].voltage) + ' ';
     }
-    
-    // Draw lines
-    if (batteryPoints) svg += '<path d="' + batteryPoints + '" stroke="#4CAF50" stroke-width="2" fill="none"/>';
-    if (rssiPoints) svg += '<path d="' + rssiPoints + '" stroke="#2196F3" stroke-width="2" fill="none"/>';
-    if (snrPoints) svg += '<path d="' + snrPoints + '" stroke="#9C27B0" stroke-width="2" fill="none"/>';
-    
-    // Add hover circles and tooltips for each point
-    for (var i = 0; i < plotData.length; i++) {
-      var p = plotData[i];
-      var x = scaleX(p.ts);
-      var dateStr = new Date(p.ts * 1000).toLocaleString();
-      
-      var tooltipLines = [];
-      var batteryStr = formatBattery(p.voltage, p.battery_pct);
-      if (batteryStr) {
-        tooltipLines.push('Battery: ' + batteryStr);
-      }
-      if (p.rssi != null) tooltipLines.push('RSSI: ' + p.rssi + 'dBm');
-      if (p.snr != null) tooltipLines.push('SNR: ' + (Math.round(p.snr * 10) / 10) + 'dB');
-      if (p.count > 1) tooltipLines.push('(' + p.count + ' samples)');
-      tooltipLines.push(dateStr);
-      
-      var tooltipText = tooltipLines.join('\n');
-      
-      // Large hover area rectangle (invisible, for better hover detection)
-      svg += '<rect cx="' + x + '" cy="' + (padding + plotHeight / 2) + '" x="' + (x - 8) + '" y="' + (padding - 5) + '" width="16" height="' + (plotHeight + 10) + '" fill="transparent" style="cursor:pointer;" class="histogram-hover" data-tooltip="' + tooltipText.replace(/"/g, '&quot;') + '"/>';
-      
-      if (p.voltage != null) {
-        var batY = scaleY(p.voltage, 2.8, 4.3);
-        svg += '<circle cx="' + x + '" cy="' + batY + '" r="3" fill="#4CAF50" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
-      }
-      
-      // RSSI point
-      if (p.rssi != null) {
-        var rssiY = scaleY(p.rssi, -120, -50);
-        svg += '<circle cx="' + x + '" cy="' + rssiY + '" r="3" fill="#2196F3" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
-      }
-      
-      // SNR point
-      if (p.snr != null) {
-        var snrY = scaleY(p.snr, -20, 10);
-        svg += '<circle cx="' + x + '" cy="' + snrY + '" r="3" fill="#9C27B0" opacity="0.7" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tooltipText + '"/>';
-      }
+    svg += '<path d="' + path + '" stroke="var(--good)" stroke-width="2" fill="none"/>';
+    for (var k = 0; k < plotData.length; k++) {
+      var q = plotData[k];
+      var x = scaleX(q.ts), y = scaleY(q.voltage);
+      var tip = 'Battery: ' + (formatBattery(q.voltage, q.battery_pct) || '?');
+      if (q.count > 1) tip += '\n(' + q.count + ' samples)';
+      tip += '\n' + new Date(q.ts * 1000).toLocaleString();
+      var tipAttr = tip.replace(/"/g, '&quot;');
+      svg += '<rect x="' + (x - 8) + '" y="' + (padding - 5) + '" width="16" height="' + (plotHeight + 10) + '" fill="transparent" style="cursor:pointer;" class="histogram-hover" data-tooltip="' + tipAttr + '"/>';
+      svg += '<circle cx="' + x + '" cy="' + y + '" r="3" fill="var(--good)" opacity="0.85" style="cursor:pointer;" class="histogram-point" data-tooltip="' + tipAttr + '"/>';
     }
-    
-    svg += '<text x="' + padding + '" y="' + (height - 5) + '" fill="#4CAF50" font-weight="bold" font-size="12px">● Voltage</text>';
-    svg += '<text x="' + (padding + 70) + '" y="' + (height - 5) + '" fill="#2196F3" font-weight="bold" font-size="12px">● RSSI</text>';
-    svg += '<text x="' + (padding + 140) + '" y="' + (height - 5) + '" fill="#9C27B0" font-weight="bold" font-size="12px">● SNR</text>';
-    
+    svg += '<text x="' + padding + '" y="' + (height - 4) + '" fill="var(--good)" font-weight="bold">● Battery voltage</text>';
     svg += '</svg>';
-    
     return svg;
   }
 
@@ -1605,100 +1419,127 @@
     return container;
   }
 
+  // ---- v2.0 card: headline state word + labeled chips ----
+  function nodeAttentionRank(node) {
+    // Lower rank sorts first: problems surface without scrolling
+    if (node.is_special) {
+      if (node.moved_far && !node.movement_alerts_muted) return 0;
+      var quiet = node.last_seen != null ? (Date.now() / 1000 - node.last_seen) : null;
+      if (node.stale || (quiet != null && quiet > solOrangeThreshold)) return 1;
+      if (!node.has_fix) return 2;
+      if (node.movement_alerts_muted) return 4;
+      return 3;
+    }
+    return 5;
+  }
+
+  function nodeHeadlineState(node) {
+    var d = node.distance_from_origin_m;
+    var dist = (d == null || isNaN(d)) ? '' : Math.round(d) + ' m from home';
+    if (node.is_special) {
+      if (node.movement_alerts_muted) return { cls: 'muted-s', word: 'Muted 🔕', detail: dist };
+      if (node.moved_far) return { cls: 'moved', word: 'Moved', detail: dist };
+      if (!node.has_fix) return { cls: 'nofix', word: 'No GPS yet', detail: '' };
+      var quietFor = node.last_seen != null ? (Date.now() / 1000 - node.last_seen) : null;
+      if (node.stale || (quietFor != null && quietFor > solOrangeThreshold)) {
+        return { cls: 'stale', word: 'Stale', detail: 'quiet ' + formatTimeAgo(node.last_seen) };
+      }
+      return { cls: 'ok', word: 'On station', detail: dist };
+    }
+    if (node.stale || node.status === 'red') return { cls: 'stale', word: 'Stale', detail: 'heard ' + formatTimeAgo(node.last_seen) };
+    return { cls: 'ok', word: 'Relaying', detail: 'heard ' + formatTimeAgo(node.last_seen) };
+  }
+
+  function chipHtml(label, value, color) {
+    var led = color === 'green' ? 'g' : color === 'yellow' ? 'y' : color === 'red' ? 'r' : 'n';
+    return '<span class="chip' + (color === 'red' ? ' alert-led' : '') + '">' +
+           '<span class="led ' + led + '"></span>' +
+           '<span class="lbl">' + label + '</span><b>' + value + '</b></span>';
+  }
+
+  // Cached /api/special/history/batch response, refreshed with the trails poll
+  var sparklineHistory = {};
+
+  function buildBatterySparkline(nodeId) {
+    // Tiny inline voltage trend on the card; tap the card's history button
+    // for the full chart. Uses data already fetched for the trails — no
+    // extra requests.
+    var data = sparklineHistory[String(nodeId)];
+    var pts = (data && data.points) ? data.points.filter(function(p){ return p.voltage != null; }) : [];
+    if (pts.length < 2) return '';
+    var w = 84, h = 20, pad = 2;
+    var t0 = pts[0].ts, span = Math.max(1, pts[pts.length - 1].ts - t0);
+    var line = '';
+    for (var i = 0; i < pts.length; i++) {
+      var x = pad + ((pts[i].ts - t0) / span) * (w - 2 * pad);
+      var n = Math.max(0, Math.min(1, (pts[i].voltage - 2.8) / (4.3 - 2.8)));
+      var y = (h - pad) - n * (h - 2 * pad);
+      line += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
+    }
+    var last = pts[pts.length - 1];
+    var lx = pad + ((last.ts - t0) / span) * (w - 2 * pad);
+    var ln = Math.max(0, Math.min(1, (last.voltage - 2.8) / (4.3 - 2.8)));
+    var ly = (h - pad) - ln * (h - 2 * pad);
+    return '<svg class="sparkline" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true">' +
+           '<path d="' + line + '" fill="none" stroke="var(--good)" stroke-width="1.5" opacity="0.85"/>' +
+           '<circle cx="' + lx.toFixed(1) + '" cy="' + ly.toFixed(1) + '" r="2" fill="var(--good)"/>' +
+           '</svg>';
+  }
+
   function buildNodeCard(node){
-    // Clickable if: has position data, OR is special node with home location
     var clickable = (node.lat != null && node.lon != null) || (node.is_special && node.origin_lat != null && node.origin_lon != null);
-    
-    // Display name: Use long name if available, fallback to special_label for special nodes, otherwise show node ID
+
     var displayName = node.name;
     if (!displayName || displayName === 'Unknown') {
-      if (node.is_special && node.special_label) {
-        // For special nodes, use the configured label from tracker.config
-        displayName = node.special_label;
-      } else {
-        // For all other nodes without a name, show the node ID in decimal
-        displayName = String(node.id);
-      }
+      displayName = (node.is_special && node.special_label) ? node.special_label : String(node.id);
     }
-    
-    // Compact header: name with signal history button (only for special nodes)
-    var specialSymbol = '';
-    if (node.is_special && node.special_symbol) {
-      specialSymbol = '<span style="margin-right:4px;font-size:1.2em;">' + node.special_symbol + '</span>';
-    } else if (node.is_gateway) {
-      // Gateway nodes get a different symbol: antenna/tower icon
-      specialSymbol = '<span style="margin-right:4px;font-size:1.2em;">📡</span>';
-    }
-    var historyButton = '';
+
+    var muteBadge = (node.is_special && node.movement_alerts_muted)
+      ? '<span class="mutebadge" title="Movement alerts muted">🔕</span>' : '';
+
+    var actionBtn = '';
     if (node.is_special) {
-      historyButton = '<button onclick="showNodeDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" style="background:none;border:none;font-size:1.1em;cursor:pointer;padding:2px 4px;color:#1976D2;opacity:0.7;transition:opacity 0.2s;" title="View signal history">📊</button>';
+      actionBtn = '<button class="iconbtn" onclick="event.stopPropagation();showNodeDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" title="Battery history">▁▃▅</button>';
     } else if (node.is_gateway) {
-      // Gateway nodes get a "View details" button to show which special nodes they receive from
-      historyButton = '<button onclick="showGatewayDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" style="background:none;border:none;font-size:1.1em;cursor:pointer;padding:2px 4px;color:#4CAF50;opacity:0.7;transition:opacity 0.2s;" title="View gateway details">ℹ️</button>';
+      actionBtn = '<button class="iconbtn" onclick="event.stopPropagation();showGatewayDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" title="Gateway details">ℹ️</button>';
     }
-    var muteBadge = '';
-    if (node.is_special && node.movement_alerts_muted) {
-      muteBadge = '<span title="Movement alerts muted" style="font-size:1.0em;">🔕</span>';
-    }
-    var header = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
-                 specialSymbol +
+
+    var header = '<div class="toprow">' +
                  '<div class="node-name">' + escapeHtml(displayName) + '</div>' +
-                 muteBadge +
-                 historyButton +
-                 '</div>';
+                 muteBadge + actionBtn + '</div>';
 
-    var bat = node.battery_pct != null ? node.battery_pct : null;
-    var voltage = node.voltage != null ? node.voltage : null;
-    var batteryColor = getBatteryColor(bat, voltage);
-    var lpuStatus = getAgeStatus(node.last_position_update, lpuBlueThreshold, lpuOrangeThreshold);
-    var solStatus = getAgeStatus(node.last_seen, solBlueThreshold, solOrangeThreshold);
-    var distStatus = getDistanceStatus(
-      node.is_special ? node.distance_from_origin_m : null,
-      specialMovementThreshold
-    );
+    var st = nodeHeadlineState(node);
+    var statePill = '<div><span class="state ' + st.cls + '">' + st.word +
+                    (st.detail ? ' <small>· ' + st.detail + '</small>' : '') + '</span></div>';
 
-    // For special nodes, show gateway signal metrics; for others show node rx metrics
-    var rssiValue = (node.is_special && node.best_gateway) ? node.best_gateway.rssi : node.rx_rssi;
-    var snrValue = (node.is_special && node.best_gateway) ? node.best_gateway.snr : node.rx_snr;
-
-    var rssiStatus = getRssiStatus(rssiValue);
-    var snrStatus = getSnrStatus(snrValue);
-
-    // Build indicators row using helper function
-    var numColumns = appFeatures.show_gateways ? 6 : 4;
-    var indicators = '<div style="display:grid;grid-template-columns:repeat(' + numColumns + ',1fr);gap:8px;margin:6px 0 0 0;">'
-      + buildIndicator('Last Position Update', lpuStatus.color, lpuStatus.text)
-      + (node.is_special ? buildIndicator('Distance from Home', distStatus.color, distStatus.text) : '<div></div>')
-      + buildIndicator('Sign of Life', solStatus.color, solStatus.text)
-      + buildIndicator('Battery Voltage', batteryColor, formatBatteryForCard(voltage, bat));
-
-    // Add RSSI and SNR indicators if show_gateways is enabled
-    if (appFeatures.show_gateways) {
-      indicators += buildIndicator('Signal Strength', rssiStatus.color, rssiStatus.text)
-                  + buildIndicator('Signal-to-Noise Ratio', snrStatus.color, snrStatus.text);
+    var chips = '';
+    if (node.is_special) {
+      var lpu = getAgeStatus(node.last_position_update, lpuBlueThreshold, lpuOrangeThreshold);
+      var sol = getAgeStatus(node.last_seen, solBlueThreshold, solOrangeThreshold);
+      var bat = node.battery_pct != null ? node.battery_pct : null;
+      var voltage = node.voltage != null ? node.voltage : null;
+      var batteryStr = formatBattery(voltage, bat) || '?';
+      chips = '<div class="chips">' +
+              chipHtml('Fix', lpu.text, lpu.color) +
+              chipHtml('Heard', sol.text, sol.color) +
+              chipHtml('Batt', batteryStr, getBatteryColor(bat, voltage)) +
+              buildBatterySparkline(node.id) +
+              '</div>';
     }
 
-    indicators += '</div>';
+    var classes = 'node ' + node.status + (node.is_special ? ' special' : '') + (node.is_gateway && !node.is_special ? ' gateway-node' : '');
+    if (node.is_special && node.moved_far) classes += ' moved-alert';
+    if (node.stale && !node.is_special) classes += ' gray';
 
-    var info = indicators;
-    var extraInfo = '';
-    
-    var classes = 'node ' + node.status + (node.is_special ? ' special' : '');
-    // Add moved-alert class if special node has moved beyond threshold
-    if (node.is_special && node.moved_far) {
-      classes += ' moved-alert';
-    }
     var clickAttr = '';
-    if (clickable) { 
-      // For special nodes with no position data, use home location (origin_lat/origin_lon)
-      var clickLat = node.lat !== null && node.lat !== undefined ? node.lat : node.origin_lat;
-      var clickLon = node.lon !== null && node.lon !== undefined ? node.lon : node.origin_lon;
-      // Ensure we have valid numbers
-      if (clickLat !== null && clickLat !== undefined && clickLon !== null && clickLon !== undefined) {
-        clickAttr = ' onclick="centerNode(' + parseFloat(clickLat) + ',' + parseFloat(clickLon) + ')"'; 
+    if (clickable) {
+      var clickLat = node.lat != null ? node.lat : node.origin_lat;
+      var clickLon = node.lon != null ? node.lon : node.origin_lon;
+      if (clickLat != null && clickLon != null) {
+        clickAttr = ' onclick="centerNode(' + parseFloat(clickLat) + ',' + parseFloat(clickLon) + ')"';
       }
     }
-    return '<div class="' + classes + '"' + clickAttr + '>' + header + '<div class="node-info">' + info + '</div>' + extraInfo + '</div>';
+    return '<div class="' + classes + '"' + clickAttr + '>' + header + statePill + chips + '</div>';
   }
 
   // Stop tooltip items from triggering card click
@@ -1764,11 +1605,12 @@
               else if (list[i].is_gateway) gateway.push(list[i]);
             }
             special.sort(function(a, b) {
-              var nameA = (a.name || '').toLowerCase();
-              var nameB = (b.name || '').toLowerCase();
-              if (nameA < nameB) return -1;
-              if (nameA > nameB) return 1;
-              return 0;
+              // Attention first: Moved / Stale bubble to the top of the list
+              var ra = nodeAttentionRank(a), rb = nodeAttentionRank(b);
+              if (ra !== rb) return ra - rb;
+              var nameA = (a.name || a.special_label || '').toLowerCase();
+              var nameB = (b.name || b.special_label || '').toLowerCase();
+              return nameA < nameB ? -1 : nameA > nameB ? 1 : 0;
             });
             gateway.sort(function(a, b) {
               var nameA = (a.name || '').toLowerCase();
@@ -2067,9 +1909,7 @@
                       }
 
                       // Update popup with gateway info
-                      var rssiStr = gw.rssi !== undefined ? ' RSSI:' + gw.rssi : '';
-                      var snrStr = gw.snr !== undefined ? ' SNR:' + gw.snr.toFixed(2) : '';
-                      var popup = 'Signal: ' + escapeHtml(gw.name) + rssiStr + snrStr;
+                      var popup = 'Gateway: ' + escapeHtml(gw.name);
                       gatewayLines[lineKey].bindPopup(popup);
 
                       // Hover effects
@@ -2091,9 +1931,7 @@
                                          'ID: ' + gw.id + '<br>' +
                                          'Confidence: ' + confidenceTag + '<br>' +
                                          'Reliability Score: ' + reliabilityScore + '/100<br>' +
-                                         'Detections: ' + (gw.detection_count || 'N/A') + '<br>' +
-                                         'RSSI: ' + (gw.rssi || 'N/A') + ' dBm<br>' +
-                                         'SNR: ' + (gw.snr !== undefined ? gw.snr.toFixed(2) : 'N/A') + ' dB';
+                                         'Detections: ' + (gw.detection_count || 'N/A');
 
                       if (!gatewayMarkers[gwMarkerKey]) {
                         gatewayMarkers[gwMarkerKey] = L.circleMarker([gw.lat, gw.lon], {
@@ -2156,6 +1994,8 @@
                   try {
                     var batchData = JSON.parse(xhr2.responseText);
                     var trails_data = batchData.trails || {};
+                    // Cache per-node history so buoy cards can draw battery sparklines
+                    sparklineHistory = trails_data;
 
                     // Process trail history for each special node
                     for(var t=0; t<toMap.length; t++){
@@ -2259,18 +2099,14 @@
             window.connectionLost = false;
               hideConnectionBanner();
             var data2 = JSON.parse(xhr.responseText); 
-            var txt = '❌ Disconnected';
-            if (data2 && data2.mqtt_status === 'receiving_packets') {
-              txt = '✅ Receiving packets';
-            } else if (data2 && data2.mqtt_status === 'stale_data') {
-              txt = '⚠️ No recent packets (stale data)';
-            } else if (data2 && data2.mqtt_status === 'connected_to_server') {
-              txt = '🔗 Connected to server';
-            } else if (data2 && data2.mqtt_status === 'connecting') {
-              txt = '⏳ Connecting...';
-            }
-            console.log('[STATUS] Updated to:', txt);
+            var txt = 'disconnected', pulse = 'down';
+            if (data2 && data2.mqtt_status === 'receiving_packets') { txt = 'mesh live'; pulse = ''; }
+            else if (data2 && data2.mqtt_status === 'stale_data') { txt = 'no recent packets'; pulse = 'warn'; }
+            else if (data2 && data2.mqtt_status === 'connected_to_server') { txt = 'connected'; pulse = ''; }
+            else if (data2 && data2.mqtt_status === 'connecting') { txt = 'connecting…'; pulse = 'warn'; }
             statusEl.textContent = txt;
+            var pulseEl = document.getElementById('mqtt-pulse');
+            if (pulseEl) pulseEl.className = 'pulse' + (pulse ? ' ' + pulse : '');
           } else if (xhr.status === 429) {
             pausePollingForRateLimit();
             statusEl.textContent = '⏸️ Rate limited (paused 60s)';
@@ -2304,8 +2140,8 @@
     // On mobile, close sidebar when clicking a node to show the map
     if (window.innerWidth <= 768) {
       var sidebar = document.getElementById('sidebar');
-      if (sidebar && sidebar.classList.contains('visible')) {
-        sidebar.classList.remove('visible');
+      if (sidebar && sidebar.classList.contains('expanded')) {
+        sidebar.classList.remove('expanded');
         var overlay = document.getElementById('sidebar-overlay');
         if (overlay) overlay.style.display = 'none';
       }
@@ -2544,9 +2380,9 @@
       var sidebar = document.getElementById('sidebar');
       var overlay = document.getElementById('sidebar-overlay');
       
-      if (isMobile && isLandscape && sidebar && sidebar.classList.contains('visible')) {
+      if (isMobile && isLandscape && sidebar && sidebar.classList.contains('expanded')) {
         // Auto-close sidebar in landscape to maximize map view
-        sidebar.classList.remove('visible');
+        sidebar.classList.remove('expanded');
         if (overlay) overlay.style.display = 'none';
       }
       
@@ -2698,13 +2534,10 @@
         var conn = receivingConnections[i];
         var marker = i === 0 ? ' ⭐' : '';
         var hopStr = ' (' + conn.hopsTraveled + ' hop' + (conn.hopsTraveled !== 1 ? 's' : '') + ')';
-        var rssiStr = conn.rssi ? ' RSSI: ' + conn.rssi + ' dBm' : '';
-        var snrStr = (conn.snr !== undefined && conn.snr !== null) ? ' SNR: ' + conn.snr.toFixed(1) + ' dB' : '';
+
         
         details += '├─ <strong>' + conn.nodeName + '</strong>' + marker + '<br>';
         details += '│  ' + hopStr;
-        if (rssiStr) details += ', ' + rssiStr;
-        if (snrStr) details += ', ' + snrStr;
         details += '<br>';
       }
     }
@@ -2732,7 +2565,7 @@
     
     if (!modal) return;
     
-    title.textContent = 'Signal History: ' + nodeName;
+    title.textContent = 'Battery history: ' + nodeName;
     container.innerHTML = '<div style="color:#999;">Loading signal history...</div>';
     modal.style.display = 'flex';
     

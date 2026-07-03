@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS positions (
     lat                  REAL,
     lon                  REAL,
     alt                  REAL,
+    voltage              REAL,
     distance_from_home_m REAL,
     packet_id            INTEGER,
     gateway_id           INTEGER,
@@ -103,6 +104,11 @@ def init(db_path: Union[str, Path, None] = None) -> None:
         _conn = sqlite3.connect(str(path), check_same_thread=False)
         _conn.execute('PRAGMA journal_mode=WAL')
         _conn.executescript(_SCHEMA)
+        # Migration for pre-release dev DBs created before positions.voltage
+        try:
+            _conn.execute('ALTER TABLE positions ADD COLUMN voltage REAL')
+        except sqlite3.OperationalError:
+            pass  # column already exists
         _conn.commit()
         _load_mute_cache_locked()
         _sync_nodes_registry_locked()
@@ -176,17 +182,17 @@ def set_movement_muted(node_id: int, muted: bool, note: Optional[str] = None) ->
 # sense of being single INSERTs under WAL — microseconds at this data rate.
 # ---------------------------------------------------------------------------
 
-def record_position(node_id, ts, lat, lon, alt=None, distance_from_home_m=None,
-                    packet_id=None, gateway_id=None, rssi=None, snr=None,
-                    simulated=False) -> None:
+def record_position(node_id, ts, lat, lon, alt=None, voltage=None,
+                    distance_from_home_m=None, packet_id=None, gateway_id=None,
+                    rssi=None, snr=None, simulated=False) -> None:
     with _lock:
         if _conn is None:
             return
         _conn.execute(
-            'INSERT INTO positions (node_id, ts, lat, lon, alt, distance_from_home_m,'
-            ' packet_id, gateway_id, rssi, snr, simulated)'
-            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (node_id, int(ts), lat, lon, alt, distance_from_home_m,
+            'INSERT INTO positions (node_id, ts, lat, lon, alt, voltage,'
+            ' distance_from_home_m, packet_id, gateway_id, rssi, snr, simulated)'
+            ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (node_id, int(ts), lat, lon, alt, voltage, distance_from_home_m,
              packet_id, gateway_id, rssi, snr, 1 if simulated else 0),
         )
         _conn.commit()
@@ -233,13 +239,14 @@ def get_positions_since(node_id, since_ts, include_simulated=False):
             return []
         sim_clause = '' if include_simulated else ' AND simulated = 0'
         rows = _conn.execute(
-            f'SELECT ts, lat, lon, alt, rssi, snr FROM positions'
+            f'SELECT ts, lat, lon, alt, voltage, rssi, snr FROM positions'
             f' WHERE node_id = ? AND ts >= ?{sim_clause} ORDER BY ts',
             (node_id, int(since_ts)),
         ).fetchall()
     return [
-        {'ts': ts, 'lat': lat, 'lon': lon, 'alt': alt, 'rssi': rssi, 'snr': snr}
-        for ts, lat, lon, alt, rssi, snr in rows
+        {'ts': ts, 'lat': lat, 'lon': lon, 'alt': alt, 'voltage': voltage,
+         'rssi': rssi, 'snr': snr}
+        for ts, lat, lon, alt, voltage, rssi, snr in rows
     ]
 
 

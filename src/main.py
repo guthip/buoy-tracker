@@ -413,10 +413,6 @@ def health_check() -> Response:
             'lpu_orange_threshold': config.LPU_ORANGE_THRESHOLD,
             'sol_blue_threshold': config.SOL_BLUE_THRESHOLD,
             'sol_orange_threshold': config.SOL_ORANGE_THRESHOLD,
-            'rssi_green_threshold': config.RSSI_GREEN_THRESHOLD,
-            'rssi_yellow_threshold': config.RSSI_YELLOW_THRESHOLD,
-            'snr_green_threshold': config.SNR_GREEN_THRESHOLD,
-            'snr_yellow_threshold': config.SNR_YELLOW_THRESHOLD,
             'special_movement_threshold': getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50),
             'low_battery_threshold': getattr(config, 'LOW_BATTERY_THRESHOLD', 50),
             'api_polling_interval': getattr(config, 'API_POLLING_INTERVAL_MS', 10000) // 1000  # Convert ms to seconds

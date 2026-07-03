@@ -1,373 +1,134 @@
-            <style>
-                input[type=number]#trail-hours {
-                    width:10ch;
-                }
-                select#sort-by {
-                    width: 16ch;
-                    min-width: 0;
-                    max-width: 100%;
-                    font-size: inherit;
-                    font-family: inherit;
-                    line-height: 1;
-                    padding: 0 2px;
-                    margin: 0;
-                    box-sizing: content-box;
-                }
-                input[type=number]#trail-hours {
-                    font-size: inherit;
-                }
-                                                /* No custom styles for trail-hours input; use browser defaults */
-            </style>
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <title>{{ app_title }} (v{{ app_version }})</title>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=yes, maximum-scale=5.0">
-    <!-- Cache busting: version {{ app_version }} -->
+    <meta name="color-scheme" content="light dark">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <style>
-        .tab-btn {
-            border: none;
-            background: #f7f7f7;
-            padding: 8px 18px 8px 18px;
-            font-size: 1em;
-            border-top-left-radius: 8px;
-            border-top-right-radius: 8px;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            transition: background 0.2s, color 0.2s, border-bottom 0.2s;
-        }
-        .tab-btn.active.tab-legend,
-        .tab-btn.active.tab-controls {
-            background: #2196F3;
-            color: #fff;
-            border-bottom: 2px solid #2196F3;
-        }
-        .tab-btn:not(.active) {
-            color: #333;
-            background: #f7f7f7;
-            border-bottom: 2px solid transparent;
-        }
-        body { font-family: sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        #map { flex: 1; min-width: 0; min-height: 0; }
-        #sidebar { width: 320px; background: #f5f5f5; padding: 0; transition: transform 0.3s ease-out; display: flex; flex-direction: column; }
-        #sidebar > div:nth-child(1) { flex-shrink: 0; } /* Header stays fixed */
-        #sidebar > div:nth-child(2) { flex-shrink: 0; } /* Status bar stays fixed */
-        #sidebar > div:nth-child(3) { flex-shrink: 0; } /* Progress bar stays fixed */
-        #nodes { flex: 1; overflow-y: auto; } /* Nodes list scrolls */
-        
-        /* Mobile layout: sidebar becomes overlay drawer that slides in from left */
-        @media (max-width: 768px) {
-            body { position: relative; flex-direction: row; overflow: hidden; }
-            #sidebar {
-                position: fixed;
-                left: 0;
-                top: 0;
-                padding-top: env(safe-area-inset-top, 0); /* Respect iOS notch/safe areas */
-                width: 280px;
-                height: 100vh;
-                height: 100dvh;
-                transform: translateX(-280px);  /* Hidden to the left by default */
-                z-index: 1000;
-                box-shadow: 2px 0 10px rgba(0,0,0,0.2);
-                background: #f5f5f5;
-                flex-direction: column;
-                overflow: hidden; /* Prevent sidebar itself from scrolling */
-                transition: transform 0.3s ease-out;
-                will-change: transform;
-                box-sizing: border-box;
-            }
-            #sidebar > div:nth-child(1) { flex-shrink: 0; } /* Header stays fixed in drawer */
-            #sidebar > div:nth-child(2) { flex-shrink: 0; } /* Status bar stays fixed in drawer */
-            #sidebar > div:nth-child(3) { flex-shrink: 0; } /* Progress bar stays fixed in drawer */
-            #sidebar > div:nth-child(4) { flex-shrink: 0; } /* Traffic light legend stays fixed */
-            #nodes {
-                flex: 1;
-                overflow-y: scroll; /* Use scroll instead of auto for iOS */
-                -webkit-overflow-scrolling: touch;
-                overscroll-behavior: contain; /* Prevent scroll chaining */
-                min-height: 0; /* Critical for flex child scrolling */
-            }
-            #sidebar.visible {
-                transform: translateX(0);
-                pointer-events: auto;
-            }
-            #sidebar:not(.visible) {
-                pointer-events: none;
-            }
-            #map {
-                width: 100%;
-                height: 100vh;
-                height: 100dvh;
-                z-index: 1;
-                position: relative;
-                min-width: 0;
-                min-height: 0;
-            }
-        }
-        
-        .node { padding: 8px; margin: 5px 8px; background: white; cursor: pointer; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .node.gray { color: #555; background: #f0f0f0; }
-        .node.moved-alert { background-color: #ffcdd2; }  /* Darker light red background for moved nodes */
-        .node-name { font-weight: bold; font-size: 0.95em; }
-        .node-info { font-size: 0.8em; color: #666; margin-top: 3px; line-height: 1.4; }
-        
-        /* Custom tooltip styles for Safari compatibility */
-        .tooltip-item { 
-            position: relative; 
-            display: inline-block;
-            cursor: help;
-            border-bottom: 1px dotted #999;
-        }
-        .tooltip-item:hover { 
-            border-bottom-color: #666; 
-        }
-        .tooltip-item .tooltip-balloon {
-            visibility: hidden;
-            opacity: 0;
-            position: absolute;
-            z-index: 1000;
-            bottom: 125%;
-            left: 0;
-            background-color: rgba(0, 0, 0, 0.9);
-            color: #fff;
-            text-align: left;
-            padding: 6px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            white-space: nowrap;
-            transition: opacity 0.2s, visibility 0.2s;
-            pointer-events: none;
-        }
-        .tooltip-item .tooltip-balloon::after {
-            content: "";
-            position: absolute;
-            top: 100%;
-            left: 15px;
-            margin-left: -5px;
-            border-width: 5px;
-            border-style: solid;
-            border-color: rgba(0, 0, 0, 0.9) transparent transparent transparent;
-        }
-        .tooltip-item:hover .tooltip-balloon {
-            visibility: visible;
-            opacity: 1;
-        }
-        
-        .node-extra { font-size: 0.75em; color: #888; margin-top: 2px; padding-top: 3px; border-top: 1px solid #eee; }
-        
-        #status-bar { padding: 8px 10px; background: #1976D2; color: white; display: flex; justify-content: space-between; align-items: center; }
-        #status-bar strong { font-size: 0.9em; }
-        #menu-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 3px 8px; cursor: pointer; border-radius: 3px; font-size: 0.75em; }
-        #menu-btn:hover { background: rgba(255,255,255,0.3); }
-        
-        /* Modal popup styles */
-        #menu-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); overflow: auto; -webkit-overflow-scrolling: touch; }
-        #menu-modal.open { display: flex; align-items: center; justify-content: center; }
-        #menu-panel { background: white; border-radius: 8px; padding: 20px; max-width: 340px; width: 90%; max-height: 85vh; overflow-y: auto; -webkit-overflow-scrolling: touch; box-shadow: 0 4px 20px rgba(0,0,0,0.3); position: relative; margin: auto; }
-        #menu-close { position: absolute; top: 10px; right: 15px; font-size: 28px; font-weight: bold; color: #aaa; cursor: pointer; line-height: 20px; }
-        #menu-close:hover { color: #000; }
-        #menu-title { font-size: 1.3em; font-weight: bold; color: #1976D2; margin: 0 0 15px 0; padding-bottom: 10px; border-bottom: 2px solid #1976D2; }
-        
-        /* Mobile responsive menu */
-        @media (max-width: 768px) {
-            #menu-panel { width: 95%; max-height: 90vh; padding: 15px; }
-            #menu-title { font-size: 1.1em; margin: 0 0 12px 0; }
-        }
-        
-        .menu-section { margin-bottom: 12px; }
-        .menu-section-title { font-weight: bold; font-size: 0.85em; color: #333; margin-bottom: 6px; border-bottom: 1px solid #eee; padding-bottom: 3px; }
-        .menu-section label { display: block; font-size: 0.8em; margin: 4px 0; cursor: pointer; }
-        .menu-section input[type="checkbox"] { margin-right: 6px; }
-        .menu-section input[type="number"], .menu-section select { width: 100%; padding: 4px; font-size: 0.8em; border: 1px solid #ccc; border-radius: 3px; margin-top: 2px; }
-        .menu-section button { width: 100%; padding: 6px; background: #1976D2; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8em; margin-top: 4px; }
-        .menu-section button:hover { background: #1565C0; }
-        
-        .legend-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; border:1px solid #222; }
-        .legend-item { display:inline-block; white-space:nowrap; margin-right:6px; font-size: 0.75em; }
-        
-        .channel-filter { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-        .channel-chip { display: inline-block; padding: 3px 8px; font-size: 0.7em; background: #e0e0e0; border: 1px solid #bbb; border-radius: 12px; cursor: pointer; user-select: none; }
-        .channel-chip.active { background: #4CAF50; color: white; border-color: #388E3C; }
-        .channel-chip:hover { opacity: 0.8; }
-        
-        /* Persistent FAB button - brings sidebar back into view on mobile */
-        #menu-fab { position: fixed; bottom: 20px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: #1976D2; color: white; border: none; cursor: pointer; font-size: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1001; transition: transform 0.2s, box-shadow 0.2s; will-change: transform; -webkit-transform: translate3d(0, 0, 0); transform: translate3d(0, 0, 0); display: none; }
-        #menu-fab:active { transform: scale(0.95); }
-        #menu-fab:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
-        
-        /* Gear button - settings menu on mobile */
-        #settings-gear { position: fixed; top: 20px; right: 20px; width: 50px; height: 50px; border-radius: 50%; background: #1976D2; color: white; border: none; cursor: pointer; font-size: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 999; transition: transform 0.2s, box-shadow 0.2s; -webkit-transform: translate3d(0, 0, 0); transform: translate3d(0, 0, 0); display: none; }
-        #settings-gear:active { transform: scale(0.95); }
-        #settings-gear:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.4); }
-        
-        @media (max-width: 768px) { 
-            #menu-fab { display: block; }
-            #settings-gear { display: block; }
-        }
-        
-        /* Custom Leaflet tooltip styling */
-        .leaflet-tooltip-custom {
-            background: rgba(0, 0, 0, 0.9);
-            color: #fff;
-            border: none;
-            border-radius: 3px;
-            padding: 4px 8px;
-            font-size: 12px;
-            font-weight: 500;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-        }
-        .leaflet-tooltip-custom::before {
-            border-top-color: rgba(0, 0, 0, 0.9);
-        }
-    </style>
+    <link rel="stylesheet" href="static/style.css?v={{ build_id }}">
 </head>
 <body data-status-refresh="{{ status_refresh }}" data-node-refresh="{{ node_refresh }}" data-default-lat="{{ default_lat }}" data-default-lon="{{ default_lon }}" data-default-zoom="{{ default_zoom }}" data-move-threshold="{{ special_move_threshold }}" data-api-key-required="{{ api_key_required|lower }}" data-api-key="{{ api_key or '' }}" data-is-localhost="{{ is_localhost|lower }}" data-url-prefix="{{ url_prefix or '' }}" style="--special-highlight-color: {{ special_highlight_color }};">
-    <!-- API Key Entry Modal (for remote/worldwide access) -->
-    <div id="api-key-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10000; align-items:center; justify-content:center; padding:20px;">
-        <div style="background:white; padding:40px 25px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); max-width:500px; width:100%;">
-            <h2 style="margin:0 0 20px 0; color:#333; font-size:24px;">🔐 Access Password Required</h2>
-            <p style="color:#666; margin:0 0 20px 0; font-size:16px; line-height:1.5;">Enter your access password to view the tracker:</p>
-            <input type="password" id="api-key-input" placeholder="Enter password..." style="width:100%; padding:14px; font-size:16px; border:2px solid #ddd; border-radius:4px; box-sizing:border-box; margin-bottom:20px;">
-            <div style="display:flex; flex-direction:column; gap:12px;">
-                <button id="api-key-submit" style="width:100%; padding:14px; background:#1976D2; color:white; border:none; border-radius:4px; cursor:pointer; font-size:16px; font-weight:bold;">✓ Sign In</button>
-                <button id="api-key-clear" style="width:100%; padding:12px; background:#f5f5f5; color:#333; border:1px solid #ddd; border-radius:4px; cursor:pointer; font-size:14px;">Clear Stored Password</button>
-            </div>
-            <p style="font-size:13px; color:#999; margin:20px 0 0 0; text-align:center; line-height:1.4;">Password is saved locally in your browser until you click "Clear Stored Password" or clear browser data</p>
+
+    <!-- API key entry (remote access) -->
+    <div id="api-key-modal">
+        <div id="api-key-panel">
+            <h2>🔐 Access password required</h2>
+            <p>Enter your access password to use the controls:</p>
+            <input type="password" id="api-key-input" placeholder="Password…">
+            <button id="api-key-submit" class="btn primary">Sign in</button>
+            <button id="api-key-clear" class="btn plain">Clear stored password</button>
+            <p class="fineprint">The password is saved in this browser until you clear it.</p>
         </div>
     </div>
-    <!-- Floating action button - brings sidebar back into view on mobile -->
-    <button id="menu-fab" onclick="toggleSidebar()" title="Show Settings">☰</button>
-    
-    <!-- Gear button - opens settings menu on mobile -->
-    <button id="settings-gear" onclick="toggleMenu()" title="Settings & Controls">⚙️</button>
-    
-    <!-- Sidebar overlay (mobile only) - dims map when sidebar is open -->
-    <div id="sidebar-overlay" style="display: none; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 500; pointer-events: auto;"></div>
-    
+
+    <!-- Bridge: one-row status header -->
+    <header id="bridge">
+        <div class="wordmark"><span class="dot"></span>{{ app_title }} <small>v{{ app_version }}</small></div>
+        <div class="spacer"></div>
+        <div class="linkstate"><span class="pulse" id="mqtt-pulse"></span><span id="mqtt-status">connecting…</span></div>
+        <div id="node-count-wrap"><span id="node-count">0</span> nodes</div>
+        <div class="pollwrap" title="Time to next data poll">
+            <div class="track"><span id="refresh-progress-bar"></span></div>
+            <div id="rate-limit-message"></div>
+        </div>
+        <button class="gearbtn" onclick="toggleMenu()" title="Settings &amp; controls">⚙ Controls</button>
+    </header>
+
+    <div id="appbody">
+        <aside id="sidebar">
+            <button id="sheet-handle" onclick="toggleSheet()" aria-label="Expand or collapse the fleet list"></button>
+            <div id="nodes"></div>
+        </aside>
+        <div id="map"></div>
+    </div>
+
+    <!-- Settings & controls -->
     <div id="menu-modal" onclick="closeMenuOnBackdrop(event)">
         <div id="menu-panel">
             <span id="menu-close" onclick="toggleMenu()">&times;</span>
-            <h2 id="menu-title">⚙️ Settings & Controls</h2>
-            <div id="menu-tabs" style="display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid #ddd;">
+            <h2 id="menu-title">Settings &amp; Controls</h2>
+            <div id="menu-tabs">
                 <button class="tab-btn tab-legend active" id="legendTabBtn" onclick="showMenuTab('legend')">Legend</button>
                 <button class="tab-btn tab-controls" id="controlsTabBtn" onclick="showMenuTab('controls')">Controls</button>
-                    <!-- Removed stray CSS for tab buttons -->
             </div>
+
             <div id="tab-legend" style="display:block;">
                 <div class="menu-section">
-                    <div class="menu-section-title">Legend</div>
-                    <div style="line-height: 1.6;">
-                        <span class="legend-item"><span class="legend-dot" style="background:#2196F3"></span>recent</span>
-                        <span class="legend-item"><span class="legend-dot" style="background:#FF9800"></span>stale</span>
-                        <span class="legend-item"><span class="legend-dot" style="background:#f44336"></span>very stale</span><br>
-                        <span class="legend-item"><span class="legend-dot" style="background:#FFD700"></span>special</span>
-                        <span class="legend-item"><span class="legend-dot" style="background:#888"></span>special (stale)</span>
-                        <span class="legend-item"><span class="legend-dot" style="background:#999"></span>special (no GPS)</span><br>
-                        <div style="margin-top: 6px; font-size: 0.85em;">
-                            <div id="legendMovementRings">
-                                <div style="margin: 2px 0;">🟢 <span style="color: #4CAF50;">Dashed ring</span> = Movement threshold</div>
-                                <div style="margin: 2px 0;">🔴 <span style="color: #e91e63;">Solid ring</span> = Moved too far</div>
-                            </div>
-                            <div id="legendGatewayConnections" style="margin: 2px 0;">🟠 <span style="color: #FF9800;">Dotted line</span> = Gateway connection (best signal)</div>
-                        </div>
+                    <div class="menu-section-title">Buoy states</div>
+                    <div class="legend-block">
+                        <span class="state ok">On station</span>
+                        <span class="state moved">Moved</span>
+                        <span class="state stale">Stale</span><br>
+                        <span class="state muted-s">Muted 🔕</span>
+                        <span class="state nofix">No GPS yet</span>
                     </div>
                 </div>
+                <div class="menu-section">
+                    <div class="menu-section-title">Readings</div>
+                    <div class="legend-line"><b>Fix</b> — time since the last GPS position</div>
+                    <div class="legend-line"><b>Heard</b> — time since any packet arrived</div>
+                    <div class="legend-line"><b>Batt</b> — battery voltage and estimated charge</div>
+                </div>
+                <div class="menu-section">
+                    <div class="menu-section-title">Map</div>
+                    <div class="legend-line" id="legendMovementRings">🟢 dashed ring = movement threshold · 🔴 solid ring = moved too far</div>
+                    <div class="legend-line" id="legendGatewayConnections">🟠 dotted line = gateway connection</div>
+                </div>
             </div>
+
             <div id="tab-controls" style="display:none;">
                 <div class="menu-section">
-                    <div class="menu-section-title">Controls</div>
-                    <!-- show_all_nodes removed: now config-only setting (edit tracker.config + restart to change) -->
-                    <label><input type="checkbox" id="showGatewaysInput"> Show Gateways &amp; Connections</label>
-                    <label><input type="checkbox" id="showPositionTrailsInput"> Show Position Trails</label>
-                    <label><input type="checkbox" id="showNauticalMarkersInput"> Show Nautical Markers</label>
-                    <label>Trail History (hours): <input type="number" id="trailHistoryInput" min="1" max="168" value="168" style="width:60px;"></label>
-                    <label>Low Battery Threshold (%): <input type="number" id="lowBatteryInput" min="5" max="50" value="25" style="width:60px;"></label>
-                    <label>Movement Threshold (m): <input type="number" id="movementThresholdInput" min="10" max="500" value="80" style="width:60px;"></label>
-                    <label>API Polling Interval (sec): <input type="number" id="apiPollingInput" min="5" max="60" value="10" style="width:60px;"></label>
+                    <div class="menu-section-title">Display</div>
+                    <label><input type="checkbox" id="showGatewaysInput"> Show gateways &amp; connections</label>
+                    <label><input type="checkbox" id="showPositionTrailsInput"> Show position trails</label>
+                    <label><input type="checkbox" id="showNauticalMarkersInput"> Show nautical markers</label>
+                    <label>Trail history (hours) <input type="number" id="trailHistoryInput" min="1" max="168" value="168"></label>
+                    <label>Poll interval (seconds) <input type="number" id="apiPollingInput" min="5" max="60" value="10"></label>
                 </div>
-                <div class="menu-section" style="margin-top: 12px; border-top: 1px solid #ddd; padding-top: 12px;">
-                    <div class="menu-section-title">Alert Controls</div>
-                    <button id="toggleAlertsBtn" onclick="toggleAlerts()" style="padding: 6px 12px; width: 100%; margin-bottom: 6px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">⚠️ Alerts Enabled</button>
-                    <div id="alertStatus" style="font-size: 0.85em; color: #666; text-align: center; margin-top: 4px;"></div>
+                <div class="menu-section">
+                    <div class="menu-section-title">Alerts</div>
+                    <label>Movement threshold (m) <input type="number" id="movementThresholdInput" min="10" max="500" value="80"></label>
+                    <label>Low battery threshold (%) <input type="number" id="lowBatteryInput" min="5" max="50" value="25"></label>
+                    <button id="toggleAlertsBtn" class="btn good" onclick="toggleAlerts()">Alert emails: on</button>
+                    <div class="menu-note" id="alertStatus"></div>
                 </div>
-                <div class="menu-section" style="margin-top: 12px; border-top: 1px solid #ddd; padding-top: 12px;">
-                    <div class="menu-section-title">Per-Buoy Movement Alert Mutes</div>
-                    <div id="muteList" style="font-size: 0.9em;">Loading…</div>
-                    <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Muted buoys send no movement emails (map indication and battery alerts stay active). A mute clears itself when the buoy is back at its home position.</div>
+                <div class="menu-section">
+                    <div class="menu-section-title">Per-buoy movement mutes</div>
+                    <div id="muteList" class="menu-note">Loading…</div>
+                    <div class="menu-note">Muted buoys send no movement emails — the map still shows them honestly. A mute clears itself once the buoy is back home.</div>
                 </div>
-                <div class="menu-section" style="margin-top: 12px; border-top: 1px solid #ddd; padding-top: 12px;">
-                    <div class="menu-section-title">Server Management</div>
-                    <button id="restartServerBtn" onclick="restartServer()" style="padding: 6px 12px; width: 100%; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">🔄 Restart Server</button>
-                    <div id="restartStatus" style="font-size: 0.85em; color: #666; text-align: center; margin-top: 4px;"></div>
-                    <button id="resetSettingsBtn" onclick="resetSettings()" style="padding: 6px 12px; width: 100%; margin-top: 8px; background: #607D8B; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">↩️ Reset Settings to Config Defaults</button>
-                    <div style="font-size: 0.75em; color: #666; margin-top: 4px;">Settings changed here persist across restarts (stored in the database). Reset removes those overrides and returns to the tracker.config values.</div>
+                <div class="menu-section">
+                    <div class="menu-section-title">Server</div>
+                    <button id="restartServerBtn" class="btn warn" onclick="restartServer()">Restart server</button>
+                    <div class="menu-note" id="restartStatus"></div>
+                    <button id="resetSettingsBtn" class="btn plain" onclick="resetSettings()">Reset settings to config defaults</button>
+                    <div class="menu-note">Settings changed here persist across restarts. Reset returns to the tracker.config values.</div>
                 </div>
             </div>
         </div>
     </div>
-    
-    <div id="sidebar">
-        <div style="padding: 12px 8px 8px 8px; background: #fff; border-bottom: 2px solid #2196F3;">
-            <div style="font-size: 1.1em; font-weight: bold; color: #333;">{{ app_title }}</div>
-            <div style="font-size: 0.75em; color: #666; margin-top: 2px;">Version {{ app_version }}</div>
-        </div>
-        <div id="status-bar">
-            <div>
-                <strong>Status:</strong> <span id="mqtt-status">Loading...</span><br>
-                <strong>Nodes:</strong> <span id="node-count">0</span>
-            </div>
-            <button id="menu-btn" onclick="handleMenuButtonClick()" style="padding: 3px 8px; font-size: 0.75em;">☰</button>
-        </div>
-        <!-- Polling progress bar -->
-        <div style="padding: 8px 10px; background: #1976D2;">
-            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.3); border-radius: 3px; overflow: hidden;">
-                <div id="refresh-progress-bar" style="height: 100%; background: white; width: 0%; transition: width 0.1s linear;"></div>
-            </div>
-        </div>
-        
-        <!-- Traffic Light Legend -->
-        <div style="padding: 8px 10px; background: #f0f0f0; border-bottom: 1px solid #ddd; font-size: 0.75em; color: #555;">
-            <div id="trafficLightLegend" style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;">
-                <div style="position: relative; text-align: center;">
-                    <div class="traffic-light-dot" data-tooltip="Last Position Update" style="font-weight: bold; cursor: help;">LPU</div>
-                </div>
-                <div style="position: relative; text-align: center;">
-                    <div class="traffic-light-dot" data-tooltip="Distance from Home" style="font-weight: bold; cursor: help;">DfH</div>
-                </div>
-                <div style="position: relative; text-align: center;">
-                    <div class="traffic-light-dot" data-tooltip="Sign of Life" style="font-weight: bold; cursor: help;">SoL</div>
-                </div>
-                <div style="position: relative; text-align: center;">
-                    <div class="traffic-light-dot" data-tooltip="Battery Voltage" style="font-weight: bold; cursor: help;">Batt</div>
-                </div>
-                <div id="legendRSSI" style="position: relative; text-align: center;">
-                    <div class="traffic-light-dot" data-tooltip="Signal Strength" style="font-weight: bold; cursor: help;">RSSI</div>
-                </div>
-                <div id="legendSNR" style="position: relative; text-align: center;">
-                    <div class="traffic-light-dot" data-tooltip="Signal-to-Noise Ratio" style="font-weight: bold; cursor: help;">SNR</div>
-                </div>
-            </div>
-        </div>
-        
-        <div id="nodes"></div>
-    </div>
-    <div id="map"></div>
 
-    <!-- Signal History Modal - overlaps cards on left -->
-    <div id="nodeDetailsModal" style="display:none;position:fixed;top:100px;left:20px;width:auto;height:auto;background:transparent;z-index:2000;justify-content:flex-start;align-items:flex-start;flex-direction:column;padding:0;box-sizing:border-box;pointer-events:none;">
-        <div style="background:white;border-radius:6px;padding:6px;max-width:350px;width:auto;height:auto;box-shadow:0 4px 20px rgba(0,0,0,0.3);pointer-events:auto;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;border-bottom:1px solid #ddd;padding-bottom:3px;gap:4px;">
-                <h2 id="modalTitle" style="margin:0;font-size:0.85em;color:#333;flex:1;word-break:break-word;min-height:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Signal History</h2>
-                <button onclick="closeNodeDetails()" style="background:none;border:none;font-size:1em;cursor:pointer;color:#666;padding:0;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;line-height:1;">&times;</button>
+    <!-- Battery history -->
+    <div id="nodeDetailsModal">
+        <div id="nodeDetailsPanel">
+            <div class="head">
+                <h2 id="modalTitle">Battery history</h2>
+                <button class="closex" onclick="closeNodeDetails()" aria-label="Close">&times;</button>
             </div>
-            <div id="histogramContainer" style="width:100%;text-align:center;display:flex;align-items:center;justify-content:center;overflow-x:auto;padding:2px 0;">
-                <div style="color:#999;font-size:0.75em;">Loading signal history...</div>
+            <div id="histogramContainer">
+                <div class="menu-note">Loading history…</div>
             </div>
         </div>
     </div>
+
+    <!-- Legacy stubs: referenced by app.js, permanently hidden in the v2 layout -->
+    <button id="menu-fab" onclick="toggleSheet()" aria-hidden="true" tabindex="-1">☰</button>
+    <button id="settings-gear" onclick="toggleMenu()" aria-hidden="true" tabindex="-1">⚙️</button>
+    <div id="sidebar-overlay" aria-hidden="true"></div>
+    <div id="trafficLightLegend" aria-hidden="true"></div>
+    <button id="menu-btn" onclick="toggleMenu()" aria-hidden="true" tabindex="-1">☰</button>
 
     <script src="static/app.js?v={{ build_id }}"></script>
 </body>

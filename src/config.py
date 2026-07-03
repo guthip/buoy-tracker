@@ -190,16 +190,6 @@ SOL_BLUE_THRESHOLD = _sol_blue_threshold_hours * 3600
 _sol_orange_threshold_hours = config.getint('special_nodes_settings', 'sol_orange_threshold_hours', fallback=6)
 SOL_ORANGE_THRESHOLD = _sol_orange_threshold_hours * 3600
 
-# Signal Quality Thresholds (RSSI in dBm, SNR in dB)
-# Meshtastic reliable communication at -100 dBm RSSI and 0 dB SNR
-# Thresholds: green (excellent) -> yellow (acceptable) -> red (poor)
-RSSI_GREEN_THRESHOLD = config.getint('signal_quality', 'rssi_green_threshold', fallback=-90)    # Excellent: -90 dBm or better
-RSSI_YELLOW_THRESHOLD = config.getint('signal_quality', 'rssi_yellow_threshold', fallback=-110)  # Acceptable: -90 to -110 dBm
-# Below -110 dBm is red (poor signal)
-
-SNR_GREEN_THRESHOLD = config.getfloat('signal_quality', 'snr_green_threshold', fallback=5.0)      # Excellent: 5+ dB
-SNR_YELLOW_THRESHOLD = config.getfloat('signal_quality', 'snr_yellow_threshold', fallback=-5.0)  # Acceptable: -5 to 5 dB
-# Below -5 dB is red (poor signal)
 
 # API Polling Interval - single unified interval for all endpoints
 # Read from config (defaults to 60 seconds if not specified)

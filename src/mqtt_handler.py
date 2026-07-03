@@ -268,7 +268,7 @@ def rebuild_history_from_db():
         for r in rows:
             special_history[node_id].append({
                 'ts': r['ts'], 'lat': r['lat'], 'lon': r['lon'], 'alt': r['alt'],
-                'voltage': None, 'rssi': r['rssi'], 'snr': r['snr'],
+                'voltage': r.get('voltage'), 'rssi': r['rssi'], 'snr': r['snr'],
             })
         total += len(rows)
     if total:
@@ -293,7 +293,7 @@ def _append_position_history(node_id, lat, lon, alt, json_data):
     try:
         topic = json_data.get('mqtt_topic')
         storage.record_position(
-            node_id, entry['ts'], lat, lon, alt=alt,
+            node_id, entry['ts'], lat, lon, alt=alt, voltage=entry['voltage'],
             distance_from_home_m=nodes_data.get(node_id, {}).get('distance_from_origin_m'),
             packet_id=json_data.get('id'),
             gateway_id=_extract_gateway_node_id_from_topic(topic) if topic else None,
