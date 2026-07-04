@@ -1463,9 +1463,13 @@
     return { cls: 'ok', word: 'Relaying', detail: 'heard ' + formatTimeAgo(node.last_seen) };
   }
 
-  function chipHtml(label, value, color) {
+  function chipHtml(label, value, color, fill) {
     var led = color === 'green' ? 'g' : color === 'yellow' ? 'y' : color === 'red' ? 'r' : 'n';
-    return '<span class="chip' + (color === 'red' ? ' alert-led' : '') + '">' +
+    var cls = 'chip';
+    if (fill && color === 'yellow') cls += ' chip-fill-y';
+    else if (fill && color === 'red') cls += ' chip-fill-r';
+    else if (color === 'red') cls += ' alert-led';
+    return '<span class="' + cls + '">' +
            '<span class="led ' + led + '"></span>' +
            '<span class="lbl">' + label + '</span><b>' + value + '</b></span>';
   }
@@ -1510,9 +1514,14 @@
     var muteBadge = (node.is_special && node.movement_alerts_muted)
       ? '<span class="mutebadge" title="Movement alerts muted">🔕</span>' : '';
 
+    var bat = node.battery_pct != null ? node.battery_pct : null;
+    var voltage = node.voltage != null ? node.voltage : null;
+    var battColor = getBatteryColor(bat, voltage);
+    var battCls = battColor === 'green' ? 'batt-g' : battColor === 'yellow' ? 'batt-y' : battColor === 'red' ? 'batt-r' : 'batt-n';
+
     var actionBtn = '';
     if (node.is_special) {
-      actionBtn = '<button class="iconbtn" onclick="event.stopPropagation();showNodeDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" title="Battery history">▁▃▅</button>';
+      actionBtn = '<button class="iconbtn ' + battCls + '" onclick="event.stopPropagation();showNodeDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" title="Battery history">▁▃▅</button>';
     } else if (node.is_gateway) {
       actionBtn = '<button class="iconbtn" onclick="event.stopPropagation();showGatewayDetails(' + node.id + ',\'' + displayName.replace(/'/g, "\\'") + '\')" title="Gateway details">ℹ️</button>';
     }
@@ -1529,13 +1538,11 @@
     if (node.is_special) {
       var lpu = getAgeStatus(node.last_position_update, lpuBlueThreshold, lpuOrangeThreshold);
       var sol = getAgeStatus(node.last_seen, solBlueThreshold, solOrangeThreshold);
-      var bat = node.battery_pct != null ? node.battery_pct : null;
-      var voltage = node.voltage != null ? node.voltage : null;
       var batteryStr = formatBattery(voltage, bat) || '?';
       chips = '<div class="chips">' +
               chipHtml('Fix', lpu.text, lpu.color) +
               chipHtml('Heard', sol.text, sol.color) +
-              chipHtml('Batt', batteryStr, getBatteryColor(bat, voltage)) +
+              chipHtml('Batt', batteryStr, battColor, true) +
               buildBatterySparkline(node.id) +
               '</div>';
     }

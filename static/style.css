@@ -463,6 +463,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   .pollwrap { width: 56px; }
 }
 
+/* battery-state coloring: history button + solid-fill Batt chip */
+.iconbtn.batt-g { color: var(--good); }
+.iconbtn.batt-y { color: var(--warn); }
+.iconbtn.batt-r { color: var(--crit); }
+.chip.chip-fill-y,
+.chip.chip-fill-r { font-weight: 600; }
+.chip.chip-fill-y { background: var(--warn-soft); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.chip.chip-fill-r { background: var(--crit-soft); color: var(--crit); border-color: color-mix(in srgb, var(--crit) 45%, var(--line)); }
+.chip.chip-fill-y .lbl,
+.chip.chip-fill-r .lbl { color: inherit; opacity: 0.8; }
+.chip.chip-fill-y b,
+.chip.chip-fill-r b { font-weight: 700; }
+
 /* inline battery sparkline on buoy cards */
 .sparkline { align-self: center; flex: none; opacity: 0.9; }
 #sidebar:not(.expanded) .sparkline { display: none; }
