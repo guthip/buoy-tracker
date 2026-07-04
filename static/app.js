@@ -579,6 +579,7 @@
   var urlPrefix = document.body.dataset.urlPrefix || '';  // URL prefix for subpath deployments (e.g., '/buoy-tracker')
   var modalShownRecently = false; // Prevent rapid modal re-displays
   var authCheckDisabled = false; // Disable 401 checks briefly after login attempt
+  var pendingAuthRequest = null; // Last admin request that failed with 401 — replayed after login
   
   // For remote access: check localStorage for previously entered API key
   if (apiKeyRequired && !isLocalhost && !apiKey) {
@@ -636,10 +637,17 @@
           authCheckDisabled = false;
         }, 3000); // Re-enable after 3 seconds
         
-        // Refresh data with new key - call updateStatus to verify auth works
+        // Refresh data with new key and replay the action that hit the 401,
+        // so the user does not have to click it a second time
+        var pending = pendingAuthRequest;
+        pendingAuthRequest = null;
         setTimeout(function() {
           updateStatus();
           updateNodes();
+          loadAlertStatus();
+          if (pending) {
+            makeApiRequest(pending.method, pending.url, pending.callback, pending.body);
+          }
         }, 100);
       }
     };
@@ -857,6 +865,8 @@
 
   // Helper function to make authenticated API requests
   function makeApiRequest(method, url, callback, body) {
+    var origUrl = url;   // pre-prefix URL, for replay after login
+    var sentWithKey = !!(apiKeyRequired && apiKey);
     try {
       // Prepend URL prefix for subpath deployments
       if (urlPrefix && !url.startsWith(urlPrefix)) {
@@ -926,9 +936,14 @@
           // This happens when stored key expires or is invalid
           // But skip if we just logged in (authCheckDisabled flag)
           if (xhr.status === 401 && apiKeyRequired && !isLocalhost && !authCheckDisabled) {
-            // Removed non-essential warning
-            apiKey = ''; // Clear invalid key
-            localStorage.removeItem('tracker_api_key'); // Don't try again
+            // Remember the rejected action so it can be replayed after login
+            pendingAuthRequest = { method: method, url: origUrl, callback: callback, body: body };
+            if (sentWithKey) {
+              // The key we actually sent was rejected — it really is wrong
+              apiKey = '';
+              localStorage.removeItem('tracker_api_key');
+            }
+            // If no key was sent (first access), keep any stored key intact
             showApiKeyModal();
           } else if (xhr.status === 401 && authCheckDisabled) {
             // Removed non-essential log
@@ -1426,7 +1441,7 @@
       if (node.moved_far && !node.movement_alerts_muted) return 0;
       var quiet = (node.last_seen && node.last_seen > 0) ? (Date.now() / 1000 - node.last_seen) : null;
       if (node.stale || (quiet != null && quiet > solOrangeThreshold)) return 1;
-      if (!node.has_fix) return 2;
+      if (!(node.last_position_update > 0)) return 2;
       if (node.movement_alerts_muted) return 4;
       return 3;
     }
@@ -1442,7 +1457,8 @@
       if (!node.last_seen || node.last_seen <= 0) {
         return { cls: 'nofix', word: 'Waiting for data', detail: '' };
       }
-      if (!node.has_fix) return { cls: 'nofix', word: 'No GPS yet', detail: '' };
+      var hasRealFix = node.last_position_update != null && node.last_position_update > 0;
+      if (!hasRealFix) return { cls: 'nofix', word: 'No GPS yet', detail: 'heard ' + formatTimeAgo(node.last_seen) };
       var quietFor = (Date.now() / 1000 - node.last_seen);
       if (node.stale || (quietFor != null && quietFor > solOrangeThreshold)) {
         return { cls: 'stale', word: 'Stale', detail: 'quiet ' + formatTimeAgo(node.last_seen) };
