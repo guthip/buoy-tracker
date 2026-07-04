@@ -608,9 +608,12 @@ decision is recorded in a SQLite database at `data/buoy_tracker.db` (90-day
 retention for measurements, configurable via `[database] retention_days`).
 Position trails rebuild from it automatically at startup. Open the file
 read-only with any SQLite tool (DBeaver, pandas, DuckDB, Datasette, Grafana).
-  For a **live** Docker deployment, prefer `docker exec buoy-tracker sqlite3
-  /app/data/buoy_tracker.db "..."` or copy the file first — querying the
-  mounted file from the host while the container writes is best avoided
+  For a **live** Docker deployment, query inside the container — e.g.
+  `tools/dbq.sh "SELECT COUNT(*) FROM positions"` (works on any image) or
+  `docker exec buoy-tracker sqlite3 /app/data/buoy_tracker.db "..."`
+  (sqlite3 CLI included in the image from v2.0) — or copy the file first;
+  querying the mounted file from the host while the container writes is
+  best avoided
 for analysis — never write to it while the app is running.
   - When `false` (default): Historical data is NOT loaded from disk on startup - start fresh (recommended for production)
   - When `true`: Load any existing historical data from disk on startup (development/debugging)
