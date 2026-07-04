@@ -152,9 +152,9 @@ movement_threshold = 150
 #   3681533965 = SYCS,N37° 33.81',W122° 13.13',true,ch1_voltage  (with sensor, monitor input voltage)
 #
 # Primary SYC nodes
-3681533965 = SYCS, 37.561962, -122.214979, true
+3681533965 = SYCS, N37° 33.81', W122° 13.13', true
 492590216  = SYCE, N37° 34.81', W122° 13.07', true
-2512106321 = SYCA, 37.529302, -122.167868, true
+2512106321 = SYCA, N37° 31.94', W122° 10.31', true
 2009991947 = SYCX, N37° 34.23', W122° 12.13', true
 3280278694 = SYCO, N37° 33.61', W122° 11.16', true
 800188038  = SYCP, N37° 33.51', W122° 11.27', true
