@@ -279,6 +279,32 @@ def get_positions_since(node_id, since_ts, include_simulated=False):
     ]
 
 
+def get_latest_state(node_id):
+    """Last known real (non-simulated) position and telemetry for one node.
+    Used to warm-start in-memory state after a restart so cards show the
+    last-known battery/position immediately instead of "Waiting for data".
+
+    Returns dict with any of: pos_ts, lat, lon, alt, tel_ts, voltage,
+    battery_pct — or {} if nothing recorded yet."""
+    with _lock:
+        if _conn is None:
+            return {}
+        pos = _conn.execute(
+            'SELECT ts, lat, lon, alt FROM positions'
+            ' WHERE node_id = ? AND simulated = 0 ORDER BY ts DESC LIMIT 1',
+            (node_id,)).fetchone()
+        tel = _conn.execute(
+            'SELECT ts, voltage, battery_pct FROM telemetry'
+            ' WHERE node_id = ? AND simulated = 0 ORDER BY ts DESC LIMIT 1',
+            (node_id,)).fetchone()
+    out = {}
+    if pos:
+        out.update(pos_ts=pos[0], lat=pos[1], lon=pos[2], alt=pos[3])
+    if tel:
+        out.update(tel_ts=tel[0], voltage=tel[1], battery_pct=tel[2])
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Runtime app settings (DB is master; config file supplies defaults at startup
 # for keys with no override row — review decision Q9)

@@ -274,6 +274,51 @@ def rebuild_history_from_db():
     if total:
         logger.info(f'Rebuilt {total} trail point(s) from durable store ({hours}h window)')
 
+    # Warm-start current state from the last known real readings so cards show
+    # battery/position/age immediately after a restart (ages stay honest: they
+    # are computed from the recorded timestamps, not from "now").
+    warmed = 0
+    for node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
+        try:
+            st = storage.get_latest_state(node_id)
+        except Exception as e:
+            logger.error(f'Warm-start failed for {node_id}: {e}')
+            continue
+        if not st:
+            continue
+        nd = nodes_data.setdefault(node_id, {})
+        sn = config.SPECIAL_NODES.get(node_id, {})
+        if sn.get('home_lat') is not None:
+            nd.setdefault('origin_lat', sn['home_lat'])
+            nd.setdefault('origin_lon', sn['home_lon'])
+        if st.get('pos_ts'):
+            nd.setdefault('latitude', st['lat'])
+            nd.setdefault('longitude', st['lon'])
+            nd.setdefault('altitude', st['alt'])
+            nd.setdefault('last_position_update', st['pos_ts'])
+            o_lat, o_lon = nd.get('origin_lat'), nd.get('origin_lon')
+            if o_lat is not None and st['lat'] is not None:
+                dist = _haversine_m(o_lat, o_lon, st['lat'], st['lon'])
+                if dist is not None:
+                    nd.setdefault('distance_from_origin_m', dist)
+                    nd.setdefault('moved_far', bool(
+                        dist >= getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0)))
+        if st.get('tel_ts'):
+            nd.setdefault('voltage', st['voltage'])
+            nd.setdefault('battery_pct', st['battery_pct'])
+            # The API reads voltage via _get_node_voltage() from the telemetry
+            # payload structure, so reconstruct it the way a real packet would
+            if st['voltage'] is not None:
+                vc = sn.get('voltage_channel', 'ch3_voltage')
+                nd.setdefault('telemetry', {}).setdefault(
+                    'power_metrics', {}).setdefault(vc, st['voltage'])
+        seen = max(st.get('pos_ts') or 0, st.get('tel_ts') or 0)
+        if seen:
+            nd.setdefault('last_seen', seen)
+        warmed += 1
+    if warmed:
+        logger.info(f'Warm-started last-known state for {warmed} special node(s)')
+
 
 def _append_position_history(node_id, lat, lon, alt, json_data):
     """Append one accepted position to the in-memory trail and the durable store."""
