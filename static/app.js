@@ -464,33 +464,10 @@
         };
         document.getElementById('showNauticalMarkersInput').onchange = function(e) {
           appFeatures.show_nautical_markers = e.target.checked;
-          if (window.seamarkOverlay && window.map) {
-            var map = window.map;
-            var overlay = window.seamarkOverlay;
-            var hasLayer = false;
-            // Use Leaflet's getLayers if available, else fallback to _layers
-            if (typeof map.hasLayer === 'function') {
-              hasLayer = map.hasLayer(overlay);
-            } else if (map._layers) {
-              for (var k in map._layers) {
-                if (map._layers[k] === overlay) {
-                  hasLayer = true;
-                  break;
-                }
-              }
-            }
-            if (appFeatures.show_nautical_markers) {
-              if (!hasLayer) {
-                overlay.addTo(map);
-              }
-            } else {
-              if (hasLayer) {
-                map.removeLayer(overlay);
-              }
-            }
-          }
+          applyNauticalOverlay();
           updateNodes();
         };
+
         // Debounce: wait 500ms after user stops typing before updating
         document.getElementById('trailHistoryInput').oninput = debounce(function(e) {
           appFeatures.trail_history_hours = Number(e.target.value);
@@ -1152,7 +1129,8 @@
           }
           // Update legend visibility based on loaded features
           updateLegendVisibility();
-          // Display options are now config-driven; no toggles to update
+          // Apply the real flags to the map (checkbox alone is not enough)
+          applyNauticalOverlay();
         } else {
           console.warn('[FEATURES] No features in /health response');
         }
@@ -1332,6 +1310,22 @@
     // Add layer control (we'll manage it via checkbox in the menu instead)
     // L.control.layers(baseLayers, overlays).addTo(map);
 
+  }
+
+
+  // Apply the nautical-markers feature flag to the map layer. Used on
+  // toggle AND after /health delivers the real flags — previously only the
+  // checkbox was updated at load, so the chart could disagree until toggled.
+  function applyNauticalOverlay() {
+    if (!(window.seamarkOverlay && window.map)) return;
+    var map = window.map, overlay = window.seamarkOverlay;
+    var hasLayer = map.hasLayer(overlay);
+    if (appFeatures.show_nautical_markers) {
+      if (!hasLayer) { overlay.addTo(map); }
+      else { overlay.redraw(); }  // refetch tiles in case the first load failed
+    } else if (hasLayer) {
+      map.removeLayer(overlay);
+    }
   }
 
   function getMoveThreshold(){

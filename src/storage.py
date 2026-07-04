@@ -1,6 +1,6 @@
 """SQLite persistence layer for Buoy Tracker.
 
-Single durable store per PROPOSAL_V2.0.md §6: data/buoy_tracker.db (WAL mode).
+Single durable store per PROPOSAL_V2.0.md §6: data/buoy_tracker.db.
 Phase 1 scope: node_settings (per-node movement-alert mutes).
 Phase 3 extends this module with time-series tables and app_settings.
 
@@ -93,6 +93,36 @@ _PRUNE_INTERVAL_S = 6 * 3600  # re-check retention a few times a day
 _last_prune_ts = 0.0
 
 
+def _open_or_salvage(path: Path) -> sqlite3.Connection:
+    """Open the DB. If the file is corrupt, quarantine it and start fresh —
+    tracker availability beats keeping a broken file in place.
+
+    Journal mode is TRUNCATE, not WAL: WAL needs shared memory between all
+    connections, which silently breaks (and corrupts) when the file lives on
+    a VM-mounted volume (Docker on macOS) or is read from the host while the
+    container writes. TRUNCATE has no shared-memory requirement and is more
+    than fast enough at this write rate.
+    """
+    conn = sqlite3.connect(str(path), check_same_thread=False)
+    try:
+        conn.execute('PRAGMA journal_mode=TRUNCATE')
+        return conn
+    except sqlite3.DatabaseError:
+        conn.close()
+    quarantine = Path(f'{path}.corrupt-{int(time.time())}')
+    path.rename(quarantine)
+    for sidecar in (f'{path}-wal', f'{path}-shm'):
+        sp = Path(sidecar)
+        if sp.exists():
+            sp.unlink()
+    logger.error(
+        f'[STORAGE] database was corrupt — quarantined as {quarantine.name}, starting fresh'
+    )
+    conn = sqlite3.connect(str(path), check_same_thread=False)
+    conn.execute('PRAGMA journal_mode=TRUNCATE')
+    return conn
+
+
 def init(db_path: Union[str, Path, None] = None) -> None:
     """Open (or create) the database and load caches. Idempotent."""
     global _conn
@@ -101,8 +131,7 @@ def init(db_path: Union[str, Path, None] = None) -> None:
             return
         path = Path(db_path) if db_path else Path(config.DB_PATH)
         path.parent.mkdir(parents=True, exist_ok=True)
-        _conn = sqlite3.connect(str(path), check_same_thread=False)
-        _conn.execute('PRAGMA journal_mode=WAL')
+        _conn = _open_or_salvage(path)
         _conn.executescript(_SCHEMA)
         # Migration for pre-release dev DBs created before positions.voltage
         try:
