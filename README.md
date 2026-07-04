@@ -18,7 +18,7 @@ To solve this, buoys are equipped with **Meshtastic LoRa nodes** that transmit G
 - **Real-time tracking**: Map-based visualization of buoy positions as updates arrive
 - **Drift detection**: Automatic alerts when buoys move beyond expected anchoring zones
 - **Instant notifications**: Email alerts on drift detection
-- **Signal monitoring**: Battery, RSSI, SNR tracking for network health
+- **Battery monitoring**: voltage tracking, low-battery alerts, per-buoy history
 - **Mesh-range coverage**: Works across miles of mesh network, not limited to Bluetooth
 
 **Data flow:** Buoys → Mesh Network → Gateways → MQTT Broker → Backend → Dashboard → Alerts
@@ -37,12 +37,11 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
 
 - **Real-time Node Tracking**: Live MQTT feed of mesh node positions
 - **Interactive Map**: Leaflet-based map with color-coded status markers
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
-  - **Desktop**: Fixed sidebar (320px) + full map view
-  - **Mobile**: Overlay sidebar drawer with FAB controls
-    - ☰ (Hamburger): Toggle sidebar
-    - ⚙️ (Gear): Access settings menu
-  - Touch-friendly controls and gestures on mobile
+- **Responsive Design** (v2.0 instrument-panel UI): works on desktop and mobile
+  - **Desktop**: one-row bridge header + fleet rail (left) + full map
+  - **Mobile**: bottom sheet over the map — collapsed one-line-per-buoy strip,
+    drag up for full cards; the map stays visible
+  - Automatic dark mode (follows the OS setting)
 - **Node Details**: Battery levels, hardware info, last-seen times, and channel information
 - **Status Color-Coding**: Blue (recent), Orange (stale), Red (very old)
 - **Polling Progress Bar**: Visual indicator in the header showing time until next data refresh
@@ -57,17 +56,12 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
     - Default: 1.0 hour (one point per hour)
     - Reduces 700+ daily points to ~24, saving 84% bandwidth
     - Adjust to 0.5 for 30-minute granularity or 24 for daily snapshots
-- **Signal Strength Monitoring**: Traffic light indicators for:
-  - **Batt** (Battery): Voltage level status
-  - **RSSI** (Signal Strength): Radio signal quality (-120 to -50 dBm)
-  - **SNR** (Signal-to-Noise Ratio): Channel quality (-20 to +10 dB)
-  - Thresholds tuned for Meshtastic LoRa operation and fully configurable in `tracker.config` (`[signal_quality]` section)
+- **Headline buoy states**: each card leads with one word — On station / Moved /
+  Stale / Muted 🔕 / No GPS yet — with labeled Fix / Heard / Batt chips;
+  buoys needing attention sort to the top
 - **Position Precision Validation**: Automatically rejects GPS packets with degraded precision (`precision_bits < 32`), preventing corrupted relay packets from polluting position trails
-- **Signal History Visualization**: Click 📊 button on any node card to view:
-  - Interactive histogram showing battery, RSSI, and SNR trends
-  - Hover tooltips with detailed readings and timestamps
-  - Full history (up to 2 weeks) of signal data
-  - Compact floating window overlaying the map
+- **Battery History**: inline sparkline on every buoy card, plus a tap-to-open
+  voltage chart with hover tooltips
 - **Gateway Tracking**: Automatically discovers and tracks mesh gateways
   - Shows all gateways that relay packets from your monitored nodes
   - Displays signal strength and status for each gateway connection
@@ -78,8 +72,12 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
   - **Low Battery Threshold**: Customize battery alert level
   - **API Polling Interval**: Adjust refresh rate
   - **Email Kill Switch**: Enable/disable alert emails instantly from the Control Menu — no restart needed
+  - **Per-Buoy Mutes**: silence movement emails for a buoy that is deliberately away
+    (yard, transport); auto-unmutes when it returns home. Map indication and battery
+    alerts stay active
+  - Settings changed in the UI persist across restarts (stored in the SQLite database);
+    a Reset button returns to the tracker.config values
   - **Server Restart**: Clear all cached trail data and reset in-memory state from the Control Menu
-  - Settings persist for current session
 - **Special Node Tracking**: Track specific nodes with home positions and movement alerts
   - Green dashed rings show movement threshold (configurable)
   - Red solid rings when nodes move beyond threshold
@@ -365,25 +363,6 @@ status_orange_threshold = 12
 api_polling_interval = 10
 ```
 
-### Signal Quality Thresholds
-
-Traffic light colors for RSSI and SNR indicators are configurable to match your deployment's radio characteristics:
-
-```ini
-[signal_quality]
-# RSSI thresholds (dBm, closer to 0 is stronger)
-rssi_green_threshold = -100     # Excellent signal (>= -100 dBm)
-rssi_yellow_threshold = -120    # Acceptable signal (-100 to -120 dBm)
-# Below -120 dBm = red (marginal, near LoRa sensitivity floor)
-
-# SNR thresholds (dB, higher is better; LoRa decodes at negative SNR)
-snr_green_threshold = 0.0       # Excellent SNR (>= 0 dB)
-snr_yellow_threshold = -10.0    # Acceptable SNR (-10 to 0 dB)
-# Below -10 dB = red (poor)
-```
-
-These thresholds reflect LoRa/Meshtastic realities, not WiFi norms. LoRa uses spread-spectrum encoding that can decode well below the noise floor (sensitivity ~-130 dBm, negative SNR acceptable). A reading of -108 dBm / -2 dB SNR is a solid, working link with 20+ dB of margin.
-
 ### User Interface Controls (Admin-Controlled)
 
 Lock down the user interface to prevent end users from modifying settings. This is useful for public deployments where you want consistent configuration across all users:
@@ -616,12 +595,12 @@ Tune these to your buoy's update interval — the defaults assume ~2-hour positi
 
 **Email Alerts**: Configure email notifications when nodes move outside the fence (see Email Alerts section below).
 
-**Data Handling**: Special node data is tracked in memory during server operation:
-- Position history (up to 2 weeks)
-- Node info (battery, channel, telemetry, position, hardware)
-- Packet history with full details
-- Data is always saved to disk (`special_nodes.json`) while running
-- The `enable_persistence` setting in `tracker.config` controls startup behavior:
+**Data Handling** (v2.0): every accepted position, telemetry reading, and alert
+decision is recorded in a SQLite database at `data/buoy_tracker.db` (90-day
+retention for measurements, configurable via `[database] retention_days`).
+Position trails rebuild from it automatically at startup. Open the file
+read-only with any SQLite tool (DBeaver, pandas, DuckDB, Datasette, Grafana)
+for analysis — never write to it while the app is running.
   - When `false` (default): Historical data is NOT loaded from disk on startup - start fresh (recommended for production)
   - When `true`: Load any existing historical data from disk on startup (development/debugging)
 - Either way, new data collected is saved to disk for future reference
@@ -815,7 +794,23 @@ curl -X POST https://your-domain.com/api/test-alert \
 ### Special Node Endpoints
 
 - **`GET /api/special/history/batch?hours=<hours>`** - Position history for all special nodes (single batch request)
-- **`GET /api/signal/history?node_id=<id>`** - Battery/RSSI/SNR history for a node
+- **`GET /api/signal/history?node_id=<id>`** - Battery history for a node
+
+### Mute & Settings Endpoints (v2.0)
+
+- **`GET /api/alerts/mutes`** - Per-buoy movement-alert mute states (public read)
+- **`POST /api/alerts/mute`** - Mute/unmute one buoy's movement emails (Bearer)
+  - Body: `{"node_id": 123, "muted": true}`
+- **`POST /api/settings/reset`** - Delete runtime-setting overrides, restore
+  config-file defaults (Bearer)
+
+### Debug & Simulation API (v2.0, off by default)
+
+Set `[debug] enable_simulation = true` (never in production) to activate
+`POST /api/debug/inject`, `POST /api/debug/scenario`, `POST /api/debug/replay`,
+and `GET /api/debug/state` — synthetic packet streams through the real pipeline
+for fast alert debugging. Endpoints return 404 when disabled and always require
+the API key. Alert emails are dry-run (logged, not sent) in simulation mode.
 
 ### Admin Endpoints (Protected - Require Authentication)
 
