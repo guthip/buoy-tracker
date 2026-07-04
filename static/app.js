@@ -179,7 +179,7 @@
      * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '5s'|'3m'|'2h'|'?'}
      */
     function getAgeStatus(timestamp, greenThreshold, yellowThreshold) {
-      if (timestamp == null) return {color: 'gray', text: '?'};
+      if (timestamp == null || timestamp <= 0) return {color: 'gray', text: '—'};
       var now = Date.now() / 1000;
       var age = Math.round(now - timestamp);
       var color = age < greenThreshold ? 'green' : age < yellowThreshold ? 'yellow' : 'red';
@@ -1062,8 +1062,8 @@
       }
       // Set up tooltip event delegation (once on init, eliminates memory leak)
       setupTooltipDelegation();
-      // Load initial alert status
-      loadAlertStatus();
+      // Alert status loads when the Controls menu opens (avoids a 401
+      // auth prompt at page load for remote viewers)
     });
   } else {
     // Already loaded
@@ -1074,8 +1074,7 @@
     }
     // Set up tooltip event delegation (once on init, eliminates memory leak)
     setupTooltipDelegation();
-    // Load initial alert status
-    loadAlertStatus();
+    // Alert status loads when the Controls menu opens
   }
 
 
@@ -1179,6 +1178,7 @@
         modal.className = modal.className.replace('open', '').trim();
       } else {
         modal.className = (modal.className + ' open').trim();
+        loadAlertStatus();  // fetched on open, not at page load
       }
     }
   };
@@ -1424,7 +1424,7 @@
     // Lower rank sorts first: problems surface without scrolling
     if (node.is_special) {
       if (node.moved_far && !node.movement_alerts_muted) return 0;
-      var quiet = node.last_seen != null ? (Date.now() / 1000 - node.last_seen) : null;
+      var quiet = (node.last_seen && node.last_seen > 0) ? (Date.now() / 1000 - node.last_seen) : null;
       if (node.stale || (quiet != null && quiet > solOrangeThreshold)) return 1;
       if (!node.has_fix) return 2;
       if (node.movement_alerts_muted) return 4;
@@ -1439,8 +1439,11 @@
     if (node.is_special) {
       if (node.movement_alerts_muted) return { cls: 'muted-s', word: 'Muted 🔕', detail: dist };
       if (node.moved_far) return { cls: 'moved', word: 'Moved', detail: dist };
+      if (!node.last_seen || node.last_seen <= 0) {
+        return { cls: 'nofix', word: 'Waiting for data', detail: '' };
+      }
       if (!node.has_fix) return { cls: 'nofix', word: 'No GPS yet', detail: '' };
-      var quietFor = node.last_seen != null ? (Date.now() / 1000 - node.last_seen) : null;
+      var quietFor = (Date.now() / 1000 - node.last_seen);
       if (node.stale || (quietFor != null && quietFor > solOrangeThreshold)) {
         return { cls: 'stale', word: 'Stale', detail: 'quiet ' + formatTimeAgo(node.last_seen) };
       }

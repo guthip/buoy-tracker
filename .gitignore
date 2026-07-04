@@ -81,6 +81,9 @@ secret.config.syc
 special_nodes.json
 data/special_nodes.json
 
+# Local Docker build override (machine-specific deployment)
+docker-compose.override.yml
+
 # Project documentation (local/development only - not for public GitHub)
 PROJECT_LEARNINGS.md
 CHANGELOG.md
