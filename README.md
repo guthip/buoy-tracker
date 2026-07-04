@@ -110,6 +110,14 @@ The web interface will be available at `http://localhost:5103`
 
 ### Docker Deployment (Recommended)
 
+> **macOS note (Colima / Docker Desktop):** the directory you run
+> `docker compose` from must live on a path the Docker VM actually mounts
+> (your home directory, by default). Running compose from a network/SMB
+> volume makes the `./config` and `./data` bind mounts silently come up
+> empty — the container then initializes from templates instead of your
+> real config. Keep the deployment directory (compose file + volumes) under
+> `$HOME`; building the image from a network-volume checkout is fine.
+
 **Option 1: Using Pre-built Docker Hub Image (Fastest)**
 
 No build or GitHub cloning required—pull the container, it initializes itself:
@@ -192,7 +200,7 @@ Access the web interface at **http://localhost:5103**
   - Mount to: `/app/config` in container
   - Editable on host; container reads from here
   - Create from templates during initial setup
-- `./data/` → Application data (special_nodes.json, historical data)
+- `./data/` → Application data (`buoy_tracker.db` SQLite store: positions, telemetry, alert events, settings)
   - Mount to: `/app/data` in container
   - Persists between restarts
 - `./logs/` → Application logs
@@ -599,7 +607,10 @@ Tune these to your buoy's update interval — the defaults assume ~2-hour positi
 decision is recorded in a SQLite database at `data/buoy_tracker.db` (90-day
 retention for measurements, configurable via `[database] retention_days`).
 Position trails rebuild from it automatically at startup. Open the file
-read-only with any SQLite tool (DBeaver, pandas, DuckDB, Datasette, Grafana)
+read-only with any SQLite tool (DBeaver, pandas, DuckDB, Datasette, Grafana).
+  For a **live** Docker deployment, prefer `docker exec buoy-tracker sqlite3
+  /app/data/buoy_tracker.db "..."` or copy the file first — querying the
+  mounted file from the host while the container writes is best avoided
 for analysis — never write to it while the app is running.
   - When `false` (default): Historical data is NOT loaded from disk on startup - start fresh (recommended for production)
   - When `true`: Load any existing historical data from disk on startup (development/debugging)

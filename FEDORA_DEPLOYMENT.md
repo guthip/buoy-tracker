@@ -1,7 +1,7 @@
 # Fedora Linux Deployment Guide for Buoy Tracker
 
 **Date**: January 2, 2026
-**Container Version**: v1.1 or later
+**Container Version**: v2.0 or later
 **Target OS**: Fedora Linux (tested on Fedora 39+)
 
 ---
@@ -306,10 +306,10 @@ docker ps | grep buoy-tracker
 ls -la data/ logs/ config/
 
 # For Option 1 (should show 999:input):
-# -rw-r----- 1 999 input ... special_nodes.json
+# -rw-r----- 1 999 ... buoy_tracker.db
 
 # For Option 2 (should show 999:docker where docker is GID 978):
-# -rw-r----- 1 999 978 ... special_nodes.json
+# -rw-r----- 1 999 ... buoy_tracker.db
 ```
 
 ### 7. Verify Host Access
@@ -317,7 +317,7 @@ ls -la data/ logs/ config/
 ```bash
 # Try to read files as your user (should work)
 cat logs/buoy_tracker.log
-cat data/special_nodes.json
+sqlite3 data/buoy_tracker.db "SELECT COUNT(*) FROM positions;"
 
 # If access denied, check your group membership:
 groups $USER
@@ -335,7 +335,7 @@ groups $USER
 **Diagnosis:**
 ```bash
 # Check file ownership
-ls -l data/special_nodes.json
+ls -l data/buoy_tracker.db
 
 # Check your group membership
 groups $USER
@@ -501,7 +501,7 @@ docker logs buoy-tracker | grep -i mqtt
 # Should show: ✅ Connected to MQTT broker
 
 # 4. File permissions work
-cat data/special_nodes.json
+sqlite3 data/buoy_tracker.db "SELECT COUNT(*) FROM positions;"
 # Should display JSON data (no permission denied)
 
 # 5. Logs accessible
@@ -521,7 +521,7 @@ curl http://localhost:5103/api/nodes | jq '.nodes | length'
 
 # Check if data is persisting
 ls -lh data/
-# Should show special_nodes.json with size > 0
+# Should show buoy_tracker.db with size > 0
 ```
 
 ---
@@ -544,4 +544,4 @@ If you encounter issues deploying on Fedora:
 
 **Last Updated**: January 2, 2026
 **Tested On**: Fedora 39, Fedora 40
-**Container Version**: v1.1
+**Container Version**: v2.0
