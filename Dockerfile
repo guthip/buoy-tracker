@@ -11,7 +11,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN apt-get update \
     # TODO: Pin package versions for security, e.g. gcc=VERSION build-essential=VERSION curl=VERSION ca-certificates=VERSION \
-    && apt-get install -y --no-install-recommends gcc build-essential curl ca-certificates sqlite3 \
+    && apt-get install -y --no-install-recommends gcc build-essential curl ca-certificates sqlite3 tzdata \
     && pip install --no-cache-dir -r requirements.txt \
     && apt-get remove -y gcc build-essential \
     && apt-get autoremove -y \
@@ -22,16 +22,14 @@ COPY . /app
 
 # Copy entrypoint script
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# 755 explicitly: files copied from SMB contexts can arrive 600, and
+# rootless podman must be able to exec this as a non-root user
+RUN chmod 755 /entrypoint.sh
 
-# Create docker group (GID 999) and non-root user
-# GID 999 matches typical docker group on Debian/Ubuntu hosts
-# IMPORTANT: Create docker group first to reserve GID 999, then create app group
-# without --system to avoid GID conflicts
-RUN groupadd -g 999 docker && \
-    groupadd app && \
-    useradd --system --gid app --create-home --home-dir /home/app app && \
-    usermod -a -G docker app
+# Non-root app user (1000:1000 baseline; the entrypoint re-numbers it to
+# PUID/PGID at runtime — linuxserver.io convention, v2.1)
+RUN groupadd -g 1000 app && \
+    useradd -u 1000 -g app --create-home --home-dir /home/app app
 
 # Create config/data/logs directories and set them world-writable
 # Entrypoint runs as root and needs to write to these
@@ -42,7 +40,7 @@ RUN mkdir -p /app/config /app/data /app/logs
 # chmod ensures files copied from SMB (which may arrive mode 600) are readable by the app user.
 RUN chown -R app:app /app/src /app/static /app/templates && \
     find /app -maxdepth 1 -type f -exec chown app:app {} \; && \
-    chmod -R a+rX /app/src /app/static /app/templates
+    chmod -R a+rX /app   # world-readable: rootless podman may run as any UID
 
 VOLUME ["/app/config", "/app/data", "/app/logs"]
 EXPOSE 5103

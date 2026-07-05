@@ -1,20 +1,20 @@
 #!/bin/bash
-# Entrypoint script for Buoy Tracker Docker container
-# Handles first-run initialization of configuration files
-# Should run as root to create and set up config files
+# Buoy Tracker entrypoint (v2.1)
+#
+# Rootful (docker default):  runs as root, re-numbers the app user to
+#   PUID/PGID (default 1000:1000, linuxserver.io convention), chowns the
+#   volume dirs, then drops privileges.
+# Rootless (podman --userns=keep-id, or compose `user:`): starts non-root,
+#   skips re-numbering/chown (PUID/PGID ignored), verifies writability,
+#   and execs the app directly.
 
 set -e
 
 echo "=== Buoy Tracker Entrypoint ==="
 
-
-# Ensure config/data/logs directories exist with proper permissions
-mkdir -p /app/config /app/data /app/logs
-
-# Make sure directories are writable by docker group (host user access)
-chmod 775 /app/config /app/data /app/logs
-
-# v2.1 layered configs: legacy single-file tracker.config is no longer read.
+# ---------------------------------------------------------------------------
+# Config layout checks (v2.1 layered configs)
+# ---------------------------------------------------------------------------
 if [ -f /app/config/tracker.config ] && [ ! -f /app/config/site.config ]; then
     echo "✗ ERROR: legacy tracker.config found but v2.1 uses layered configs."
     echo "  Migrate once (on the host):"
@@ -25,36 +25,52 @@ if [ -f /app/config/tracker.config ] && [ ! -f /app/config/site.config ]; then
     exit 1
 fi
 
-# First-run initialization: drop commented example files for the two layers
-for name in site.config environment.config; do
-    if [ ! -f "/app/config/$name" ] && [ ! -f "/app/config/$name.example" ]; then
-        cp "/app/$name.example" "/app/config/$name.example" 2>/dev/null || true
-        echo "ⓘ  No $name yet — example placed at config/$name.example (app runs on defaults until you create $name)"
-    fi
-done
+place_examples() {
+    for name in site.config environment.config; do
+        if [ ! -f "/app/config/$name" ] && [ ! -f "/app/config/$name.example" ]; then
+            cp "/app/$name.example" "/app/config/$name.example" 2>/dev/null || true
+            echo "ⓘ  No $name yet — example placed at config/$name.example (app runs on defaults until you create $name)"
+        fi
+    done
+}
 
-if [ ! -f /app/config/secret.config ]; then
-    echo "First run detected: copying secret.config template..."
-    if [ -f /app/secret.config.template ]; then
-        cp /app/secret.config.template /app/config/secret.config
-        chmod 664 /app/config/secret.config
-        echo "✓ Created /app/config/secret.config from template"
-    else
-        echo "⚠ WARNING: secret.config.template not found, skipping (optional)"
-    fi
+# ---------------------------------------------------------------------------
+# Rootless mode: verify access and run as the invoking user
+# ---------------------------------------------------------------------------
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ⓘ  Running as UID $(id -u):$(id -g) (rootless mode) — PUID/PGID env vars are ignored"
+    for d in /app/config /app/data /app/logs; do
+        mkdir -p "$d" 2>/dev/null || true
+        if [ ! -w "$d" ]; then
+            echo "✗ ERROR: $d is not writable by UID $(id -u)."
+            echo "  Rootless podman: run with  --userns=keep-id"
+            echo "  Otherwise: chown the mounted host directories to the mapped user."
+            exit 1
+        fi
+    done
+    place_examples
+    echo "Starting Buoy Tracker..."
+    exec python3 run.py
 fi
 
-# Change ownership to app:docker (NOT app:app) so host users in docker group keep access
-# Use || true so SMB-mounted AppleDouble (._*) files that can't be chowned don't abort startup
-chown -R app:docker /app/config /app/data /app/logs 2>/dev/null || true
+# ---------------------------------------------------------------------------
+# Rootful mode: PUID/PGID (linuxserver.io convention), then drop privileges
+# ---------------------------------------------------------------------------
+PUID="${PUID:-1000}"
+PGID="${PGID:-1000}"
+echo "ⓘ  PUID=${PUID} PGID=${PGID} (set these env vars to match your host user)"
 
-echo "✓ Configuration files ready in /app/config/"
-echo "✓ Data directory ready at /app/data/"
-echo "✓ Logs directory ready at /app/logs/"
-echo ""
-echo "Starting Buoy Tracker as user 'app'..."
-echo ""
+groupmod -o -g "$PGID" app
+usermod  -o -u "$PUID" app
 
-# Switch to app user and run the application
-# WORKDIR is /app, so run.py will be found
-exec su -s /bin/bash app -c "exec python3 run.py"
+mkdir -p /app/config /app/data /app/logs
+chmod 775 /app/config /app/data /app/logs
+
+place_examples
+
+# chown volumes to the (re-numbered) app user; tolerate exotic filesystems
+chown -R app:app /app/config /app/data /app/logs 2>/dev/null || true
+
+echo "✓ Configuration ready in /app/config/"
+echo "Starting Buoy Tracker as UID ${PUID}:${PGID}..."
+exec setpriv --reuid app --regid app --init-groups python3 run.py
