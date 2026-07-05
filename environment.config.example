@@ -1,0 +1,44 @@
+# ============================================================================
+# environment.config — WHERE IT RUNS
+# ============================================================================
+# Owned by whoever operates the server. Survives fleet changes and app
+# upgrades untouched. Copy to config/environment.config and edit.
+# Unset keys fall back to app defaults.
+# ============================================================================
+
+[mqtt]
+broker = mqtt.bayme.sh
+port = 1883
+root_topic = msh/US/bayarea/2/e/
+channel_name = MediumFast
+# Credentials may also go in secret.config or MQTT_USERNAME/MQTT_PASSWORD env vars
+username = meshdev
+password = large4cats
+
+[webapp]
+host = 0.0.0.0
+port = 5103
+# Client poll interval in seconds (rate limits auto-scale from this)
+api_polling_interval = 10
+
+[alerts]
+# SMTP TRANSPORT lives here; alert policy (on/off, cooldown) is site.config
+email_from = noreply@example.com
+smtp_host = localhost
+smtp_port = 25
+smtp_ssl = false
+# tracker_url = https://buoy.example.com
+
+[debug]
+# DEBUG / INFO / WARNING / ERROR
+log_level = ERROR
+
+[database]
+# Days of measurements to keep (settings and node registry keep forever)
+retention_days = 90
+
+[security]
+# production disables the localhost auth exemption
+environment = production
+# Reverse proxy IPs allowed to set X-Forwarded-For
+trusted_proxies =

@@ -1,0 +1,45 @@
+# ============================================================================
+# site.config — WHAT THE FLEET IS
+# ============================================================================
+# Owned by the club/fleet operator. Replace this file wholesale when buoys
+# move or the fleet changes; your environment.config is never touched.
+# Copy to config/site.config and edit. Unset keys fall back to app defaults.
+# ============================================================================
+
+[app]
+title = SYC buoy tracker
+
+[special_nodes]
+# Alert radius around each buoy's home position (meters)
+movement_threshold = 150
+
+# node_id = LABEL, home_lat, home_lon
+# Coordinates: decimal (37.5637125,-122.2189855) or
+# degrees-minutes (N37° 33.81', W122° 13.13')
+# Omit coordinates to auto-learn home from the first GPS fix.
+#3681533965 = SYCS, N37° 33.81', W122° 13.13'
+#492590216  = SYCE, N37° 34.81', W122° 13.07'
+
+[special_nodes_settings]
+# Timing thresholds for the Fix / Heard indicators (hours),
+# tuned to how often YOUR buoys transmit
+lpu_blue_threshold_hours = 3
+lpu_orange_threshold_hours = 8
+sol_blue_threshold_hours = 2
+sol_orange_threshold_hours = 6
+# Deduplicate trail points to one per this many hours
+data_limit_time = 1.0
+
+[webapp]
+# Map view for your waters
+default_center = 37.7749,-122.4194
+default_zoom = 13
+
+[battery]
+low_battery_threshold = 25
+
+[alerts]
+# Alert POLICY lives here (site decides); SMTP transport lives in
+# environment.config; the recipient address lives in secret.config
+enabled = false
+alert_cooldown = 1

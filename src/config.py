@@ -8,37 +8,40 @@ from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Find config files (look in config directory, fallback to project root)
-# Public config: tracker.config (user copy) or tracker.config.template (template)
-# Secrets config: secret.config (user copy, optional)
-# First try /app/config (production volume mount), then project root (development)
+# Layered configuration (v2.1, PROPOSAL_V2.1.md §2a). Later layers win:
+#   1. src/defaults.config          — application defaults, shipped in the image
+#   2. config/site.config           — what the fleet is (buoys, homes, policy)
+#   3. config/environment.config    — where it runs (broker, ports, smtp, logs)
+#   4. config/secret.config         — credentials (merged below, wins over files)
+# Files are searched in /app/config (volume mount) first, then project root.
 CONFIG_DIR = Path(__file__).parent.parent / 'config'
 PROJECT_ROOT = Path(__file__).parent.parent
+DEFAULTS_FILE = Path(__file__).parent / 'defaults.config'
 
-# Production: look in /app/config first (volume-mounted)
-# Development: fall back to project root
-for base_dir in [CONFIG_DIR, PROJECT_ROOT]:
-    potential_config = base_dir / 'tracker.config'
-    if potential_config.exists():
-        CONFIG_FILE = potential_config
-        break
-else:
-    # If no tracker.config found, use template (either location)
-    if CONFIG_DIR.exists():
-        CONFIG_FILE = CONFIG_DIR / 'tracker.config.template'
-    else:
-        CONFIG_FILE = PROJECT_ROOT / 'tracker.config.template'
 
-CONFIG_TEMPLATE_FILE = CONFIG_DIR / 'tracker.config.template' if CONFIG_DIR.exists() else PROJECT_ROOT / 'tracker.config.template'
+def _find_config(name: str) -> Optional[Path]:
+    for base_dir in (CONFIG_DIR, PROJECT_ROOT):
+        p = base_dir / name
+        if p.exists():
+            return p
+    return None
 
-# Secrets config: look in /app/config first, then project root
-for base_dir in [CONFIG_DIR, PROJECT_ROOT]:
-    potential_secrets = base_dir / 'secret.config'
-    if potential_secrets.exists():
-        CONFIG_SECRETS_FILE = potential_secrets
-        break
-else:
-    CONFIG_SECRETS_FILE = CONFIG_DIR / 'secret.config' if CONFIG_DIR.exists() else PROJECT_ROOT / 'secret.config'
+
+SITE_CONFIG_FILE = _find_config('site.config')
+ENVIRONMENT_CONFIG_FILE = _find_config('environment.config')
+CONFIG_SECRETS_FILE = _find_config('secret.config') or (
+    (CONFIG_DIR if CONFIG_DIR.exists() else PROJECT_ROOT) / 'secret.config')
+
+# v2.1 clean cut: the single-file tracker.config is no longer read.
+_legacy_config = _find_config('tracker.config')
+if _legacy_config and SITE_CONFIG_FILE is None:
+    raise RuntimeError(
+        f"Found legacy single-file config at {_legacy_config}, but v2.1 uses "
+        f"layered configs (site.config + environment.config).\n"
+        f"Migrate once with:\n"
+        f"    python3 tools/split_config.py {_legacy_config}\n"
+        f"then restart. The legacy file is left in place and ignored afterwards."
+    )
 
 def parse_coordinate(coord_str: str) -> float:
     """
@@ -87,13 +90,13 @@ def parse_coordinate(coord_str: str) -> float:
     # If neither format works, raise error with helpful message
     raise ValueError(f"Invalid coordinate format: '{coord_str}'\nExpected: decimal (37.5637125) or degrees-minutes (N37° 33.81')")
 
-# Load configuration
+# Load configuration layers in precedence order (later files win per key)
 # inline_comment_prefixes strips trailing # comments from values (e.g. "3  # note" → "3")
 config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
-if CONFIG_FILE.exists():
-    config.read(CONFIG_FILE)
-else:
-    raise FileNotFoundError(f"Configuration file not found: {CONFIG_FILE}")
+if not DEFAULTS_FILE.exists():
+    raise FileNotFoundError(f"Application defaults missing from image: {DEFAULTS_FILE}")
+_layer_files = [DEFAULTS_FILE] + [p for p in (SITE_CONFIG_FILE, ENVIRONMENT_CONFIG_FILE) if p]
+CONFIG_SOURCES = [str(p) for p in config.read(str(f) for f in _layer_files)]
 
 # Load secrets configuration if it exists (overrides public config)
 secrets_config = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))

@@ -404,6 +404,7 @@ def health_check() -> Response:
         'status': 'ok',
         'mqtt_connected': mqtt_connected,
         'mqtt_status': mqtt_status,
+        'config_sources': getattr(config, 'CONFIG_SOURCES', []),
         'nodes_tracked': len(nodes),
         'nodes_with_position': len(nodes),
         'config': {

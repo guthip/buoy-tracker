@@ -14,18 +14,24 @@ mkdir -p /app/config /app/data /app/logs
 # Make sure directories are writable by docker group (host user access)
 chmod 775 /app/config /app/data /app/logs
 
-# First-run initialization: copy templates if config files don't exist
-if [ ! -f /app/config/tracker.config ]; then
-    echo "First run detected: copying tracker.config template..."
-    if [ -f /app/tracker.config.template ]; then
-        cp /app/tracker.config.template /app/config/tracker.config
-        chmod 664 /app/config/tracker.config
-        echo "✓ Created /app/config/tracker.config from template"
-    else
-        echo "✗ ERROR: tracker.config.template not found in image!"
-        exit 1
-    fi
+# v2.1 layered configs: legacy single-file tracker.config is no longer read.
+if [ -f /app/config/tracker.config ] && [ ! -f /app/config/site.config ]; then
+    echo "✗ ERROR: legacy tracker.config found but v2.1 uses layered configs."
+    echo "  Migrate once (on the host):"
+    echo "    python3 tools/split_config.py config/tracker.config"
+    echo "  or inside the container:"
+    echo "    docker exec buoy-tracker python3 /app/tools/split_config.py /app/config/tracker.config"
+    echo "  then restart. The legacy file is ignored afterwards."
+    exit 1
 fi
+
+# First-run initialization: drop commented example files for the two layers
+for name in site.config environment.config; do
+    if [ ! -f "/app/config/$name" ] && [ ! -f "/app/config/$name.example" ]; then
+        cp "/app/$name.example" "/app/config/$name.example" 2>/dev/null || true
+        echo "ⓘ  No $name yet — example placed at config/$name.example (app runs on defaults until you create $name)"
+    fi
+done
 
 if [ ! -f /app/config/secret.config ]; then
     echo "First run detected: copying secret.config template..."
