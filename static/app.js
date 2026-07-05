@@ -1187,12 +1187,94 @@
     }
   };
 
-  // v2.0 bottom sheet: expand/collapse the fleet list on mobile
-  window.toggleSheet = function(){
+  // -------------------------------------------------------------------
+  // v2.1 bottom sheet: draggable with snap points (collapsed / half / tall)
+  // -------------------------------------------------------------------
+  var sheetIndex = 0;
+
+  function sheetHeights() {
+    var vh = window.innerHeight;
+    return [180, Math.round(vh * 0.45), Math.round(vh * 0.70)];
+  }
+
+  function setSheet(idx) {
     var sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.toggle('expanded');
+    if (!sidebar) return;
+    sheetIndex = Math.max(0, Math.min(2, idx));
+    sidebar.classList.remove('dragging');
+    if (window.innerWidth <= 768) {
+      sidebar.style.height = sheetHeights()[sheetIndex] + 'px';
+    } else {
+      sidebar.style.height = '';
+    }
+    sidebar.classList.toggle('expanded', sheetIndex > 0);
+  }
+  window.__setSheet = setSheet;
+
+  // Tap on the handle still cycles: collapsed <-> tall
+  window.toggleSheet = function(){
+    setSheet(sheetIndex === 0 ? 2 : 0);
   };
   window.toggleSidebar = window.toggleSheet;  // legacy name still used by stubs
+
+  (function initSheetDrag() {
+    var handle = document.getElementById('sheet-handle');
+    var sidebar = document.getElementById('sidebar');
+    if (!handle || !sidebar) return;
+    var active = false, moved = false;
+    var startY = 0, startH = 0, startIdx = 0, lastY = 0, lastT = 0, vel = 0;
+
+    function pointY(e) { return e.touches ? e.touches[0].clientY : e.clientY; }
+
+    function onDown(e) {
+      if (window.innerWidth > 768) return;
+      active = true; moved = false;
+      startY = lastY = pointY(e);
+      startH = sidebar.getBoundingClientRect().height;
+      startIdx = sheetIndex;
+      lastT = Date.now(); vel = 0;
+      sidebar.classList.add('dragging');
+      e.preventDefault();
+    }
+
+    function onMove(e) {
+      if (!active) return;
+      var y = pointY(e);
+      var now = Date.now();
+      if (now > lastT) { vel = (y - lastY) / (now - lastT); }
+      lastY = y; lastT = now;
+      var delta = startY - y;
+      if (Math.abs(delta) > 4) moved = true;
+      var h = Math.max(120, Math.min(window.innerHeight * 0.75, startH + delta));
+      sidebar.style.height = h + 'px';
+      e.preventDefault();
+    }
+
+    function onUp() {
+      if (!active) return;
+      active = false;
+      if (!moved) { window.toggleSheet(); return; }  // it was a tap
+      var hs = sheetHeights();
+      var h = sidebar.getBoundingClientRect().height;
+      var idx = 0, best = 1e9;
+      for (var i = 0; i < hs.length; i++) {
+        var d = Math.abs(hs[i] - h);
+        if (d < best) { best = d; idx = i; }
+      }
+      // A flick (fast release) moves at least one level in its direction
+      if (vel < -0.5) idx = Math.max(idx, Math.min(2, startIdx + 1));
+      else if (vel > 0.5) idx = Math.min(idx, Math.max(0, startIdx - 1));
+      setSheet(idx);
+    }
+
+    handle.addEventListener('touchstart', onDown, { passive: false });
+    handle.addEventListener('pointerdown', onDown);
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('touchend', onUp);
+    document.addEventListener('pointerup', onUp);
+    window.addEventListener('resize', function(){ setSheet(sheetIndex); });
+  })();
 
   // Attach event listeners to traffic light dots for JavaScript-based tooltips
   function createTooltipElements() {
@@ -1250,7 +1332,7 @@
             e.target.id !== 'menu-btn' &&
             !e.target.closest('#menu-fab') &&
             !e.target.closest('#menu-btn')) {
-          sidebar.classList.remove('expanded');
+          window.__setSheet ? window.__setSheet(0) : sidebar.classList.remove('expanded');
           if (overlay) overlay.style.display = 'none';
         }
       }
@@ -2161,7 +2243,7 @@
     if (window.innerWidth <= 768) {
       var sidebar = document.getElementById('sidebar');
       if (sidebar && sidebar.classList.contains('expanded')) {
-        sidebar.classList.remove('expanded');
+        window.__setSheet ? window.__setSheet(0) : sidebar.classList.remove('expanded');
         var overlay = document.getElementById('sidebar-overlay');
         if (overlay) overlay.style.display = 'none';
       }
@@ -2402,7 +2484,7 @@
       
       if (isMobile && isLandscape && sidebar && sidebar.classList.contains('expanded')) {
         // Auto-close sidebar in landscape to maximize map view
-        sidebar.classList.remove('expanded');
+        window.__setSheet ? window.__setSheet(0) : sidebar.classList.remove('expanded');
         if (overlay) overlay.style.display = 'none';
       }
       

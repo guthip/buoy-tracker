@@ -247,14 +247,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     border-radius: 16px 16px 0 0;
     box-shadow: var(--sheet-shadow);
     z-index: 1000;
-    /* collapsed: strip height; expanded: 65% of viewport */
-    height: 178px;
-    max-height: 65dvh;
+    /* v2.1: draggable sheet — JS drives height between snap points
+       (collapsed strip / ~45% / ~70%); this is the initial collapsed state */
+    height: 180px;
+    max-height: 75dvh;
     transition: height 0.25s ease-out;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    touch-action: none;
   }
+  #sidebar.dragging { transition: none; }
+  #nodes { touch-action: pan-y; }
   @media (prefers-reduced-motion: reduce) { #sidebar { transition: none; } }
-  #sidebar.expanded { height: 65dvh; }
+  #sidebar.expanded { /* height driven inline by JS; class keeps card styling */ }
   #sheet-handle {
     display: block;
     width: 44px;
@@ -284,6 +288,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   #sidebar:not(.expanded) .toprow { float: left; margin-right: 8px; }
   #sidebar:not(.expanded) .state { float: right; margin: 0; }
   #sidebar:not(.expanded) .node::after { content: ""; display: block; clear: both; }
+}
+
+@media (min-width: 769px) {
+  #sidebar { height: auto !important; }
 }
 
 /* ---------- menu modal (Controls) ---------- */
