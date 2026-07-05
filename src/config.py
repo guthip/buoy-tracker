@@ -146,14 +146,9 @@ except Exception as e:
 # Web App Configuration
 WEBAPP_HOST = config.get('webapp', 'host', fallback='127.0.0.1')
 WEBAPP_PORT = config.getint('webapp', 'port', fallback=5102)
-# URL prefix for subpath deployments (e.g., '/buoy-tracker' for https://example.com/buoy-tracker/)
-# Leave empty for root deployment (e.g., https://example.com/)
-URL_PREFIX = config.get('webapp', 'url_prefix', fallback='').strip()
-# Ensure URL_PREFIX starts with / if non-empty and doesn't end with /
-if URL_PREFIX and not URL_PREFIX.startswith('/'):
-    URL_PREFIX = '/' + URL_PREFIX
-if URL_PREFIX and URL_PREFIX.endswith('/'):
-    URL_PREFIX = URL_PREFIX.rstrip('/')
+# v2.1: url_prefix config key removed. Subpath deployments are detected
+# per-request from the X-Forwarded-Prefix header (Traefik stripprefix sends
+# it automatically; Apache/nginx need one RequestHeader/proxy_set_header line).
 
 # Parse default center point (supports both decimal and degrees-minutes formats)
 _default_center = config.get('webapp', 'default_center', fallback='37.7749,-122.4194')

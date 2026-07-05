@@ -359,6 +359,20 @@ def handle_options(path: str = '') -> Tuple[str, int]:
     return '', 204
 
 
+def _request_url_prefix() -> str:
+    """Subpath prefix for THIS request, from X-Forwarded-Prefix.
+
+    Traefik's stripprefix middleware sets the header automatically; for
+    Apache/nginx add one line (RequestHeader set X-Forwarded-Prefix ... /
+    proxy_set_header X-Forwarded-Prefix ...). Only used to build the URLs
+    returned to the same requester — no security decisions read it.
+    """
+    prefix = request.headers.get('X-Forwarded-Prefix', '').strip()
+    if prefix and not prefix.startswith('/'):
+        prefix = '/' + prefix
+    return prefix.rstrip('/')
+
+
 @api_bp.route('/', methods=['GET'])
 def index() -> Response:
     """Serve the main map page."""
@@ -384,7 +398,7 @@ def index() -> Response:
                           api_key_required=True,  # API key always required for Control Menu
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
-                          url_prefix=config.URL_PREFIX,  # Pass URL prefix for subpath deployments
+                          url_prefix=_request_url_prefix(),  # from X-Forwarded-Prefix (v2.1)
                           build_id=int(time.time())))
     # Disable caching for HTML to always get fresh page
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
@@ -946,11 +960,10 @@ def debug_state() -> Response:
 
 # Register blueprint with the Flask app
 app.register_blueprint(api_bp)
-if config.URL_PREFIX:
-    logger.info(f'App routes registered at {config.URL_PREFIX}')
+logger.info('Routes registered at root; subpath prefix (if any) comes from X-Forwarded-Prefix per request')
 
 
 if __name__ == '__main__':
-    logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}' + (f' at {config.URL_PREFIX}' if config.URL_PREFIX else ''))
+    logger.info(f'Starting Buoy Tracker on http://{config.WEBAPP_HOST}:{config.WEBAPP_PORT}')
     start_mqtt_on_startup()
     app.run(debug=False, host=config.WEBAPP_HOST, port=config.WEBAPP_PORT, threaded=True)
