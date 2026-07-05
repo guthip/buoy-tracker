@@ -57,7 +57,7 @@ On first run, the container auto-initializes config files in `./config/`
 
 **4. Customize configuration:**
 ```bash
-nano config/tracker.config  # MQTT broker, special nodes, etc.
+nano config/site.config config/environment.config  # fleet + infrastructure layers
 nano config/secret.config   # Credentials (if needed)
 ```
 
@@ -91,7 +91,7 @@ This file will be automatically loaded by docker-compose. Supported variables:
 - `ALERT_SMTP_USERNAME` - SMTP username for email alerts
 - `ALERT_SMTP_PASSWORD` - SMTP password for email alerts
 
-**Note:** Environment variables override values in `config/tracker.config` and `config/secret.config`. If you don't create a `.env` file, the container will use values from the config files instead (recommended for most deployments).
+**Note:** Environment variables override values in the config layers. If you don't create a `.env` file, the container will use values from the config files instead (recommended for most deployments).
 
 **6. Restart the container to apply configuration changes:**
 ```bash
@@ -129,7 +129,7 @@ Configuration files are stored in `./config/` on the host and are editable witho
 
 ```bash
 # Edit MQTT configuration
-nano config/tracker.config
+nano config/site.config
 
 # Edit secrets (optional - only if using email alerts)
 nano config/secret.config
@@ -139,11 +139,11 @@ docker compose restart
 ```
 
 **On first run**, the container automatically initializes:
-- `./config/tracker.config` (copied from template in image)
+- `./config/site.config` + `./config/environment.config` (examples auto-placed on first run)
 - `./config/secret.config` (copied from template in image)
 
 **Volume Structure:**
-- `./config/tracker.config` → Auto-created on first run (edit here for MQTT broker, special nodes, etc.)
+- `./config/site.config` / `environment.config` → create from the auto-placed examples (app runs on defaults until then)
 - `./config/secret.config` → Auto-created on first run (edit here for credentials)
 - `./data/` → Application data (`buoy_tracker.db` SQLite store — positions, telemetry, alert events, runtime settings)
 - `./logs/` → Application logs
@@ -182,7 +182,7 @@ Simply start the container with your configuration files, and the application wi
 ## Data Persistence
 
 The following persists across container restarts:
-- `./config/tracker.config` - MQTT and application settings
+- `./config/site.config` (fleet) + `./config/environment.config` (infrastructure)
 - `./config/secret.config` - Credentials (if configured)
 - `./logs/` - Application logs
 - `./data/` - Persistent application data (special nodes, node metadata, etc.)
@@ -191,7 +191,7 @@ On restart, the tracker rebuilds live data (node positions, connections) from in
 
 **Controlling persistence:**
 
-You can enable or disable persistence in `tracker.config`:
+Data persistence (v2.0+):
 
 ```ini
 [app_features]
@@ -219,7 +219,7 @@ lsof -i :5103
 docker exec buoy-tracker ping mqtt.bayme.sh
 
 # Check config
-docker exec buoy-tracker cat /app/config/tracker.config
+docker exec buoy-tracker cat /app/config/site.config
 ```
 
 ### Data not persisting
@@ -245,12 +245,12 @@ Buoy Tracker v2.0 Docker image for real-time Meshtastic node tracking.
 Quick Start:
 1. mkdir buoy-tracker && cd buoy-tracker
 2. Create docker-compose.yml (see DOCKER.md Quick Start section)
-3. touch tracker.config && mkdir -p data logs
+3. mkdir -p config data logs
 4. docker compose up -d
 5. Open: http://localhost:5103
 
 The container runs with sensible defaults. To customize:
-- Get tracker.config.template and copy to tracker.config, then edit
+- Copy site.config.example/environment.config.example into config/ and edit
 - Restart: docker compose restart
 
 See DOCKER.md for complete instructions.
@@ -273,3 +273,59 @@ See DOCKER.md for complete instructions.
 - If API key is configured: Control Menu actions require correct password (401 if missing/invalid)
 - If no API key configured: No authentication required (development mode)
 - Unauthorized requests receive 401 response
+
+
+## PUID / PGID (v2.1)
+
+The container follows the linuxserver.io convention: set `PUID`/`PGID` to your
+host user so files in the mounted volumes are owned by you (default 1000:1000).
+`TZ` is honored too:
+
+```yaml
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Los_Angeles
+```
+
+## Rootless podman (v2.1)
+
+The entrypoint detects a non-root start, skips ownership changes, and runs as
+the invoking user (PUID/PGID are ignored — podman's user mapping replaces them):
+
+```bash
+podman run -d --name buoy-tracker --userns=keep-id \
+  -p 5103:5103 \
+  -v ./config:/app/config -v ./data:/app/data -v ./logs:/app/logs \
+  dokwerker8891/buoy-tracker:2.1
+# systemd unit: podman generate systemd --new --name buoy-tracker
+```
+
+If a volume isn't writable, the container exits with an actionable message.
+
+## Traefik (v2.1)
+
+Subdomain style (`buoy.example.com`):
+
+```yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.buoy.rule=Host(`buoy.example.com`)"
+      - "traefik.http.routers.buoy.entrypoints=https"
+      - "traefik.http.routers.buoy.tls.certresolver=cloudflare"
+      - "traefik.http.services.buoy.loadbalancer.server.port=5103"
+```
+
+Subpath style (`www.example.com/buoy`) — stripprefix sends
+`X-Forwarded-Prefix`, which the app adapts to automatically:
+
+```yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.buoy.rule=Host(`www.example.com`) && PathPrefix(`/buoy`)"
+      - "traefik.http.routers.buoy.middlewares=buoy-strip"
+      - "traefik.http.middlewares.buoy-strip.stripprefix.prefixes=/buoy"
+      - "traefik.http.services.buoy.loadbalancer.server.port=5103"
+```
+
+An ansible kit using these patterns ships in `deploy/ansible/`.

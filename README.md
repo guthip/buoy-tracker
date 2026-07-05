@@ -52,7 +52,7 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
   - **SoL** (Sign of Life): Time since any packet received
   - **Position History**: Deduplicated by packet timestamp to show only unique positions (retransmitted packets are automatically filtered)
   - **Position Trail Display**: Shows movement history on map with markers fading from light blue (oldest) to dark blue (newest); size increases with recency
-  - **Server-side Deduplication**: Position data reduced to one point per time window (configurable via `data_limit_time` in `tracker.config`)
+  - **Server-side Deduplication**: Position data reduced to one point per time window (configurable via `data_limit_time` in `site.config`)
     - Default: 1.0 hour (one point per hour)
     - Reduces 700+ daily points to ~24, saving 84% bandwidth
     - Adjust to 0.5 for 30-minute granularity or 24 for daily snapshots
@@ -76,7 +76,7 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
     (yard, transport); auto-unmutes when it returns home. Map indication and battery
     alerts stay active
   - Settings changed in the UI persist across restarts (stored in the SQLite database);
-    a Reset button returns to the tracker.config values
+    a Reset button returns to the config-file values
   - **Server Restart**: Clear all cached trail data and reset in-memory state from the Control Menu
 - **Special Node Tracking**: Track specific nodes with home positions and movement alerts
   - Green dashed rings show movement threshold (configurable)
@@ -94,13 +94,14 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
 # Install dependencies
 pip install -r requirements.txt
 
-# Create configuration files from templates
-cp tracker.config.template tracker.config
-cp secret.config.template secret.config
+# v2.1 layered config: the app runs on built-in defaults out of the box.
+# Create the two small override layers from the examples:
+cp site.config.example config/site.config            # your fleet: buoys, homes, alert policy
+cp environment.config.example config/environment.config  # your infra: broker, smtp, ports
+cp secret.config.template config/secret.config       # credentials
 
-# Edit to customize MQTT broker, special nodes, etc.
-nano tracker.config
-nano secret.config
+nano config/site.config
+nano config/environment.config
 
 # Run the application
 python3 run.py
@@ -139,8 +140,9 @@ docker compose up -d
 
 4. Edit configuration files on the host:
 ```bash
-nano config/tracker.config  # MQTT broker, special nodes, etc.
-nano config/secret.config   # Credentials (if needed)
+nano config/site.config         # your fleet: buoys, homes, alert policy
+nano config/environment.config  # your infra: broker, smtp, ports
+nano config/secret.config       # credentials (if needed)
 ```
 
 5. Restart the container to apply changes:
@@ -174,13 +176,14 @@ cd buoy-tracker
 # Create directories for volumes (config, data, logs)
 mkdir -p config data logs
 
-# Create configuration files from templates in config directory
-cp tracker.config.template config/tracker.config
+# Create the two config layers from the examples
+cp site.config.example config/site.config
+cp environment.config.example config/environment.config
 cp secret.config.template config/secret.config
 
-# Customize for your environment
-nano config/tracker.config  # MQTT broker, special nodes, etc.
-nano config/secret.config   # Credentials (if using email alerts)
+# Customize
+nano config/site.config         # your fleet: buoys, homes, alert policy
+nano config/environment.config  # your infra: broker, smtp, ports
 ```
 
 3. Start the service:
@@ -196,7 +199,7 @@ docker compose logs -f
 Access the web interface at **http://localhost:5103**
 
 **Volume Structure** (persists between container restarts):
-- `./config/` → Configuration files (tracker.config, secret.config)
+- `./config/` → Configuration layers (site.config, environment.config, secret.config)
   - Mount to: `/app/config` in container
   - Editable on host; container reads from here
   - Create from templates during initial setup
@@ -238,7 +241,7 @@ docker compose up -d
 - ✅ Multi-platform: Works on Intel/AMD (x86_64), Apple Silicon (ARM64), Raspberry Pi (ARM64)
 
 **Configuration files (created from templates in config volume):**
-- `./config/tracker.config.template` → Reference template; copy to `config/tracker.config` and customize for your MQTT broker, special nodes, etc.
+- `site.config.example` / `environment.config.example` → commented reference layers (auto-placed in `./config/` on first run)
 - `./config/secret.config.template` → Template showing required secrets; copy to `config/secret.config` and fill in real values
 
 **Generated directories:**
@@ -257,7 +260,7 @@ docker compose up -d
   - Toggle "Show Position Trails" to visualize movement history on the map
   - Toggle "Show Nautical Markers" to display navigation markers on the map
   - Adjust trail history hours and movement threshold dynamically
-  - Note: "Show All Nodes" is now a server-side config setting (`show_all_nodes` in tracker.config), not a UI toggle
+  - Note: "Show All Nodes" is now a server-side config setting (`show_all_nodes` in `environment.config`), not a UI toggle
   - (Sorting is automatic: special nodes are always shown at the top, sorted alphabetically; all other nodes are sorted by most recently seen)
 - **Movement Alerts**:
   - Green dashed circles show 50m threshold around special node home positions
@@ -272,7 +275,7 @@ docker compose up -d
   - ⚫ Dark Gray: Special node stale
   - ⚪ Light Gray: Awaiting GPS (at home position)
   - 🔴 Light Red Card: Special node outside expected range
-  - **LPU/SoL indicators** use separate configurable thresholds (see `[special_nodes_settings]` in `tracker.config`):
+  - **LPU/SoL indicators** use separate configurable thresholds (see `[special_nodes_settings]` in `site.config`):
     - LPU: blue < 3h, orange 3–8h, red > 8h (defaults for ~2-hour position update interval)
     - SoL: blue < 2h, orange 2–6h, red > 6h (defaults for ~1-hour telemetry interval)
 
@@ -284,18 +287,15 @@ Before running the application, create your volume directories and configuration
 # Create directories for volumes
 mkdir -p config data logs
 
-# Create configuration files from templates
-cp tracker.config.template config/tracker.config
-cp secret.config.template config/secret.config
-
-# Customize for your environment
-nano config/tracker.config
-nano config/secret.config  # Optional: only needed if using email alerts
+# Create the config layers from the examples
+cp site.config.example config/site.config
+cp environment.config.example config/environment.config
+cp secret.config.template config/secret.config  # only if using auth/alerts
 ```
 
 ### Applying Configuration Changes
 
-After editing `config/tracker.config`, restart the container:
+After editing files in `config/`, restart the container:
 
 ```bash
 docker compose restart
@@ -303,7 +303,16 @@ docker compose restart
 
 ---
 
-Edit `tracker.config` to customize settings:
+Configuration is layered (v2.1): built-in defaults < `site.config` (what the
+fleet is) < `environment.config` (where it runs) < `secret.config` < settings
+changed in the UI (persisted in the database). `/health` lists the loaded
+files under `config_sources`.
+
+**Upgrading from a single-file setup:** run once
+`python3 tools/split_config.py config/tracker.config` — it writes the two
+layer files; the legacy file is ignored afterwards.
+
+Key settings by layer:
 
 ### MQTT Connection
 ```ini
@@ -409,7 +418,7 @@ API rate limits are **automatically calculated** based on polling interval and n
   - At 10-second polling → **3,600 requests/hour per IP address** (current default)
   - At 30-second polling → **1,200 requests/hour per IP address**
   - At 60-second polling → **600 requests/hour per IP address**
-- **Dynamic scaling**: Rate limit automatically adjusts if you add/remove special nodes in `tracker.config`
+- **Dynamic scaling**: Rate limit automatically adjusts if you add/remove special nodes in `site.config`
 - **Client Notification**: If a client exceeds the rate limit:
   - The **progress bar turns orange** and displays remaining pause time
   - Polling automatically pauses for 60 seconds, then resumes
@@ -424,7 +433,7 @@ API rate limits are **automatically calculated** based on polling interval and n
 
 The rate limit automatically adjusts based on polling interval and special node count:
 ```bash
-# Change polling frequency in tracker.config:
+# Change polling frequency in environment.config:
 api_polling_interval = 10   # Calculates rate limit from polling interval and special nodes in config
 api_polling_interval = 30   # Lower polling = lower rate limit
 api_polling_interval = 60   # Even more conservative
@@ -448,18 +457,18 @@ Deploy Buoy Tracker behind a reverse proxy (nginx, Apache, etc.) at any subpath.
 
 ### Configuration
 
-Edit `tracker.config`:
+No app configuration needed (v2.1): the app reads the `X-Forwarded-Prefix`
+header per request. Traefik's `stripprefix` middleware sends it automatically.
+For Apache/nginx add one line:
 
-```ini
-[webapp]
-port = 5103
-url_prefix = /buoy-tracker
+```apache
+# Apache (inside the proxied <Location>)
+RequestHeader set X-Forwarded-Prefix "/buoy-tracker"
 ```
-
-The app will automatically:
-- Register all routes at `/buoy-tracker/*`
-- Tell the browser to request `/buoy-tracker/health`, `/buoy-tracker/api/nodes`, etc.
-- Prepend the prefix to all API calls in the web interface
+```nginx
+# nginx (inside the location block)
+proxy_set_header X-Forwarded-Prefix /buoy-tracker;
+```
 
 ### Nginx Example
 
@@ -488,7 +497,7 @@ server {
 ```
 
 **Key Points:**
-- Set `url_prefix = /buoy-tracker` in `tracker.config`
+- Send `X-Forwarded-Prefix: /buoy-tracker` from the proxy (one line, above)
 - Nginx location path must end with `/`
 - `proxy_pass` to Flask app port (e.g., `http://localhost:5103/`)
 - Don't add the prefix to the proxy_pass URL—Flask handles that via blueprint registration
@@ -639,7 +648,7 @@ Send email notifications when special nodes move outside their home fence.
 
 Linux servers have `sendmail` or `postfix` running by default. Use **localhost:25** (no credentials needed):
 
-**In `tracker.config`:**
+**In `config/environment.config` (site policy like `enabled` goes in `site.config`):**
 ```ini
 
 [alerts]
@@ -679,7 +688,7 @@ sudo yum install sendmail   # RHEL/CentOS
 
 macOS and Windows don't have sendmail/postfix running by default. Use an external SMTP provider:
 
-**In `tracker.config`:**
+**In `config/environment.config` (site policy like `enabled` goes in `site.config`):**
 ```ini
 
 [alerts]
@@ -710,7 +719,7 @@ See External SMTP Providers section below for setup instructions.
 
 ### External SMTP Providers
 
-For development on Mac/Windows, use an external SMTP provider. All providers work the same way - configure in `tracker.config`:
+For development on Mac/Windows, use an external SMTP provider. All providers work the same way - configure in `config/environment.config`:
 
 **Gmail:**
 ```ini
@@ -753,7 +762,7 @@ export ALERT_SMTP_USERNAME="your-email@gmail.com"
 export ALERT_SMTP_PASSWORD="your-app-password"
 ```
 
-Then leave `smtp_username` and `smtp_password` blank in `tracker.config`.
+Then leave `smtp_username` and `smtp_password` blank in the config files.
 
 ### Testing
 
@@ -835,7 +844,7 @@ the API key. Alert emails are dry-run (logged, not sent) in simulation mode.
 - **`POST /api/test-alert`** - Send test alert email to verify email configuration
   - Body: `{"type": "movement"}`, `{"type": "battery"}`, or `{"type": "offline"}` (optional, defaults to "movement")
   - Returns: `{"success": true, "message": "Test movement alert sent"}`
-  - Requires: Email alerts enabled in tracker.config (`[alerts] enabled = true`)
+  - Requires: Email alerts enabled in site.config (`[alerts] enabled = true`)
   - Authentication: Required if `api_key` is set in `secret.config` (bypassed on localhost if `ENV=development`)
   - Use cases: Verify SMTP configuration, test email delivery, check alert formatting
 
@@ -874,13 +883,14 @@ buoy_tracker/
 │   └── app.js               # Frontend JavaScript
 ├── data/                    # Application data (persisted; special node history)
 ├── tests/                   # Test suite
-├── tracker.config.template  # Template (copy to tracker.config during setup)
+├── site.config.example      # Fleet-layer reference (buoys, homes, policy)
+├── environment.config.example # Infrastructure-layer reference
 ├── secret.config.template   # Template (copy to secret.config during setup)
 ├── run.py                   # Application runner
 └── requirements.txt         # Python dependencies
 ```
 
-**Note:** `tracker.config` and `secret.config` are created from templates during deployment and are not included in the repository.
+**Note:** the real `site.config`, `environment.config`, and `secret.config` live in each deployment's `config/` volume and are never committed.
 
 ## Development
 
