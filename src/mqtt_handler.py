@@ -72,7 +72,32 @@ node_topics = {}
 special_node_packets = {}  # node_id -> list of ALL packets with details
 special_node_last_packet = {}  # node_id -> timestamp of last packet (any type, even encrypted)
 special_node_channels = {}  # node_id -> channel_name from topic (for routing packets)
-special_node_position_timestamps = {}  # node_id -> set of rxTime values to deduplicate retransmitted positions
+special_node_position_timestamps = {}  # node_id -> set of rxTime values (legacy; kept for restart clears)
+
+# Lean storage (v2.1): one history entry + one DB row per BROADCAST, not per
+# gateway copy. A broadcast's gateway copies share the packet id; ~20-25
+# gateways around the bay each uplink a copy, and recording them all inflated
+# the store ~23x with data no one reads. The consensus alert buffer still
+# sees every copy through its own path.
+_seen_broadcasts = {}  # node_id -> (set of packet_ids, deque for eviction)
+_SEEN_BROADCASTS_MAX = 300
+
+
+def _is_new_broadcast(node_id, packet_id):
+    if packet_id is None:
+        return True  # can't identify the broadcast; accept rather than drop
+    entry = _seen_broadcasts.get(node_id)
+    if entry is None:
+        entry = (set(), deque())
+        _seen_broadcasts[node_id] = entry
+    ids, order = entry
+    if packet_id in ids:
+        return False
+    ids.add(packet_id)
+    order.append(packet_id)
+    if len(order) > _SEEN_BROADCASTS_MAX:
+        ids.discard(order.popleft())
+    return True
 _last_channel_save = 0  # Track when we last saved channel data
 _last_packet_save = 0  # Track when we last saved packet history
 
@@ -1215,21 +1240,15 @@ def on_position(json_data):
                     gateway_info_cache[node_id]["lat"] = lat
                     gateway_info_cache[node_id]["lon"] = lon
 
-            # Record history for special nodes (deduplicate by rxTime to avoid retransmitted packets)
+            # Record history for special nodes: one entry per broadcast
+            # (gateway copies of the same packet_id are skipped — lean storage)
             if is_special:
-                # Extract rxTime from the packet to deduplicate retransmissions
-                rx_time = json_data.get("rxTime")
-
-                if node_id not in special_node_position_timestamps:
-                    special_node_position_timestamps[node_id] = set()
-
-                if rx_time is not None and rx_time in special_node_position_timestamps[node_id]:
-                    logger.debug(f'Skipped duplicate position for {node_id} (rxTime: {rx_time} already seen)')
-                else:
-                    if rx_time is not None:
-                        special_node_position_timestamps[node_id].add(rx_time)
+                pid = json_data.get('id')
+                if _is_new_broadcast(node_id, pid):
                     _append_position_history(node_id, lat, lon, alt, json_data)
-                    logger.debug(f'Added new position to history for {node_id} (rxTime: {rx_time})')
+                    logger.debug(f'Added new position to history for {node_id} (packet {pid})')
+                else:
+                    logger.debug(f'Skipped gateway copy of position broadcast {pid} for {node_id}')
 
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
@@ -1369,7 +1388,9 @@ def on_telemetry(json_data):
 
             logger.info(f'Updated telemetry for {node_id}: voltage={voltage}V, battery_pct={battery_pct}%')
 
-            if _is_special_node(node_id) and (voltage is not None or battery_pct is not None):
+            if (_is_special_node(node_id)
+                    and (voltage is not None or battery_pct is not None)
+                    and _is_new_broadcast(node_id, json_data.get('id'))):
                 try:
                     storage.record_telemetry(
                         node_id, time.time(), voltage=voltage, battery_pct=battery_pct,
