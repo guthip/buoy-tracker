@@ -45,11 +45,11 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
 - **Node Details**: Battery levels, hardware info, last-seen times, and channel information
 - **Status Color-Coding**: Blue (recent), Orange (stale), Red (very old)
 - **Polling Progress Bar**: Visual indicator in the header showing time until next data refresh
-  - White progress bar fills left to right, resets at each poll
+  - Green progress bar fills left to right, resets at each poll
   - Configurable polling interval (5-120 seconds; default is 10 seconds)
-- **Time Indicators**: Each node card shows:
-  - **LPU** (Last Position Update): Time since last GPS position packet
-  - **SoL** (Sign of Life): Time since any packet received
+- **Time Indicators**: Each buoy card shows labeled chips:
+  - **Fix**: Time since the last GPS position packet
+  - **Heard**: Time since any packet was received
   - **Position History**: Deduplicated by packet timestamp to show only unique positions (retransmitted packets are automatically filtered)
   - **Position Trail Display**: Shows movement history on map with markers fading from light blue (oldest) to dark blue (newest); size increases with recency
   - **Server-side Deduplication**: Position data reduced to one point per time window (configurable via `data_limit_time` in `site.config`)
@@ -275,9 +275,9 @@ docker compose up -d
   - ⚫ Dark Gray: Special node stale
   - ⚪ Light Gray: Awaiting GPS (at home position)
   - 🔴 Light Red Card: Special node outside expected range
-  - **LPU/SoL indicators** use separate configurable thresholds (see `[special_nodes_settings]` in `site.config`):
-    - LPU: blue < 3h, orange 3–8h, red > 8h (defaults for ~2-hour position update interval)
-    - SoL: blue < 2h, orange 2–6h, red > 6h (defaults for ~1-hour telemetry interval)
+  - **Fix/Heard chips** use separate configurable thresholds (`lpu_*`/`sol_*` keys in `[special_nodes_settings]` in `site.config`):
+    - Fix: blue < 3h, orange 3–8h, red > 8h (defaults for ~2-hour position update interval)
+    - Heard: blue < 2h, orange 2–6h, red > 6h (defaults for ~1-hour telemetry interval)
 
 ## Configuration
 
@@ -425,8 +425,8 @@ API rate limits are **automatically calculated** based on polling interval and n
   - Browser console shows `[RATELIMIT]` messages for debugging
 
 **Progress Bar Indicator:**
-- Located in the header bar (blue background)
-- **White fill** shows time elapsed since last data poll
+- Located in the header bar
+- **Green fill** shows time elapsed since last data poll
 - **Fills 0→100%** over the polling interval
 - **Orange display** during rate limit pause with countdown
 - **Updates every 100ms** for smooth animation
@@ -591,16 +591,16 @@ Once a position is learned, movement alerts are triggered relative to that first
 
 **Movement Alerts**: Green dashed ring shows threshold boundary. Red solid ring appears when node moves beyond threshold from home position.
 
-**LPU and SoL Timing Thresholds**: The LPU (Last Position Update) and SoL (Sign of Life) timing indicators use independent thresholds configured in `[special_nodes_settings]`:
+**Fix and Heard Timing Thresholds**: The Fix (last GPS position) and Heard (any packet) chips use independent thresholds configured in `[special_nodes_settings]` (key names keep the historical `lpu`/`sol` prefixes):
 
 ```ini
 [special_nodes_settings]
-# LPU thresholds: color based on time since last GPS position packet
+# Fix thresholds: color based on time since last GPS position packet
 lpu_blue_threshold_hours = 3       # Green/blue within 3 hours
 lpu_orange_threshold_hours = 8     # Orange between 3-8 hours
 # Red if older than 8 hours
 
-# SoL thresholds: color based on time since any packet (telemetry, position, etc.)
+# Heard thresholds: color based on time since any packet (telemetry, position, etc.)
 sol_blue_threshold_hours = 2       # Green/blue within 2 hours
 sol_orange_threshold_hours = 6     # Orange between 2-6 hours
 # Red if older than 6 hours
