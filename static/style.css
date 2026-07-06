@@ -279,15 +279,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     background: var(--line);
   }
   #nodes { padding: 0 12px 10px; }
-  /* collapsed: cards compress to strip rows (state pill + name only) */
-  #sidebar:not(.expanded) .node { padding: 7px 4px; border: none; box-shadow: none; border-radius: 0; border-top: 1px solid var(--line); background: none; }
+  /* collapsed: strip rows — NAME … BATTERY STATE (battery stays visible so a
+     weak buoy is glanceable without expanding; label dropped for space) */
+  #sidebar:not(.expanded) .node {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 4px; border: none; box-shadow: none; border-radius: 0;
+    border-top: 1px solid var(--line); background: none;
+  }
   #sidebar:not(.expanded) .node:first-child { border-top: none; }
-  #sidebar:not(.expanded) .chips,
   #sidebar:not(.expanded) .node-extra,
   #sidebar:not(.expanded) .iconbtn { display: none; }
-  #sidebar:not(.expanded) .toprow { float: left; margin-right: 8px; }
-  #sidebar:not(.expanded) .state { float: right; margin: 0; }
-  #sidebar:not(.expanded) .node::after { content: ""; display: block; clear: both; }
+  #sidebar:not(.expanded) .toprow { min-width: 0; flex: 0 1 auto; }
+  #sidebar:not(.expanded) .node > div:not(.toprow):not(.chips) { order: 3; }
+  #sidebar:not(.expanded) .state { margin: 0; }
+  #sidebar:not(.expanded) .state small { display: none; }
+  #sidebar:not(.expanded) .chips { display: flex; order: 2; margin-left: auto; }
+  #sidebar:not(.expanded) .chips .chip:not(.chip-batt) { display: none; }
+  #sidebar:not(.expanded) .chip.chip-batt .lbl { display: none; }
 }
 
 @media (min-width: 769px) {

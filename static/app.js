@@ -1547,7 +1547,7 @@
 
   function chipHtml(label, value, color, fill) {
     var led = color === 'green' ? 'g' : color === 'yellow' ? 'y' : color === 'red' ? 'r' : 'n';
-    var cls = 'chip';
+    var cls = 'chip chip-' + label.toLowerCase();
     if (fill && color === 'yellow') cls += ' chip-fill-y';
     else if (fill && color === 'red') cls += ' chip-fill-r';
     else if (color === 'red') cls += ' alert-led';
