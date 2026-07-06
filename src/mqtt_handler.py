@@ -1768,91 +1768,6 @@ def is_connected():
         return 'disconnected'
 
 
-def inject_telemetry_data(node_id, battery_level, channel_name="TEST", from_name="Test Node", message_type="telemetry"):
-    """
-    Inject fake telemetry or admin data for testing.
-    Simulates receiving MQTT messages as if they came from a real node.
-    
-    Args:
-        node_id: The node ID (integer)
-        battery_level: Battery percentage (0-100)
-        channel_name: Channel name (default "TEST")
-        from_name: Node name for display (default "Test Node")
-        message_type: Type of message - "telemetry" (TELEMETRY_APP) or "admin" (ADMIN_APP) (default "telemetry")
-    
-    Returns:
-        bool: True if successful
-    """
-    try:
-        import time
-        
-        if message_type.lower() == "admin":
-            # ADMIN_APP message with deviceState containing battery
-            fake_json = {
-                "from": node_id,
-                "type": "ADMIN_APP",
-                "channel": 0,
-                "channel_name": channel_name,
-                "decoded": {
-                    "portnum": "ADMIN_APP",
-                    "payload": {
-                        "deviceState": {
-                            "power": {
-                                "battery": battery_level,
-                                "chargingCurrent": 0,
-                                "flags": 0,
-                                "observedCurrent": 0,
-                                "voltage": 4200 if battery_level > 50 else 3800
-                            }
-                        }
-                    }
-                },
-                "timestamp": int(time.time()),
-                "rxTime": int(time.time()),
-                "rxRssi": -100,
-                "rxSnr": 0,
-                "from_name": from_name
-            }
-        else:
-            # TELEMETRY_APP message with device_metrics (default) - using snake_case to match protobuf
-            fake_json = {
-                "from": node_id,
-                "type": "TELEMETRY_APP",
-                "channel": 0,
-                "channel_name": channel_name,
-                "decoded": {
-                    "portnum": "TELEMETRY_APP",
-                    "payload": {
-                        "device_metrics": {
-                            "battery_level": battery_level,
-                            "voltage": 4.0 if battery_level > 50 else 3.8,
-                            "channel_utilization": 0.0,
-                            "air_util_tx": 0.0,
-                            "uptime_seconds": 1000000
-                        }
-                    }
-                },
-                "timestamp": int(time.time()),
-                "rxTime": int(time.time()),
-                "rxRssi": -100,
-                "rxSnr": 0,
-                "from_name": from_name
-            }
-        
-        # Call the appropriate handler
-        if message_type.lower() == "admin":
-            on_telemetry(fake_json)  # Admin messages with power info also trigger telemetry handlers
-        else:
-            on_telemetry(fake_json)
-        
-        logger.info(f"Injected fake {message_type} telemetry: {from_name} (ID: {node_id}) battery={battery_level}%")
-        return True
-        
-    except Exception as e:
-        logger.error(f"Failed to inject telemetry data: {e}", exc_info=True)
-        return False
-
-
 # View layer moved to api_views.py (v2.0 refactor); re-exported for call sites
 from .api_views import (  # noqa: E402  (must import after state is defined)
     _calculate_node_status,
@@ -1866,10 +1781,6 @@ from .api_views import (  # noqa: E402  (must import after state is defined)
     get_special_history,
     _deduplicate_by_hour,
     get_signal_history,
-    get_all_gateways,
-    get_all_special_history,
-    get_gateway_connections,
-    get_special_node_packets,
 )
 
 
@@ -1879,6 +1790,5 @@ from .gateways import (  # noqa: E402
     _extract_gateway_from_packet,
     _calculate_gateway_reliability_score,
     _update_gateway_reliability_cache_for_gateway,
-    _load_gateways_from_saved_data,
     _update_gateway_names_in_connections,
 )

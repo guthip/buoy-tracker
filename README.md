@@ -411,7 +411,7 @@ trail_history_hours = 168      # Adjustable in UI
 
 API rate limits are **automatically calculated** based on polling interval and number of special nodes:
 - **Formula**: `(3600 / polling_seconds) * (3_base_endpoints + N_special_nodes) * 2.0_safety_margin`, rounded up to nearest 10
-- **Base endpoints**: `/health`, `api/nodes`, `api/special/packets` = 3 requests per interval
+- **Base endpoints**: `/health`, `api/nodes`, `api/special/history/batch` = 3 requests per interval
 - **Per special node**: `api/special/history` request when trails enabled = N additional requests
 - **Safety multiplier**: 2.0x provides headroom for traffic spikes
 - **Examples** (assuming 4 special nodes configured):

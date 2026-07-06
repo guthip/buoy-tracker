@@ -148,28 +148,6 @@
       };
     }
 
-    /**
-     * Convert traffic light color name to hex color
-     * @param {string} color - Color name: 'green', 'yellow', 'red', or anything else
-     * @returns {string} Hex color code
-     */
-    function trafficLightColor(color) {
-      switch(color) {
-        case 'green': return '#4CAF50';
-        case 'yellow': return '#FFEB3B';
-        case 'red': return '#F44336';
-        default: return '#bbb';
-      }
-    }
-
-    function formatBatteryForCard(voltage, batteryPct) {
-      if (voltage != null && batteryPct != null) {
-        return voltage.toFixed(2) + 'V<br>' + batteryPct + '%';
-      }
-      if (voltage != null) return voltage.toFixed(2) + 'V';
-      if (batteryPct != null) return batteryPct + '%';
-      return '?';
-    }
 
     /**
      * Calculate age-based traffic light color and text
@@ -214,21 +192,6 @@
       }
       return 'gray';
     }
-
-    /**
-     * Calculate distance traffic light color and text
-     * @param {number} distanceMeters - Distance from home in meters
-     * @param {number} threshold - Movement threshold in meters
-     * @returns {object} {color: 'green'|'yellow'|'red'|'gray', text: '150M'|'?'}
-     */
-    function getDistanceStatus(distanceMeters, threshold) {
-      if (distanceMeters == null || isNaN(distanceMeters)) return {color: 'gray', text: '?'};
-      var distm = Math.round(Number(distanceMeters));
-      var color = distm < threshold/2 ? 'green' : distm < threshold ? 'yellow' : 'red';
-      var text = distm + 'M';
-      return {color: color, text: text};
-    }
-
 
 
     /**
@@ -646,6 +609,19 @@
     };
   }
   
+  // Alerts button styling via design-system classes (no inline hex)
+  function setAlertsButton(enabled) {
+    var btn = document.getElementById('toggleAlertsBtn');
+    var status = document.getElementById('alertStatus');
+    if (btn) {
+      btn.className = enabled ? 'btn good' : 'btn crit';
+      btn.textContent = enabled ? 'Alert emails: on' : 'Alert emails: off';
+    }
+    if (status) status.textContent = enabled
+      ? 'Alerts are ON — movement/battery emails will be sent'
+      : 'Alerts are OFF — no emails will be sent';
+  }
+
   // Toggle email alerts on/off
   window.toggleAlerts = function toggleAlerts() {
     try {
@@ -653,18 +629,7 @@
         try {
           if (xhr.status === 200) {
             var data = JSON.parse(xhr.responseText);
-            var btn = document.getElementById('toggleAlertsBtn');
-            var status = document.getElementById('alertStatus');
-            
-            if (data.alerts_enabled) {
-              btn.style.background = '#4CAF50';
-              btn.textContent = '⚠️ Alerts Enabled';
-              if (status) status.textContent = 'Alerts are ON - will send notifications on movement';
-            } else {
-              btn.style.background = '#f44336';
-              btn.textContent = '⚠️ Alerts Disabled';
-              if (status) status.textContent = 'Alerts are OFF - no notifications will be sent';
-            }
+            setAlertsButton(data.alerts_enabled);
             
             console.log('[Alerts] Toggled: ' + (data.alerts_enabled ? 'ON' : 'OFF'));
           } else {
@@ -688,18 +653,7 @@
         try {
           if (xhr.status === 200) {
             var data = JSON.parse(xhr.responseText);
-            var btn = document.getElementById('toggleAlertsBtn');
-            var status = document.getElementById('alertStatus');
-            
-            if (data.alerts_enabled) {
-              btn.style.background = '#4CAF50';
-              btn.textContent = '⚠️ Alerts Enabled';
-              if (status) status.textContent = 'Alerts are ON - will send notifications on movement';
-            } else {
-              btn.style.background = '#f44336';
-              btn.textContent = '⚠️ Alerts Disabled';
-              if (status) status.textContent = 'Alerts are OFF - no notifications will be sent';
-            }
+            setAlertsButton(data.alerts_enabled);
           }
         } catch(e) {
           // Silent - use default state
@@ -933,8 +887,7 @@
             // Make progress bar RED for visibility
             var progressBar = document.getElementById('refresh-progress-bar');
             if (progressBar) {
-              progressBar.style.background = '#f44336';
-              progressBar.style.boxShadow = '0 0 10px rgba(244, 67, 54, 0.8)';
+              progressBar.style.background = 'var(--crit)';
             }
             
             // Create banner
@@ -1176,16 +1129,6 @@
     }
   };
 
-  // Handle menu button click - behavior differs on mobile vs desktop
-  window.handleMenuButtonClick = function(){
-    if (window.innerWidth <= 768) {
-      // On mobile: close the sidebar drawer
-      toggleSidebar();
-    } else {
-      // On desktop: open the settings menu
-      toggleMenu();
-    }
-  };
 
   // -------------------------------------------------------------------
   // v2.1 bottom sheet: draggable with snap points (collapsed / half / tall)
@@ -1417,11 +1360,6 @@
     if (isNaN(n) || n <= 0) n = 50;
     return n;
   }
-
-
-
-
-
 
 
   function buildSignalHistogramSVG(historyPoints) {
@@ -1656,7 +1594,6 @@
       e.stopPropagation();
     }
   }, true);
-
 
 
   function updateNodes(){
@@ -2318,13 +2255,12 @@
         // Determine color based on connection and rate limit state
         if (window.connectionLost) {
           // Gray when connection is lost
-          progressBar.style.background = '#999';
+          progressBar.style.background = 'var(--muted-state)';
           progressBar.style.boxShadow = 'none';
           showConnectionBanner();
         } else if (isRateLimitPaused()) {
           // Red when rate limited
-          progressBar.style.background = '#f44336';
-          progressBar.style.boxShadow = '0 0 10px rgba(244, 67, 54, 0.8)';
+          progressBar.style.background = 'var(--crit)';
         } else {
           // Normal: clear inline overrides so the stylesheet owns the color
           // (green via var(--good); a v1 leftover hard-coded white here and
@@ -2447,33 +2383,6 @@
     console.error('[INIT] Error setting up progress bar:', e);
   }
   
-  // Handle iOS Safari zoom issues with fixed position FAB button
-  // iOS Safari can detach fixed elements during zoom - this keeps it visible
-  try {
-    var fab = document.getElementById('menu-fab');
-    if (fab) {
-      // Add will-change and transform to help Safari keep element in viewport during zoom
-      fab.style.willChange = 'transform';
-      fab.style.webkitTransform = 'translate3d(0, 0, 0)';
-      
-      // Re-anchor to viewport after zoom/scroll events
-      var reanchorFAB = function() {
-        if (fab && fab.parentNode) {
-          // Force reflow to re-anchor
-          void fab.offsetWidth;
-        }
-      };
-      
-      // Listen for zoom/scroll/resize
-      window.addEventListener('resize', reanchorFAB);
-      document.addEventListener('scroll', reanchorFAB, { passive: true });
-      window.addEventListener('orientationchange', reanchorFAB);
-
-      // Periodic check removed - event listeners are sufficient
-    }
-  } catch(e) {
-    console.error('[UI] Error setting up FAB:', e);
-  }
   
   // Handle orientation changes - fix map rendering and sidebar state
   var handleOrientationChange = function() {
@@ -2763,9 +2672,5 @@
     }
   });
 })();
-
-
-
-
 
 

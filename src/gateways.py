@@ -264,43 +264,6 @@ def _update_gateway_reliability_cache_for_gateway(gateway_id):
 
     logger.debug(f"Updated gateway reliability cache for {gateway_id}: score={reliability['score']}, detections={reliability['detection_count']}")
 
-def _load_gateways_from_saved_data(node_id, gateways_dict):
-    """
-    Load gateway connections for a special node from saved data.
-    Updates mh.special_node_gateways, mh.node_is_gateway, and mh.nodes_data.
-
-    Args:
-        node_id: The special node ID
-        gateways_dict: Dictionary of gateway data from saved file
-    """
-    if not isinstance(gateways_dict, dict):
-        return
-
-    # Convert string keys to int keys for consistency with runtime gateway detection
-    gateways_with_int_keys = {}
-    for gateway_id_str, gw_info in gateways_dict.items():
-        gw_id_int = int(gateway_id_str)
-        gateways_with_int_keys[gw_id_int] = gw_info
-        mh.node_is_gateway[gw_id_int] = True
-
-        # Create mh.nodes_data entry for gateway so it appears in get_nodes()
-        if gw_id_int not in mh.nodes_data:
-            mh.nodes_data[gw_id_int] = {}
-        mh.nodes_data[gw_id_int]["is_gateway"] = True
-
-        # Store gateway connection info in mh.nodes_data for display
-        if isinstance(gw_info, dict):
-            mh.nodes_data[gw_id_int]["rx_rssi"] = gw_info.get("rssi")
-            mh.nodes_data[gw_id_int]["rx_snr"] = gw_info.get("snr")
-            mh.nodes_data[gw_id_int]["last_seen"] = gw_info.get("last_seen", time.time())
-
-        logger.debug(f"Restored gateway {gateway_id_str} for special node {node_id}")
-
-    mh.special_node_gateways[node_id] = gateways_with_int_keys
-
-    # Update gateway caches for all loaded gateways
-    for gw_id in gateways_with_int_keys.keys():
-        _update_gateway_reliability_cache_for_gateway(gw_id)
 
 def _update_gateway_names_in_connections(node_id, updated_name):
     """

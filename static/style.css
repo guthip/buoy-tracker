@@ -232,7 +232,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .led.n { background: var(--line); }
 .chip.alert-led { border-color: color-mix(in srgb, var(--crit) 40%, var(--line)); }
 
-.node-extra { font-size: 11.5px; color: var(--ink-2); margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); }
 
 /* ---------- mobile: bottom sheet ---------- */
 @media (max-width: 768px) {
@@ -287,7 +286,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     border-top: 1px solid var(--line); background: none;
   }
   #sidebar:not(.expanded) .node:first-child { border-top: none; }
-  #sidebar:not(.expanded) .node-extra,
   #sidebar:not(.expanded) .iconbtn { display: none; }
   #sidebar:not(.expanded) .toprow { min-width: 0; flex: 0 1 auto; }
   #sidebar:not(.expanded) .node > div:not(.toprow):not(.chips) { order: 3; }
@@ -380,21 +378,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .btn.plain   { background: var(--panel-2); color: var(--ink); border: 1px solid var(--line); }
 .btn:hover { filter: brightness(1.06); }
 
-.legend-item { display: inline-block; white-space: nowrap; margin-right: 8px; font-size: 12.5px; }
-.legend-dot {
-  display: inline-block; width: 9px; height: 9px; border-radius: 50%;
-  margin-right: 5px; vertical-align: middle; border: 1px solid var(--line);
-}
 #tab-legend .legend-block { line-height: 1.9; }
 .legend-line { font-size: 12.5px; margin: 3px 0; }
 
-.muterow { display: flex; justify-content: space-between; align-items: center; margin: 4px 0; font-size: 13.5px; }
-.muterow button {
-  border: none; border-radius: 5px; cursor: pointer;
-  padding: 3px 11px; color: #fff; font-weight: 600; font-size: 12px;
-}
-.muterow button.on  { background: var(--good); }
-.muterow button.off { background: var(--crit); }
 
 /* ---------- api key modal ---------- */
 #api-key-modal {

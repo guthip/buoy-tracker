@@ -3,7 +3,6 @@
 from flask import Flask, jsonify, render_template, request, Response
 from functools import wraps
 import logging
-from logging.handlers import RotatingFileHandler
 import threading
 import sys
 from pathlib import Path
