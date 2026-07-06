@@ -3,7 +3,11 @@
 Templates for deploying Buoy Tracker with an ansible role. With the v2.1
 layered config, the old approach of templating the entire tracker.config is
 gone — you template only the small environment layer; the fleet layer
-(`site.config`) is distributed by the club as a plain file and copied as-is.
+(`site.config`) is the club's real, current fleet data, checked into this
+directory verbatim (nothing in it is secret — the live map already shows
+every buoy's position to the world; only `secret.config` holds credentials).
+Pull it from GitHub along with the templates instead of waiting for an
+emailed copy; when a buoy gets re-moored, the fix ships as a commit here.
 
 ## Files
 
@@ -12,7 +16,7 @@ gone — you template only the small environment layer; the fleet layer
 | `docker-compose.yml.j2` | service definition (PUID/PGID, Traefik labels) | yes |
 | `environment.config.j2` | broker/smtp/ports/logging for YOUR environment | yes |
 | `secret.config.j2` | api_key + smtp credentials | yes |
-| `site.config` | buoys, homes, alert policy — **owned by the club** | no — copy verbatim, replace on demand |
+| `site.config` | buoys, homes, alert policy — the real fleet data | no — copy verbatim, redeploy on update |
 
 Suggested role vars (rename freely; keep names consistent — see note below):
 
@@ -31,8 +35,9 @@ buoy_api_key:        "{{ vault_buoy_api_key }}"
 ```
 
 Role tasks: create `config/ data/ logs/` dirs, template the three `.j2` files
-into place (`environment.config` and `secret.config` into `config/`), copy the
-club's `site.config` into `config/`, then `community.docker.docker_compose_v2`.
+into place (`environment.config` and `secret.config` into `config/`), copy
+`site.config` from this directory into `config/`, then
+`community.docker.docker_compose_v2`.
 
 **Migrating from a pre-2.1 setup:** delete your old full-file
 `tracker.config.j2` from the role. If a deployed host still has
