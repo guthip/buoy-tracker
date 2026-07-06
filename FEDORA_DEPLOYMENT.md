@@ -1,5 +1,10 @@
 # Fedora Linux Deployment Guide for Buoy Tracker
 
+> **v2.1 NOTE:** the Fedora-specific entrypoint is gone — the GID-999
+> docker-group workaround it existed for was replaced by standard PUID/PGID
+> env vars (set them to your host user; see DOCKER.md). References below to
+> fedora-entrypoint.sh are historical.
+
 **Date**: January 2, 2026
 **Container Version**: v2.0 or later
 **Target OS**: Fedora Linux (tested on Fedora 39+)

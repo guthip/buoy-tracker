@@ -97,7 +97,6 @@ DOCKER_HUB_SETUP.md
 MESHTASTIC_SIGNAL_METRICS.md
 SIGNAL_ANALYSIS_PLAN.md
 effort_assessment.md
-kill_server.sh
 verify_deployment.sh
 
 # Deployment bundles (generated locally, not for version control)
@@ -108,14 +107,8 @@ create_deployment_bundle.sh
 validate_and_build.sh
 
 # Local testing scripts (local development tool only)
-test_subpath.sh
 
 # Server management scripts (local development only)
-start_server.sh
-start_clean_server.sh
-observer_server.sh
-kill_server.sh
-.server.pid
 
 # Security files (internal, not for public release)
 SECURITY.md
