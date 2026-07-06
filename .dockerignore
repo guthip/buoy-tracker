@@ -85,3 +85,13 @@ secret.config.syc
 
 # Internal working notes — never in images or git
 *claude_directives*
+
+# Internal docs — never in the image
+PROPOSAL_*.md
+SECURITY.md
+CHANGELOG.md
+DEPLOYMENT.md
+IMPROVEMENT_PLAN.md
+tests/
+docs/
+*.log

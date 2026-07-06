@@ -126,3 +126,7 @@ data/buoy_tracker.db-shm
 
 # Internal working notes
 *claude_directives*
+
+# Internal planning docs
+PROPOSAL_*.md
+IMPROVEMENT_PLAN.md
