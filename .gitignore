@@ -119,3 +119,7 @@ data/special_nodes.json
 data/buoy_tracker.db
 data/buoy_tracker.db-wal
 data/buoy_tracker.db-shm
+
+# macOS AppleDouble sidecar files (SMB volume)
+._*
+**/._*
