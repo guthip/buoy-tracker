@@ -123,3 +123,6 @@ data/buoy_tracker.db-shm
 # macOS AppleDouble sidecar files (SMB volume)
 ._*
 **/._*
+
+# Internal working notes
+*claude_directives*

@@ -82,3 +82,6 @@ secret.config.syc
 
 # SECURITY_ANALYSIS.md
 # SECURITY_PATCHES.md
+
+# Internal working notes — never in images or git
+*claude_directives*
