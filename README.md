@@ -242,11 +242,11 @@ docker compose up -d
 
 **Configuration files (created from templates in config volume):**
 - `site.config.example` / `environment.config.example` → commented reference layers (auto-placed in `./config/` on first run)
-- `./config/secret.config.template` → Template showing required secrets; copy to `config/secret.config` and fill in real values
+- `./secret.config.template` → Template showing required secrets; copy to `config/secret.config` and fill in real values
 
 **Generated directories:**
 - `./config/` → Configuration files (created from templates during setup; mounted as volume for easy editing)
-- `./data/` → Application data persistence (history.json, special node tracking data)
+- `./data/` → Application data persistence (`buoy_tracker.db`, the SQLite store for positions, telemetry, alerts, and settings)
 - `./logs/` → Application logs (created automatically)
 
 
@@ -261,7 +261,7 @@ docker compose up -d
   - Toggle "Show Nautical Markers" to display navigation markers on the map
   - Adjust trail history hours and movement threshold dynamically
   - Note: "Show All Nodes" is now a server-side config setting (`show_all_nodes` in `environment.config`), not a UI toggle
-  - (Sorting is automatic: special nodes are always shown at the top, sorted alphabetically; all other nodes are sorted by most recently seen)
+  - (Sorting is automatic and attention-first: buoys off location rank highest, then battery alarms, quiet nodes, and healthy buoys; gateways last)
 - **Movement Alerts**:
   - Green dashed circles show 50m threshold around special node home positions
   - Red solid circles appear when nodes exceed threshold
@@ -542,8 +542,6 @@ Track specific nodes with extra detail:
 
 ```ini
 [special_nodes_settings]
-history_hours = 24
-persist_path = data/special_history.json
 stale_after_hours = 12
 special_symbol = ⭐
 

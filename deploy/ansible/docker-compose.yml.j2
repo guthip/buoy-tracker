@@ -4,7 +4,7 @@
 services:
   buoy-tracker:
     container_name: {{ buoy_role_project | default('buoy-tracker') }}
-    image: dokwerker8891/buoy-tracker:{{ buoy_role_image_tag | default('2.1') }}
+    image: dokwerker8891/buoy-tracker:{{ buoy_role_image_tag | default('2.2') }}
     restart: unless-stopped
 {% if buoy_role_map_ports | default(true) %}
     ports:
