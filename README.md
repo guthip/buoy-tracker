@@ -29,11 +29,11 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
 
 ## Features
 
-### Basic Interface
-![Basic Window](screenshots/basic%20window.png)
+### Desktop
+![Desktop](screenshots/desktop.png)
 
-### Full-Featured Interface
-![Full Featured Window](screenshots/full%20featured%20window.png)
+### Mobile
+![Mobile](screenshots/mobile.png)
 
 - **Real-time Node Tracking**: Live MQTT feed of mesh node positions
 - **Interactive Map**: Leaflet-based map with color-coded status markers
