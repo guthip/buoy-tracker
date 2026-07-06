@@ -1,6 +1,6 @@
 """SQLite persistence layer for Buoy Tracker.
 
-Single durable store per PROPOSAL_V2.0.md §6: data/buoy_tracker.db.
+Single durable store: data/buoy_tracker.db.
 Phase 1 scope: node_settings (per-node movement-alert mutes).
 Phase 3 extends this module with time-series tables and app_settings.
 

@@ -1,4 +1,4 @@
-"""Simulation / debug packet injection (PROPOSAL_V2.0.md §7).
+"""Simulation / debug packet injection.
 
 Injects synthetic packets at the same seam real MQTT traffic uses: the decoded
 json_packet dict that _route_message_to_handler() hands to on_position() /

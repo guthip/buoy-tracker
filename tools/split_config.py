@@ -10,7 +10,7 @@ once site.config exists. Only values that differ from the application defaults
 matter, but this tool copies every key faithfully — trimming is optional and
 can be done later by deleting lines.
 
-Key routing (PROPOSAL_V2.1.md §2a):
+Key routing:
   site.config        — fleet identity: buoys, homes, alert policy, map view
   environment.config — infrastructure: broker, ports, smtp transport, logging
 Unknown sections/keys go to environment.config (safe default) with a notice.

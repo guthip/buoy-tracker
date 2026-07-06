@@ -8,7 +8,7 @@ mutated single-path copy gets outvoted ([ALERT_SUPPRESSED]) while a genuine
 drift — all copies agreeing on a far position — fires ([ALERT_FIRE]).
 
 Also owns position-precision validation (rejects relay-quantized packets)
-and the homecoming auto-unmute counter (PROPOSAL_V2.0.md §2).
+and the homecoming auto-unmute counter.
 """
 
 import logging

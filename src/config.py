@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Layered configuration (v2.1, PROPOSAL_V2.1.md §2a). Later layers win:
+# Layered configuration (v2.1). Later layers win:
 #   1. src/defaults.config          — application defaults, shipped in the image
 #   2. config/site.config           — what the fleet is (buoys, homes, policy)
 #   3. config/environment.config    — where it runs (broker, ports, smtp, logs)
@@ -362,7 +362,7 @@ DB_PATH = str(DATA_DIR / 'buoy_tracker.db')
 # Measurement retention (settings and node registry are kept indefinitely)
 DB_RETENTION_DAYS = config.getint('database', 'retention_days', fallback=90)
 
-# Debug / Simulation (PROPOSAL_V2.0.md §7)
+# Debug / Simulation API
 # Hard-off by default: /api/debug/* endpoints return 404 unless enabled.
 # When simulation is enabled, alert emails are DRY-RUN (rendered + logged,
 # not sent) unless send_real_emails is also set.

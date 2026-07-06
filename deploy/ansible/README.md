@@ -21,7 +21,7 @@ buoy_role_ui_port:   5103
 buoy_role_puid:      "{{ ansible_user_uid | default(1000) }}"
 buoy_role_pgid:      "{{ ansible_user_gid | default(1000) }}"
 buoy_role_tz:        "{{ homelab_tz }}"
-buoy_role_image_tag: "2.1"          # pin; avoid :latest drift
+buoy_role_image_tag: "2.2"          # pin; avoid :latest drift
 buoy_smtp_host:      "{{ homelab_smtp_fqdn }}"
 buoy_smtp_port:      "{{ homelab_smtp_port }}"
 buoy_smtp_username:  "{{ homelab_smtp_username }}"

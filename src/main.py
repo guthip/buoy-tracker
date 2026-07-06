@@ -810,7 +810,7 @@ def test_alert() -> Response:
 
 
 # ============================================================================
-# Debug / Simulation API (PROPOSAL_V2.0.md §7)
+# Debug / Simulation API
 # Double-gated: 404 unless [debug] enable_simulation = true, AND Bearer auth.
 # The simulation gate runs before auth so a disabled deployment reveals
 # nothing (404, not 401) when the endpoints are probed.

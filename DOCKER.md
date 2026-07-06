@@ -1,6 +1,6 @@
 # Buoy Tracker — Docker Deployment Guide
 
-Complete instructions for deploying Buoy Tracker v2.0 with Docker.
+Complete instructions for deploying Buoy Tracker with Docker.
 
 ## Platform Support
 
@@ -191,16 +191,10 @@ On restart, the tracker rebuilds live data (node positions, connections) from in
 
 **Controlling persistence:**
 
-Data persistence (v2.0+):
-
-```ini
-[app_features]
-# (v2.0) Persistence is automatic via the SQLite store in ./data — the old
-# enable_persistence flag is gone. Position trails and settings survive
-# restarts; measurement retention is set by [database] retention_days.
-```
-
-When disabled (default for production), all special node history is cleared on restart. When enabled, it persists across restarts.
+Persistence is automatic via the SQLite store in `./data` — there is no
+`enable_persistence` flag to set. Position trails, telemetry, and settings
+all survive restarts; measurement retention is controlled by
+`retention_days` in `[database]` (default 90 days).
 
 ## Troubleshooting
 
@@ -238,9 +232,9 @@ docker inspect buoy-tracker | grep -A 10 Mounts
 ## Email Distribution Template
 
 ```
-Subject: Buoy Tracker v2.0 - Docker Container
+Subject: Buoy Tracker - Docker Container
 
-Buoy Tracker v2.0 Docker image for real-time Meshtastic node tracking.
+Buoy Tracker Docker image for real-time Meshtastic node tracking.
 
 Quick Start:
 1. mkdir buoy-tracker && cd buoy-tracker

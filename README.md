@@ -340,17 +340,11 @@ password = large4cats
 host = 127.0.0.1
 port = 5103
 
-# URL prefix for subpath deployments (OPTIONAL)
-# Use this if you're deploying behind a reverse proxy at a subpath
-# Examples:
-#   Root deployment (https://example.com/): url_prefix = (leave empty or omit)
-#   Subpath deployment (https://example.com/buoy-tracker/): url_prefix = /buoy-tracker
-#   Alternative format also works: url_prefix = buoy-tracker
-# Notes:
-#   - Trailing slashes are automatically removed
-#   - All routes (/, /health, /api/*) will be prefixed
-#   - Browser will automatically request /buoy-tracker/health, /buoy-tracker/api/nodes, etc.
-url_prefix = 
+# Subpath deployments need no config here (there is no url_prefix key).
+# The app detects the prefix per request from the X-Forwarded-Prefix header,
+# which Traefik's stripprefix middleware sends automatically; for
+# nginx/Apache add one proxy header line (see DOCKER.md). One container can
+# serve a subdomain and a subpath simultaneously.
 
 # Map center point. Supports both decimal and degrees-minutes formats:
 # Decimal: default_center = 37.7749,-122.4194
@@ -531,7 +525,7 @@ server {
 
 | Problem | Cause | Solution |
 |---------|-------|----------|
-| 404 on all API calls | `url_prefix` not set in config | Set `url_prefix = /buoy-tracker` in `[webapp]` section |
+| 404 on all API calls | Proxy isn't sending `X-Forwarded-Prefix` | Add the header line shown above for your proxy |
 | Routes work but styles/JS broken | Prefix only applied to Flask routes, not static files | Ensure reverse proxy serves `/static/` from root Flask app |
 | CORS errors | Missing headers | Verify reverse proxy forwards `X-Forwarded-*` headers |
 | Connection lost immediately | Flask can't detect reverse proxy | Ensure `X-Forwarded-For` header is passed through |

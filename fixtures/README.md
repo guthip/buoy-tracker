@@ -1,7 +1,7 @@
 # Replay fixtures
 
 JSONL files for `POST /api/debug/replay` (simulation mode only — see
-`[debug]` in `tracker.config` and PROPOSAL_V2.0.md §7).
+`[debug]` in `config/environment.config`, `enable_simulation = true`).
 
 One packet per line:
 
