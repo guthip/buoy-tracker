@@ -778,14 +778,119 @@ def on_nodeinfo(json_data):
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
 
+def _process_special_movement(node_id, payload, json_data):
+    """Movement pipeline for one special-node position copy: resolve origin
+    (config home, else first fix), compute distance-from-home, run the
+    homecoming auto-unmute counter, and submit the copy to the buffered
+    consensus alert (movement.py decides at window close)."""
+    try:
+        lat = payload["latitude_i"] / 1e7
+        lon = payload["longitude_i"] / 1e7
+
+        special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
+        home_lat = special_node_config.get('home_lat')
+        home_lon = special_node_config.get('home_lon')
+        if home_lat is not None and home_lon is not None:
+            nodes_data[node_id]["origin_lat"] = home_lat
+            nodes_data[node_id]["origin_lon"] = home_lon
+        elif nodes_data[node_id].get("origin_lat") is None:
+            nodes_data[node_id]["origin_lat"] = lat
+            nodes_data[node_id]["origin_lon"] = lon
+
+        o_lat = nodes_data[node_id].get("origin_lat")
+        o_lon = nodes_data[node_id].get("origin_lon")
+        if o_lat is None or o_lon is None:
+            return
+        dist = _haversine_m(o_lat, o_lon, lat, lon)
+        nodes_data[node_id]["distance_from_origin_m"] = dist
+        threshold_m = getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0)
+        moved_far = bool(dist is not None and dist >= threshold_m)
+
+        try:
+            _update_homecoming(node_id, json_data.get('id'), moved_far)
+        except Exception as hc_err:
+            logger.error(f'Homecoming check failed for {node_id}: {hc_err}')
+
+        # Buffered, not immediate: every copy (far or close) joins the open
+        # buffer so close copies vote against a mutated far outlier.
+        if moved_far or node_id in _pending_movement_alerts:
+            try:
+                _add_copy_to_alert_buffer(
+                    node_id, json_data, payload, dist,
+                    lat, lon, o_lat, o_lon, threshold_m, moved_far
+                )
+            except Exception as buf_err:
+                logger.error(f'Failed to buffer movement copy for {node_id}: {buf_err}')
+
+        nodes_data[node_id]["moved_far"] = moved_far
+    except Exception as e:
+        logger.debug(f"Error processing movement alerts for {node_id}: {e}")
+
+
+def _update_node_position(node_id, payload):
+    """Write the decoded coordinates and freshness timestamps. Returns (lat, lon, alt)."""
+    lat = payload["latitude_i"] / 1e7
+    lon = payload["longitude_i"] / 1e7
+    alt = payload.get("altitude", 0)
+    nodes_data[node_id]["latitude"] = lat
+    nodes_data[node_id]["longitude"] = lon
+    nodes_data[node_id]["altitude"] = alt
+    nodes_data[node_id]["last_seen"] = time.time()
+    nodes_data[node_id]["last_position_update"] = time.time()
+    return lat, lon, alt
+
+
+def _update_best_signal(node_id, json_data):
+    """Keep the best RSSI/SNR seen in a rolling 1-hour window (gateway copies
+    arrive with varying signal; last-received would be arbitrary). Used
+    internally by gateway scoring; not displayed since v2.0."""
+    _SIGNAL_WINDOW = 3600
+    now_sig = time.time()
+    for field, ts_field in (("rx_rssi", "rx_rssi_ts"), ("rx_snr", "rx_snr_ts")):
+        new_val = json_data.get(field)
+        if new_val is None:
+            continue
+        prev = nodes_data[node_id].get(field)
+        prev_age = now_sig - nodes_data[node_id].get(ts_field, 0)
+        if prev is None or prev_age > _SIGNAL_WINDOW or new_val > prev:
+            nodes_data[node_id][field] = new_val
+            nodes_data[node_id][ts_field] = now_sig
+
+
+def _sync_gateway_position(node_id, lat, lon):
+    """When a gateway reports its own position, refresh it in every special
+    node's connection record and in the gateway info cache."""
+    if not node_is_gateway.get(node_id, False):
+        return
+    for special_id, gw_dict in special_node_gateways.items():
+        if node_id in gw_dict:
+            gw_dict[node_id]["lat"] = lat
+            gw_dict[node_id]["lon"] = lon
+            gw_dict[node_id]["last_seen"] = time.time()
+    if node_id in gateway_info_cache:
+        gateway_info_cache[node_id]["lat"] = lat
+        gateway_info_cache[node_id]["lon"] = lon
+
+
+def _record_special_position(node_id, lat, lon, alt, json_data):
+    """One history entry + one DB row per broadcast (lean storage)."""
+    pid = json_data.get('id')
+    if _is_new_broadcast(node_id, pid):
+        _append_position_history(node_id, lat, lon, alt, json_data)
+        logger.debug(f'Added new position to history for {node_id} (packet {pid})')
+    else:
+        logger.debug(f'Skipped gateway copy of position broadcast {pid} for {node_id}')
+
+
 def on_position(json_data):
-    """Process position messages - update node coordinates."""
+    """Process a position packet: validate, track, run the movement pipeline,
+    update state, and record history. Orchestration only — each step lives in
+    its own helper."""
     global message_received, last_message_time
     message_received = True
     last_message_time = time.time()
 
     # Close any pending alert buffers whose window has elapsed.
-    # Done at entry so decisions don't lag behind incoming traffic.
     try:
         _check_expired_alert_buffers()
     except Exception as e:
@@ -796,151 +901,40 @@ def on_position(json_data):
         channel = json_data.get("channel")
         payload = json_data["decoded"]["payload"]
 
-        # Validate position precision early - reject corrupted packets before any processing
+        # Reject corrupted / relay-quantized packets before any processing
         if not _validate_position_precision(payload, node_id=node_id):
             logger.info(f'Skipped position packet for node {node_id} due to insufficient precision')
             return
 
-        # Extract channel name once
         channel_name = _extract_channel_from_topic(node_id) if node_id else "Unknown"
         if channel_name == "Unknown":
             channel_name = json_data.get("channel_name", "Unknown")
 
-        # Check if special node once
         is_special = _is_special_node(node_id) if node_id else False
 
-        # IMPORTANT: Track and save packet IMMEDIATELY, before any processing that might fail
-        # This ensures we never lose packet data due to processing errors
+        # Track the packet FIRST so it is never lost to a later processing error
         if is_special:
             special_node_last_packet[node_id] = time.time()
-            # Update channel name if different
             if special_node_channels.get(node_id) != channel_name:
                 special_node_channels[node_id] = channel_name
-            # Track packet FIRST, before any other processing
             _track_special_node_packet(node_id, 'POSITION_APP', json_data)
-        
+
         if node_id and "latitude_i" in payload and "longitude_i" in payload:
             if node_id not in nodes_data:
                 nodes_data[node_id] = {}
-            
-            # Store channel if available
             if channel is not None:
                 nodes_data[node_id]["channel"] = channel
-            
-            # Store channel name from topic
             nodes_data[node_id]["channel_name"] = channel_name
-            
-            # For movement alerts on special nodes, track origin and distance
-            try:
-                if is_special:
-                    lat = payload["latitude_i"] / 1e7
-                    lon = payload["longitude_i"] / 1e7
-                    
-                    # Get home position from config if defined, otherwise use first position seen
-                    special_node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {})
-                    home_lat = special_node_config.get('home_lat')
-                    home_lon = special_node_config.get('home_lon')
-                    
-                    # If home position is defined in config, use it
-                    if home_lat is not None and home_lon is not None:
-                        nodes_data[node_id]["origin_lat"] = home_lat
-                        nodes_data[node_id]["origin_lon"] = home_lon
-                    # Otherwise, use first position seen as origin
-                    elif "origin_lat" not in nodes_data[node_id] or nodes_data[node_id].get("origin_lat") is None:
-                        nodes_data[node_id]["origin_lat"] = lat
-                        nodes_data[node_id]["origin_lon"] = lon
-                    
-                    # Compute distance from origin (home or first position)
-                    o_lat = nodes_data[node_id].get("origin_lat")
-                    o_lon = nodes_data[node_id].get("origin_lon")
-                    if o_lat is not None and o_lon is not None:
-                        dist = _haversine_m(o_lat, o_lon, lat, lon)
-                        nodes_data[node_id]["distance_from_origin_m"] = dist
-                        threshold_m = getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0)
-                        moved_far = bool(dist is not None and dist >= threshold_m)
 
-                        # Auto-unmute check: muted nodes seen back home clear
-                        # their own mute after enough distinct broadcasts.
-                        try:
-                            _update_homecoming(node_id, json_data.get('id'), moved_far)
-                        except Exception as hc_err:
-                            logger.error(f'Homecoming check failed for {node_id}: {hc_err}')
-
-                        # Alert decision is BUFFERED, not immediate.
-                        # Each received copy (far OR close) is appended to a per-node
-                        # buffer when either (a) this copy is moved_far, or (b) a buffer
-                        # is already open for this node — close-to-home copies in the
-                        # same window count as "close" votes against firing the alert.
-                        # The buffer is evaluated when its window elapses (see
-                        # _check_expired_alert_buffers / _evaluate_alert_buffer).
-                        if moved_far or node_id in _pending_movement_alerts:
-                            try:
-                                _add_copy_to_alert_buffer(
-                                    node_id, json_data, payload, dist,
-                                    lat, lon, o_lat, o_lon, threshold_m, moved_far
-                                )
-                            except Exception as buf_err:
-                                logger.error(f'Failed to buffer movement copy for {node_id}: {buf_err}')
-
-                        nodes_data[node_id]["moved_far"] = moved_far
-            except Exception as e:
-                logger.debug(f"Error processing movement alerts for {node_id}: {e}")
-            
-            # Convert from integer coordinates to decimal degrees
-            lat = payload["latitude_i"] / 1e7
-            lon = payload["longitude_i"] / 1e7
-            alt = payload.get("altitude", 0)
-            
-            nodes_data[node_id]["latitude"] = lat
-            nodes_data[node_id]["longitude"] = lon
-            nodes_data[node_id]["altitude"] = alt
-            nodes_data[node_id]["last_seen"] = time.time()
-            nodes_data[node_id]["last_position_update"] = time.time()  # Track position updates separately
-
-            # Store best signal quality within a rolling 1-hour window.
-            # Multiple gateways each publish their own copy of a packet, so we keep
-            # the best (highest) RSSI/SNR seen within the window rather than last-received.
-            # After the window expires the next packet resets the baseline so stale
-            # best-ever values don't linger as the network topology changes over time.
-            _SIGNAL_WINDOW = 3600
-            now_sig = time.time()
-            new_rssi = json_data.get("rx_rssi")
-            new_snr  = json_data.get("rx_snr")
-            if new_rssi is not None:
-                prev      = nodes_data[node_id].get("rx_rssi")
-                prev_age  = now_sig - nodes_data[node_id].get("rx_rssi_ts", 0)
-                if prev is None or prev_age > _SIGNAL_WINDOW or new_rssi > prev:
-                    nodes_data[node_id]["rx_rssi"]    = new_rssi
-                    nodes_data[node_id]["rx_rssi_ts"] = now_sig
-            if new_snr is not None:
-                prev      = nodes_data[node_id].get("rx_snr")
-                prev_age  = now_sig - nodes_data[node_id].get("rx_snr_ts", 0)
-                if prev is None or prev_age > _SIGNAL_WINDOW or new_snr > prev:
-                    nodes_data[node_id]["rx_snr"]    = new_snr
-                    nodes_data[node_id]["rx_snr_ts"] = now_sig
-
-            # If this is a gateway, update its position in all special node connections
-            if node_is_gateway.get(node_id, False):
-                for special_id, gw_dict in special_node_gateways.items():
-                    if node_id in gw_dict:
-                        gw_dict[node_id]["lat"] = lat
-                        gw_dict[node_id]["lon"] = lon
-                        gw_dict[node_id]["last_seen"] = time.time()
-
-                # Update gateway info cache
-                if node_id in gateway_info_cache:
-                    gateway_info_cache[node_id]["lat"] = lat
-                    gateway_info_cache[node_id]["lon"] = lon
-
-            # Record history for special nodes: one entry per broadcast
-            # (gateway copies of the same packet_id are skipped — lean storage)
             if is_special:
-                pid = json_data.get('id')
-                if _is_new_broadcast(node_id, pid):
-                    _append_position_history(node_id, lat, lon, alt, json_data)
-                    logger.debug(f'Added new position to history for {node_id} (packet {pid})')
-                else:
-                    logger.debug(f'Skipped gateway copy of position broadcast {pid} for {node_id}')
+                _process_special_movement(node_id, payload, json_data)
+
+            lat, lon, alt = _update_node_position(node_id, payload)
+            _update_best_signal(node_id, json_data)
+            _sync_gateway_position(node_id, lat, lon)
+
+            if is_special:
+                _record_special_position(node_id, lat, lon, alt, json_data)
 
             logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
