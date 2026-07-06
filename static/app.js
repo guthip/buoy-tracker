@@ -2326,9 +2326,11 @@
           progressBar.style.background = '#f44336';
           progressBar.style.boxShadow = '0 0 10px rgba(244, 67, 54, 0.8)';
         } else {
-          // White normally
-          progressBar.style.background = 'white';
-          progressBar.style.boxShadow = 'none';
+          // Normal: clear inline overrides so the stylesheet owns the color
+          // (green via var(--good); a v1 leftover hard-coded white here and
+          // silently overrode any CSS, 100 times a second)
+          progressBar.style.background = '';
+          progressBar.style.boxShadow = '';
           hideConnectionBanner();
         }
       }
