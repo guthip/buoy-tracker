@@ -133,3 +133,6 @@ data/buoy_tracker.db-shm
 # Internal planning docs
 PROPOSAL_*.md
 IMPROVEMENT_PLAN.md
+
+# Personal correspondence drafts (site.config in the same dir IS meant to be public)
+deploy/buoy-tracker-upgrade-email.md

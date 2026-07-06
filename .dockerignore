@@ -92,6 +92,7 @@ SECURITY.md
 CHANGELOG.md
 DEPLOYMENT.md
 IMPROVEMENT_PLAN.md
+deploy/buoy-tracker-upgrade-email.md
 tests/
 docs/
 *.log
