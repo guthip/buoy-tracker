@@ -169,9 +169,10 @@ def _extract_gateway_from_packet(special_node_id, json_data):
 def _calculate_gateway_reliability_score(gateway_detections):
     """
     Calculate a reliability score (0-100) for a gateway based on:
-    - Confidence level (direct > partial)
+    - Confidence level (direct > partial) — dominant factor, since only
+      hop-verified direct receptions are recorded in the first place
     - Number of detections (more = more consistent)
-    - Signal strength (stronger RSSI = better)
+    - Signal strength (minor factor; weak RSSI is normal over water)
     
     Args:
         gateway_detections: List of detection records for this gateway
@@ -194,26 +195,30 @@ def _calculate_gateway_reliability_score(gateway_detections):
     
     # Calculate score components
     score = 0
-    
-    # Factor 1: Confidence level (0-40 points)
+
+    # Factor 1: Confidence level (0-60 points)
+    # _extract_gateway_from_packet only ever records direct (hop_start ==
+    # hop_limit) receptions, so a listed gateway is already hop-verified —
+    # score it accordingly. "partial" kept in case that gate ever loosens.
     if confidence_level == "direct":
-        score += 40
+        score += 60
     else:
-        score += 20
-    
-    # Factor 2: Detection count (0-30 points)
-    # 1 detection = 5 pts, 2 = 10 pts, 3 = 15 pts, 4+ = 30 pts
-    if detection_count >= 4:
         score += 30
+
+    # Factor 2: Detection count (0-25 points)
+    # 1 detection = 10 pts, 2 = 15, 3 = 20, 4+ = 25
+    if detection_count >= 4:
+        score += 25
     else:
-        score += min(30, detection_count * 10)
-    
-    # Factor 3: Signal strength (0-30 points)
-    # -80 dBm (excellent) = 30 pts, -120 dBm (poor) = 0 pts
+        score += 5 + detection_count * 5
+
+    # Factor 3: Signal strength (0-15 points)
+    # Buoy-to-shore LoRa routinely works at -120 dBm; don't punish normal
+    # links. -125 dBm = 0 pts, -95 dBm or better = 15 pts.
     if avg_rssi is not None:
-        # Normalize RSSI: -80 is max (30pts), -120 is min (0pts)
-        rssi_score = max(0, min(30, int((avg_rssi + 120))))
-        score += rssi_score
+        score += max(0, min(15, int((avg_rssi + 125) * 0.5)))
+    else:
+        score += 8  # unknown RSSI shouldn't drag a verified gateway down
     
     return {
         "score": int(score),

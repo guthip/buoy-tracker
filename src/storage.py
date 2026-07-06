@@ -10,6 +10,7 @@ handlers never touch SQLite on the receive path.
 """
 
 import logging
+import math
 import sqlite3
 import threading
 import time
@@ -277,6 +278,35 @@ def get_positions_since(node_id, since_ts, include_simulated=False):
          'rssi': rssi, 'snr': snr}
         for ts, lat, lon, alt, voltage, rssi, snr in rows
     ]
+
+
+def get_anchor_spread(node_id, since_ts):
+    """RMS distance (meters) of recent positions from their centroid.
+
+    A measure of anchoring quality: a well-set buoy swings around one spot,
+    so its spread stays small even while distance-to-home fluctuates.
+    Returns {'spread_m', 'count'} or None with fewer than 5 fixes.
+    """
+    with _lock:
+        rows = _conn.execute(
+            'SELECT lat, lon FROM positions'
+            ' WHERE node_id = ? AND ts >= ? AND simulated = 0'
+            ' AND lat IS NOT NULL AND lon IS NOT NULL',
+            (node_id, since_ts),
+        ).fetchall()
+    n = len(rows)
+    if n < 5:
+        return None
+    mean_lat = sum(r[0] for r in rows) / n
+    mean_lon = sum(r[1] for r in rows) / n
+    # Equirectangular approximation — spans here are tens of meters
+    m_per_deg = 111320.0
+    m_per_deg_lon = m_per_deg * math.cos(math.radians(mean_lat))
+    variance = sum(
+        ((lat - mean_lat) * m_per_deg) ** 2 + ((lon - mean_lon) * m_per_deg_lon) ** 2
+        for lat, lon in rows
+    ) / n
+    return {'spread_m': math.sqrt(variance), 'count': n}
 
 
 def get_latest_state(node_id):

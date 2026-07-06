@@ -281,6 +281,10 @@
           if (node.moved_far) {
             popup += ' <span style="color:#e91e63;font-weight:bold;">⚠️ MOVED FAR</span>';
           }
+          if (node.anchor_spread_m != null) {
+            popup += '<br>Anchor swing (7d): σ ' + node.anchor_spread_m.toFixed(1) + ' m · ' +
+                     node.anchor_spread_n + ' fixes';
+          }
         }
 
         // Time indicators
@@ -1565,10 +1569,16 @@
       var lpu = getAgeStatus(node.last_position_update, lpuBlueThreshold, lpuOrangeThreshold);
       var sol = getAgeStatus(node.last_seen, solBlueThreshold, solOrangeThreshold);
       var batteryStr = formatBattery(voltage, bat) || '?';
+      // Anchoring quality: spread of the last week's fixes around their
+      // centroid — shown next to distance-to-home while we evaluate it.
+      var spreadChip = (node.anchor_spread_m != null)
+        ? chipHtml('Swing', 'σ ' + Math.round(node.anchor_spread_m) + ' m', null)
+        : '';
       chips = '<div class="chips">' +
               chipHtml('Fix', lpu.text, lpu.color) +
               chipHtml('Heard', sol.text, sol.color) +
               chipHtml('Batt', batteryStr, battColor, true) +
+              spreadChip +
               buildBatterySparkline(node.id) +
               '</div>';
     }
@@ -1969,14 +1979,7 @@
                       var gwMarkerKey = 'gw_' + node.id + '_' + gw.id;
                       var reliabilityScore = gw.reliability_score !== undefined ? gw.reliability_score : 50;
                       var circleRadius = 5 + ((reliabilityScore - 50) / 50) * 4;  // 5-9 px range
-                      var confidenceTag = gw.confidence_level === 'direct' ? '✅ DIRECT' : '⚠️ PARTIAL';
                       var fillColor = gw.confidence_level === 'direct' ? '#2196F3' : '#4CAF50';
-
-                      var gwMarkerPopup = '<strong>📡 ' + escapeHtml(gw.name) + '</strong><br>' +
-                                         'ID: ' + gw.id + '<br>' +
-                                         'Confidence: ' + confidenceTag + '<br>' +
-                                         'Reliability Score: ' + reliabilityScore + '/100<br>' +
-                                         'Detections: ' + (gw.detection_count || 'N/A');
 
                       if (!gatewayMarkers[gwMarkerKey]) {
                         gatewayMarkers[gwMarkerKey] = L.circleMarker([gw.lat, gw.lon], {
@@ -1986,16 +1989,22 @@
                           weight: 2,
                           opacity: 0.8,
                           fillOpacity: 0.7
-                        }).addTo(map).bindPopup(gwMarkerPopup);
+                        }).addTo(map);
                       } else {
                         gatewayMarkers[gwMarkerKey].setLatLng([gw.lat, gw.lon]);
-                        gatewayMarkers[gwMarkerKey].setPopupContent(gwMarkerPopup);
                         gatewayMarkers[gwMarkerKey].setRadius(circleRadius);
                         gatewayMarkers[gwMarkerKey].setStyle({
                           fillColor: fillColor,
                           color: fillColor === '#2196F3' ? '#0D47A1' : '#2E7D32'
                         });
                       }
+                      // Clicking the marker opens the same gateway details view
+                      // as the card — one place for all gateway info.
+                      (function(gwId, gwName) {
+                        gatewayMarkers[gwMarkerKey].off('click').on('click', function() {
+                          showGatewayDetails(gwId, gwName);
+                        });
+                      })(gw.id, gw.name);
                     }
                   }
 
@@ -2511,7 +2520,17 @@
     if (gatewayNode.is_online !== undefined) {
       details += '<strong>Status:</strong> ' + (gatewayNode.is_online ? '<span style="color:green;">🟢 Online</span>' : '<span style="color:red;">🔴 Offline</span>') + '<br>';
     }
-    
+
+    // Reliability summary (was previously only in the map marker popup)
+    if (gatewayNode.reliability_score !== undefined) {
+      var confLabel = gatewayNode.confidence_level === 'direct' ? '✅ direct reception' :
+                      gatewayNode.confidence_level === 'partial' ? '⚠️ partial hop data' : '';
+      details += '<strong>Reliability:</strong> ' + gatewayNode.reliability_score + '/100' +
+                 ' · ' + (gatewayNode.detection_count || 0) + ' detection' +
+                 ((gatewayNode.detection_count || 0) !== 1 ? 's' : '') +
+                 (confLabel ? ' · ' + confLabel : '') + '<br>';
+    }
+
     // Receiving from section
     details += '<br><strong style="color:#2196F3;">📶 Receiving from:</strong><br>';
     

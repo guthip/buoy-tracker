@@ -56,6 +56,23 @@ def _get_origin_coordinates(node_id, data, is_special):
 
     return origin_lat, origin_lon
 
+# Anchoring-quality statistic: spread of the last week's fixes around their
+# centroid. Cheap query, but no need to rerun it on every 10 s poll.
+_ANCHOR_WINDOW_S = 7 * 86400
+_ANCHOR_CACHE_TTL_S = 120
+_anchor_cache = {}
+
+
+def _get_anchor_spread_cached(node_id):
+    now = time.time()
+    hit = _anchor_cache.get(node_id)
+    if hit and now - hit[0] < _ANCHOR_CACHE_TTL_S:
+        return hit[1]
+    spread = storage.get_anchor_spread(node_id, now - _ANCHOR_WINDOW_S)
+    _anchor_cache[node_id] = (now, spread)
+    return spread
+
+
 def _build_gateway_connections_list(node_id):
     """Build list of gateway connections with reliability scores for a special node."""
     gateway_connections = []
@@ -124,6 +141,13 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         battery_pct < getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
     )
 
+    # Anchoring quality for special nodes (shown alongside distance-to-home
+    # while the statistic is being evaluated)
+    if is_special:
+        spread = _get_anchor_spread_cached(node_id)
+        node_info["anchor_spread_m"] = round(spread["spread_m"], 1) if spread else None
+        node_info["anchor_spread_n"] = spread["count"] if spread else 0
+
     # Add gateway connections for special nodes
     if is_special and node_id in mh.special_node_gateways:
         node_info["gateway_connections"] = _build_gateway_connections_list(node_id)
@@ -137,6 +161,14 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
     # Determine if this node is a gateway
     is_gw = mh.node_is_gateway.get(node_id, False) or node_id in mh.all_gateway_node_ids
     node_info["is_gateway"] = is_gw
+
+    # Reliability summary for the gateway details view (gateway-only nodes
+    # get the same fields from _build_gateway_only_node)
+    if is_gw:
+        cached_reliability = mh.gateway_reliability_cache.get(node_id, {})
+        node_info["reliability_score"] = cached_reliability.get("score", 0)
+        node_info["detection_count"] = cached_reliability.get("detection_count", 0)
+        node_info["confidence_level"] = cached_reliability.get("confidence_level", "none")
 
     # Set name fallback based on gateway status
     if not node_name:
