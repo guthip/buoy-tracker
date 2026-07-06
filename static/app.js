@@ -1512,16 +1512,22 @@
 
   // ---- v2.0 card: headline state word + labeled chips ----
   function nodeAttentionRank(node) {
-    // Lower rank sorts first: problems surface without scrolling
-    if (node.is_special) {
-      if (node.moved_far && !node.movement_alerts_muted) return 0;
-      var quiet = (node.last_seen && node.last_seen > 0) ? (Date.now() / 1000 - node.last_seen) : null;
-      if (node.stale || (quiet != null && quiet > solOrangeThreshold)) return 1;
-      if (!(node.last_position_update > 0)) return 2;
-      if (node.movement_alerts_muted) return 4;
-      return 3;
-    }
-    return 5;
+    // Lower rank sorts first: alarm situations surface without scrolling.
+    // Off location beats everything; battery alarms outrank routine states
+    // (and apply even to movement-muted buoys — mute only covers movement).
+    if (!node.is_special) return 7;
+    var batt = getBatteryColor(
+      node.battery_pct != null ? node.battery_pct : null,
+      node.voltage != null ? node.voltage : null
+    );
+    if (node.moved_far && !node.movement_alerts_muted) return 0;  // off location
+    if (batt === 'red') return 1;                                 // critical battery
+    var quiet = (node.last_seen && node.last_seen > 0) ? (Date.now() / 1000 - node.last_seen) : null;
+    if (node.stale || (quiet != null && quiet > solOrangeThreshold)) return 2;  // gone quiet
+    if (batt === 'yellow') return 3;                              // weak battery
+    if (!(node.last_position_update > 0)) return 4;               // no GPS yet
+    if (node.movement_alerts_muted) return 6;                     // parked/muted
+    return 5;                                                     // all well
   }
 
   function nodeHeadlineState(node) {
