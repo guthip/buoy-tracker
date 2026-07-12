@@ -53,3 +53,10 @@ echo "=== 6. Docs referencing endpoints that don't exist =========="
 for ep in $(grep -oE 'api/[a-z/_-]+' README.md DOCKER.md 2>/dev/null | cut -d: -f2 | sort -u); do
   grep -q "$ep" src/main.py || echo "  $ep (in docs, not in routes)"
 done
+
+echo ""
+echo "=== 7. Duplicate code blocks in Python (pylint) =============="
+echo "(catches literal copy-paste; two functions doing the same job in"
+echo " different words — e.g. send_movement_alert/send_battery_alert"
+echo " before 2026-07-12 — won't show up here and need a human read)"
+$PY -m pylint --disable=all --enable=duplicate-code src/ 2>/dev/null || echo "(pip install pylint)"

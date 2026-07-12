@@ -619,25 +619,17 @@ def _extract_modem_preset(obj):
 
 
 def _extract_channel_from_topic(node_id):
-    """Extract channel name from stored topic path for this node."""
+    """Extract channel name from stored topic path for this node.
+
+    Found by pylint's duplicate-code check (2026-07-12): this used to
+    re-parse the topic itself instead of calling _extract_channel_from_mqtt_topic
+    (the topics.channel_from_topic import, already aliased just above and
+    already in use one call site over) — same parsing logic, pasted a
+    second time a few lines from the working alias.
+    """
     if node_id not in node_topics:
         return "Unknown"
-    
-    topic = node_topics[node_id]
-    try:
-        # Topic format: msh/US/bayarea/2/e/CHANNEL_NAME/!nodeid/...
-        parts = topic.split('/')
-        if 'e' in parts:
-            e_idx = parts.index('e')
-            if e_idx + 1 < len(parts):
-                channel = parts[e_idx + 1]
-                # Make sure it's not a node id part (starts with !)
-                if not channel.startswith('!'):
-                    return _sanitize_display_text(channel)
-    except Exception as e:
-        logger.debug(f"Error extracting channel from topic {topic}: {e}")
-
-    return "Unknown"
+    return _extract_channel_from_mqtt_topic(node_topics[node_id])
 
 
 def _initialize_special_node_home_position(node_id):
