@@ -2168,6 +2168,11 @@
             statusEl.textContent = txt;
             var pulseEl = document.getElementById('mqtt-pulse');
             if (pulseEl) pulseEl.className = 'pulse' + (pulse ? ' ' + pulse : '');
+
+            var uptimeEl = document.getElementById('server-uptime');
+            if (uptimeEl && data2 && data2.server_start_ts) {
+              uptimeEl.textContent = 'up ' + formatTimeAgo(data2.server_start_ts);
+            }
           } else if (xhr.status === 429) {
             pausePollingForRateLimit();
             statusEl.textContent = '⏸️ Rate limited (paused 60s)';

@@ -59,6 +59,11 @@ root_logger.addHandler(file_handler)
 logger = logging.getLogger(__name__)
 logger.info(f'=== BUOY TRACKER STARTED at {time.strftime("%Y-%m-%d %H:%M:%S")} (log_level={config.LOG_LEVEL}) ===')
 
+# Process start time, exposed via /health so the header can show uptime —
+# the simplest possible signal that the server was reset (restart or
+# "Restart server" both re-import this module, resetting the clock).
+_PROCESS_START_TS = time.time()
+
 # Open the SQLite durable store (settings + time series; survives restarts)
 storage.init()
 # Rebuild in-memory position trails from the durable store
@@ -417,6 +422,7 @@ def health_check() -> Response:
         'status': 'ok',
         'mqtt_connected': mqtt_connected,
         'mqtt_status': mqtt_status,
+        'server_start_ts': _PROCESS_START_TS,
         'config_sources': getattr(config, 'CONFIG_SOURCES', []),
         'nodes_tracked': len(nodes),
         'nodes_with_position': len(nodes),
