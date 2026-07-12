@@ -229,6 +229,13 @@ def _add_telemetry_to_history(node_id, json_data):
     Add or update telemetry data in special node history.
     Creates new history entry or updates existing one if within 2-second window.
 
+    special_history entries double as both the map's position trail and the
+    battery-history chart's data source, but a telemetry packet carries no
+    position of its own — it only ever reports whatever position was last
+    known (possibly none yet, for a brand-new node). Position-less entries
+    are valid: the battery chart never reads lat/lon; only the map-trail
+    renderer needs a real fix, and it filters for that itself.
+
     Args:
         node_id: Node ID to add history for
         json_data: Full MQTT packet data
@@ -237,11 +244,10 @@ def _add_telemetry_to_history(node_id, json_data):
     if not _is_special_node(node_id):
         return
 
-    # Guard clause: No valid position? Skip.
     lat = nodes_data[node_id].get("latitude")
     lon = nodes_data[node_id].get("longitude")
-    if lat is None or lon is None or (lat == 0 and lon == 0):
-        return
+    if lat == 0 and lon == 0:
+        lat = lon = None
 
     # Ensure history structure exists
     _ensure_history_struct(node_id)

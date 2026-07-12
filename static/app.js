@@ -85,6 +85,9 @@
      * @returns {string} HTML popup text
      */
     function buildTrailPopup(point, index, total, node) {
+      // Assumes point.lat/lon are real — the one call site below already
+      // filters special_history for position-bearing points before this
+      // runs. Don't call this with an unfiltered point.
       var lines = [];
 
       lines.push('<b>' + escapeHtml(node.name) + '</b>');
@@ -2059,7 +2062,11 @@
                       var nodeTrailData = trails_data[String(node.id)];
                       if (!nodeTrailData) continue;
 
-                      var pts = nodeTrailData.points || [];
+                      // Battery-only telemetry points (no GPS fix yet) can be mixed
+                      // in; the trail itself only ever plots points with a position.
+                      var pts = (nodeTrailData.points || []).filter(function(p){
+                        return p.lat != null && p.lon != null;
+                      });
 
                       // Remove old trail polyline
                         if (trails[node.id]) { 
