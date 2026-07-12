@@ -280,6 +280,30 @@ def get_positions_since(node_id, since_ts, include_simulated=False):
     ]
 
 
+def get_telemetry_since(node_id, since_ts, include_simulated=False):
+    """Telemetry rows for one node since a timestamp, oldest first.
+
+    Used to rebuild in-memory battery history at startup alongside
+    get_positions_since(). Telemetry rows carry no position of their own
+    (lat/lon are None) — same shape _add_telemetry_to_history() produces
+    for a telemetry-only sample.
+    """
+    with _lock:
+        if _conn is None:
+            return []
+        sim_clause = '' if include_simulated else ' AND simulated = 0'
+        rows = _conn.execute(
+            f'SELECT ts, voltage, rssi, snr FROM telemetry'
+            f' WHERE node_id = ? AND ts >= ?{sim_clause} ORDER BY ts',
+            (node_id, int(since_ts)),
+        ).fetchall()
+    return [
+        {'ts': ts, 'lat': None, 'lon': None, 'alt': None, 'voltage': voltage,
+         'rssi': rssi, 'snr': snr}
+        for ts, voltage, rssi, snr in rows
+    ]
+
+
 def get_anchor_spread(node_id, since_ts):
     """RMS distance (meters) of recent positions from their centroid.
 

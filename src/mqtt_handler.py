@@ -279,20 +279,32 @@ def _add_telemetry_to_history(node_id, json_data):
     _prune_history(node_id, now_ts=current_ts)
 
 def rebuild_history_from_db():
-    """Rebuild in-memory position trails from the durable store at startup.
+    """Rebuild in-memory position trail AND battery history from the durable
+    store at startup.
 
     Replaces the old special_nodes.json persistence: trails survive restarts
     without any JSON snapshotting because every accepted position is already
-    a row in the positions table."""
+    a row in the positions table.
+
+    Found 2026-07-12 (SYCP report — card 4.12V/91% but the battery history
+    chart stuck at an older 4.108V/90% for over an hour after a restart):
+    this used to rebuild only from positions, never from telemetry. Any
+    telemetry-only sample between the last position fix and a restart was
+    permanently missing from the chart afterward, until the next telemetry
+    packet happened to arrive post-restart — every restart during today's
+    release cycle reproduced exactly this symptom. Positions and telemetry
+    are now merged by timestamp."""
     hours = getattr(config, 'SPECIAL_HISTORY_HOURS', 24)
     since = time.time() - hours * 3600
     total = 0
     for node_id in getattr(config, 'SPECIAL_NODE_IDS', []):
         try:
-            rows = storage.get_positions_since(node_id, since)
+            pos_rows = storage.get_positions_since(node_id, since)
+            tel_rows = storage.get_telemetry_since(node_id, since)
         except Exception as e:
             logger.error(f'Trail rebuild failed for {node_id}: {e}')
             continue
+        rows = sorted(pos_rows + tel_rows, key=lambda r: r['ts'])
         if not rows:
             continue
         _ensure_history_struct(node_id)
