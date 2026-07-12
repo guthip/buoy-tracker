@@ -2,6 +2,7 @@
 
 import logging
 import smtplib
+import time
 from datetime import datetime, UTC
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Track when we last sent alerts to avoid spamming
 # Pruned periodically to prevent memory leak
-last_alert_sent = {}  # node_id -> timestamp
+last_alert_sent = {}  # (node_id, kind) -> timestamp; kind is "movement" or "battery"
 
 
 def _format_battery(node_data: Dict[str, Any]) -> str:
@@ -30,27 +31,67 @@ def _format_battery(node_data: Dict[str, Any]) -> str:
 
 
 def _cleanup_alert_history() -> None:
-    """Remove stale alert records for nodes that no longer exist or are too old."""
-    import time
+    """Remove stale alert records for nodes that no longer exist or are too old.
+
+    Keys are (node_id, kind) tuples — see _send_alert. A prior version kept
+    movement alerts under a bare node_id and battery alerts under the string
+    f"{node_id}_battery"; this function's dead-node check compared that string
+    against SPECIAL_NODE_IDS (a list of ints), which is never true, so every
+    battery-alert cooldown record was deleted the instant this ran — silently
+    defeating the battery-alert cooldown whenever a movement alert fired
+    anywhere nearby in time. Tuple keys make node_id a real, comparable value
+    for both kinds.
+    """
     try:
         now = time.time()
         # Remove alerts older than 3x the cooldown period (shouldn't accumulate beyond this)
         max_age = config.ALERT_COOLDOWN * 3
         cutoff_time = now - max_age
-        
-        # Remove dead node IDs and overly old entries
+
         to_remove = [
-            node_id for node_id, timestamp in last_alert_sent.items()
-            if node_id not in config.SPECIAL_NODE_IDS or timestamp < cutoff_time
+            key for key, timestamp in last_alert_sent.items()
+            if key[0] not in config.SPECIAL_NODE_IDS or timestamp < cutoff_time
         ]
-        
-        for node_id in to_remove:
-            del last_alert_sent[node_id]
-        
+
+        for key in to_remove:
+            del last_alert_sent[key]
+
         if to_remove:
             logger.debug(f'Cleaned up {len(to_remove)} stale alert records')
     except Exception as e:
         logger.warning(f'Error cleaning up alert history: {e}')
+
+
+def _send_alert(kind: str, node_id: int, subject: str, body: str, log_detail: str) -> None:
+    """Shared send path for every alert kind: cleanup, cooldown, enabled-check,
+    send, log — the one place movement and battery alerts used to each
+    reimplement (and, for cleanup, one of them silently skip).
+    """
+    _cleanup_alert_history()
+
+    key = (node_id, kind)
+    now = time.time()
+    last_sent = last_alert_sent.get(key)
+    if last_sent is not None and (now - last_sent) < config.ALERT_COOLDOWN:
+        logger.debug(
+            f"Skipping {kind} alert for node_id {node_id}, last sent {int(now - last_sent)}s ago"
+        )
+        return
+
+    try:
+        if not hasattr(config, "ALERT_ENABLED") or not config.ALERT_ENABLED:
+            logger.debug("Email alerts disabled in config")
+            return
+
+        # Update last sent time BEFORE sending to prevent duplicate alerts
+        # from rapid duplicate packets passing the cooldown check simultaneously
+        last_alert_sent[key] = now
+
+        _send_email(to_addresses=config.ALERT_EMAIL_TO, subject=subject, body=body)
+        logger.info(f"Sent {kind} alert for {log_detail}")
+
+    except Exception as e:
+        logger.error(f"Failed to send {kind} alert: {e}", exc_info=True)
 
 
 def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: float) -> None:
@@ -62,101 +103,41 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
         node_data: Dictionary with node information
         distance_m: Distance from origin in meters
     """
-    # Periodically clean up old alert records
-    _cleanup_alert_history()
-    
-    # Check if we should send alert (avoid spam)
-    import time
+    node_name = node_data.get("long_name", "Unknown")
+    battery_display = _format_battery(node_data)
+    special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
 
-    now = time.time()
-    if node_id in last_alert_sent:
-        time_since_last = now - last_alert_sent[node_id]
-        # Don't send more than once per cooldown period
-        if time_since_last < config.ALERT_COOLDOWN:
-            logger.debug(
-                f"Skipping alert for node_id {node_id}, last sent {int(time_since_last)}s ago"
-            )
-            return
-
-    try:
-        # Get alert configuration
-        if not hasattr(config, "ALERT_ENABLED") or not config.ALERT_ENABLED:
-            logger.debug("Email alerts disabled in config")
-            return
-
-        node_name = node_data.get("long_name", "Unknown")
-        battery_display = _format_battery(node_data)
-
-        # Special node label
-        special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
-
-        # Create email
-        subject = f"🚨 {config.APP_TITLE} - Movement Alert: {special_label}"
-
-        body = (
-            f"{config.APP_TITLE} - Movement Alert\n\n"
-            f"ALERT TYPE: Position Outside Safe Zone\n\n"
-            f"Buoy: {special_label}\n\n"
-            f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
-            f"ALERT DETAILS:\n  Distance from home: {int(distance_m)} meters\n  Safe zone threshold: {config.SPECIAL_MOVEMENT_THRESHOLD_METERS} meters\n\n"
-            f"TELEMETRY:\n  Battery: {battery_display}\n\n"
-            f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
-            f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN}s (next alert after this time)"
-        )
-
-        # Update last sent time BEFORE sending to prevent duplicate alerts
-        # from rapid duplicate packets passing the cooldown check simultaneously
-        last_alert_sent[node_id] = now
-
-        # Send email
-        _send_email(to_addresses=config.ALERT_EMAIL_TO, subject=subject, body=body)
-        logger.info(f"Sent movement alert for {special_label} ({int(distance_m)}m)")
-
-    except Exception as e:
-        logger.error(f"Failed to send movement alert: {e}", exc_info=True)
+    subject = f"🚨 {config.APP_TITLE} - Movement Alert: {special_label}"
+    body = (
+        f"{config.APP_TITLE} - Movement Alert\n\n"
+        f"ALERT TYPE: Position Outside Safe Zone\n\n"
+        f"Buoy: {special_label}\n\n"
+        f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+        f"ALERT DETAILS:\n  Distance from home: {int(distance_m)} meters\n  Safe zone threshold: {config.SPECIAL_MOVEMENT_THRESHOLD_METERS} meters\n\n"
+        f"TELEMETRY:\n  Battery: {battery_display}\n\n"
+        f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
+        f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN}s (next alert after this time)"
+    )
+    _send_alert("movement", node_id, subject, body, f"{special_label} ({int(distance_m)}m)")
 
 
 def send_battery_alert(node_id: int, node_data: Dict[str, Any]) -> None:
     """Send email alert when a special node's battery drops below threshold."""
-    import time
+    node_name = node_data.get("long_name", "Unknown")
+    special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
+    battery_display = _format_battery(node_data)
 
-    now = time.time()
-    alert_key = f"{node_id}_battery"
-    if alert_key in last_alert_sent:
-        time_since_last = now - last_alert_sent[alert_key]
-        if time_since_last < config.ALERT_COOLDOWN:
-            logger.debug(
-                f"Skipping battery alert for node_id {node_id}, last sent {int(time_since_last)}s ago"
-            )
-            return
-
-    try:
-        if not hasattr(config, "ALERT_ENABLED") or not config.ALERT_ENABLED:
-            logger.debug("Email alerts disabled in config")
-            return
-
-        node_name = node_data.get("long_name", "Unknown")
-        special_label = config.SPECIAL_NODES.get(node_id, {}).get("label", node_name)
-        battery_display = _format_battery(node_data)
-
-        subject = f"🔋 {config.APP_TITLE} - Low Battery Alert: {special_label}"
-
-        body = (
-            f"{config.APP_TITLE} - Low Battery Alert\n\n"
-            f"ALERT TYPE: Low Battery Level\n\n"
-            f"Buoy: {special_label}\n\n"
-            f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
-            f"ALERT DETAILS:\n  Current battery: {battery_display}\n\n"
-            f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
-            f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN / 3600:.1f} hours between alerts"
-        )
-
-        last_alert_sent[alert_key] = now
-        _send_email(to_addresses=config.ALERT_EMAIL_TO, subject=subject, body=body)
-        logger.info(f"Sent battery alert for {special_label} ({battery_display})")
-
-    except Exception as e:
-        logger.error(f"Failed to send battery alert: {e}", exc_info=True)
+    subject = f"🔋 {config.APP_TITLE} - Low Battery Alert: {special_label}"
+    body = (
+        f"{config.APP_TITLE} - Low Battery Alert\n\n"
+        f"ALERT TYPE: Low Battery Level\n\n"
+        f"Buoy: {special_label}\n\n"
+        f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
+        f"ALERT DETAILS:\n  Current battery: {battery_display}\n\n"
+        f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
+        f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN / 3600:.1f} hours between alerts"
+    )
+    _send_alert("battery", node_id, subject, body, f"{special_label} ({battery_display})")
 
 
 def _send_email(to_addresses: Union[str, List[str]], subject: str, body: str) -> None:

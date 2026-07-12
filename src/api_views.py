@@ -73,6 +73,23 @@ def _get_anchor_spread_cached(node_id):
     return spread
 
 
+def _gateway_reliability_fields(gateway_id):
+    """The 4 gateway-reliability fields, in one place.
+
+    Previously each of _build_node_info_from_data and _build_gateway_only_node
+    read mh.gateway_reliability_cache and listed these fields independently;
+    they'd already drifted (avg_rssi was gateway-only-exclusive, and a
+    regular node that's also a gateway never got it) before this existed.
+    """
+    cached = mh.gateway_reliability_cache.get(gateway_id, {})
+    return {
+        "reliability_score": cached.get("score", 0),
+        "detection_count": cached.get("detection_count", 0),
+        "avg_rssi": cached.get("avg_rssi"),
+        "confidence_level": cached.get("confidence_level", "none"),
+    }
+
+
 def _build_gateway_connections_list(node_id):
     """Build list of gateway connections with reliability scores for a special node."""
     gateway_connections = []
@@ -163,12 +180,9 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
     node_info["is_gateway"] = is_gw
 
     # Reliability summary for the gateway details view (gateway-only nodes
-    # get the same fields from _build_gateway_only_node)
+    # get the same fields, from the same helper, in _build_gateway_only_node)
     if is_gw:
-        cached_reliability = mh.gateway_reliability_cache.get(node_id, {})
-        node_info["reliability_score"] = cached_reliability.get("score", 0)
-        node_info["detection_count"] = cached_reliability.get("detection_count", 0)
-        node_info["confidence_level"] = cached_reliability.get("confidence_level", "none")
+        node_info.update(_gateway_reliability_fields(node_id))
 
     # Set name fallback based on gateway status
     if not node_name:
@@ -181,12 +195,17 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
     return node_info
 
 def _build_gateway_only_node(gateway_id, current_time):
-    """Build node_info dictionary for gateway that hasn't sent its own data."""
+    """Build node_info dictionary for a gateway that hasn't sent its own data.
+
+    Field set is meant to match _build_node_info_from_data's output for an
+    equivalent non-special node (frontend code doesn't special-case which
+    builder produced a given node). The two have already drifted apart
+    more than once without a test to catch it — see
+    tests/test_api_views.py::test_gateway_only_node_matches_regular_node_schema.
+    """
     gw_info = mh.gateway_info_cache.get(gateway_id)
     if gw_info is None:
         return None
-
-    cached_reliability = mh.gateway_reliability_cache.get(gateway_id, {})
 
     return {
         "id": gateway_id,
@@ -212,17 +231,16 @@ def _build_gateway_only_node(gateway_id, current_time):
         "last_seen": gw_info.get("last_seen"),
         "last_position_update": None,
         "battery_pct": None,
+        "battery_low": False,
         "age_min": int((current_time - gw_info.get("last_seen", current_time)) / 60),
         "moved_far": False,
         "distance_from_origin_m": None,
+        "movement_alerts_muted": False,
         "voltage": None,
         "power_current": None,
         "is_gateway": True,
         "gateway_connections": [],
-        "reliability_score": cached_reliability.get("score", 0),
-        "detection_count": cached_reliability.get("detection_count", 0),
-        "avg_rssi": cached_reliability.get("avg_rssi"),
-        "confidence_level": cached_reliability.get("confidence_level", "none"),
+        **_gateway_reliability_fields(gateway_id),
     }
 
 def get_nodes():

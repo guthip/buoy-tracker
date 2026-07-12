@@ -242,7 +242,7 @@ def get_state():
         'alert_cooldown_s': config.ALERT_COOLDOWN,
         'emails': 'real' if getattr(config, 'DEBUG_SEND_REAL_EMAILS', False) else 'dry-run',
         'pending_movement_alerts': pending,
-        'alert_cooldowns': {str(k): int(v) for k, v in alerts.last_alert_sent.items()},
+        'alert_cooldowns': {f'{k[0]}_{k[1]}': int(v) for k, v in alerts.last_alert_sent.items()},
         'homecoming_progress': {str(k): v for k, v in movement._homecoming_progress.items()},
         'mutes': storage.get_all_mutes(),
     }

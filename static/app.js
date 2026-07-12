@@ -210,8 +210,7 @@
       var nodeIdHex = '!' + node.id.toString(16).padStart(8, '0');
       popup += '<br>ID: ' + node.id + ' (' + nodeIdHex + ')';
 
-      var displayVoltage = (node.is_special && node.improved_voltage != null) ? node.improved_voltage : node.voltage;
-      var batteryStr = formatBattery(displayVoltage, node.battery_pct);
+      var batteryStr = formatBattery(node.voltage, node.battery_pct);
       if (batteryStr) {
         popup += '<br>Battery: ' + batteryStr;
         if (node.battery_low) popup += ' ⚠️ LOW';

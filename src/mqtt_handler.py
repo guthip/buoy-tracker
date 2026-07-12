@@ -748,27 +748,8 @@ def on_nodeinfo(json_data):
             _store_node_names(node_id, payload, name)
             nodes_data[node_id]["last_seen"] = time.time()
             
-            # Store best signal quality within a rolling 1-hour window.
-            # Multiple gateways each publish their own copy of a packet, so we keep
-            # the best (highest) RSSI/SNR seen within the window rather than last-received.
-            # After the window expires the next packet resets the baseline so stale
-            # best-ever values don't linger as the network topology changes over time.
-            _SIGNAL_WINDOW = 3600
-            now_sig = time.time()
-            new_rssi = json_data.get("rx_rssi")
-            new_snr  = json_data.get("rx_snr")
-            if new_rssi is not None:
-                prev      = nodes_data[node_id].get("rx_rssi")
-                prev_age  = now_sig - nodes_data[node_id].get("rx_rssi_ts", 0)
-                if prev is None or prev_age > _SIGNAL_WINDOW or new_rssi > prev:
-                    nodes_data[node_id]["rx_rssi"]    = new_rssi
-                    nodes_data[node_id]["rx_rssi_ts"] = now_sig
-            if new_snr is not None:
-                prev      = nodes_data[node_id].get("rx_snr")
-                prev_age  = now_sig - nodes_data[node_id].get("rx_snr_ts", 0)
-                if prev is None or prev_age > _SIGNAL_WINDOW or new_snr > prev:
-                    nodes_data[node_id]["rx_snr"]    = new_snr
-                    nodes_data[node_id]["rx_snr_ts"] = now_sig
+            # Best RSSI/SNR within a rolling window — same helper on_position uses.
+            _update_best_signal(node_id, json_data)
             
             logger.info(f'Updated nodeinfo for {node_id}: {nodes_data[node_id]["long_name"]}')
 
@@ -949,12 +930,17 @@ def on_position(json_data):
 
 def _extract_battery_and_voltage_from_telemetry(node_id, payload):
     """
-    Extract voltage and battery percentage from a telemetry payload.
+    Extract voltage and battery percentage from a just-merged telemetry payload.
 
-    For special nodes (all power-sensor buoys): voltage comes from power_metrics
-    on the configured channel. For regular mesh nodes: voltage and battery_level
-    come from device_metrics. Battery percentage is always derived from voltage
-    via _estimate_battery_from_voltage when voltage is available, so the card
+    Voltage always comes from _get_node_voltage() — the one place that knows
+    which channel a node uses — rather than re-deriving channel selection
+    here. (A prior version read payload["power_metrics"] directly for every
+    special node regardless of its configured voltage_channel, and silently
+    disagreed with _get_node_voltage() for any special node configured with
+    voltage_channel="device_voltage".) This runs after _merge_telemetry_payload
+    in on_telemetry, so nodes_data[node_id]["telemetry"] already reflects
+    this packet. Battery percentage is always derived from voltage via
+    _estimate_battery_from_voltage when voltage is available, so the card
     and the chart can never disagree.
 
     Returns:
@@ -966,27 +952,19 @@ def _extract_battery_and_voltage_from_telemetry(node_id, payload):
     battery_pct = None
 
     try:
-        if not isinstance(payload, dict):
-            return (None, None)
-
-        if _is_special_node(node_id):
-            power_metrics = payload.get("power_metrics", {})
-            if isinstance(power_metrics, dict):
-                voltage_channel = config.SPECIAL_NODES[node_id].get('voltage_channel', 'ch3_voltage')
-                voltage = power_metrics.get(voltage_channel)
-        else:
-            device_metrics = payload.get("device_metrics", {})
-            if isinstance(device_metrics, dict):
-                voltage = device_metrics.get("voltage")
-                # Only fall back to device-reported battery_level if voltage is missing
-                if voltage is None:
-                    battery_pct = device_metrics.get("battery_level")
+        voltage = _get_node_voltage(node_id)
 
         if voltage is not None and isinstance(voltage, (int, float)):
             voltage = float(voltage)
             battery_pct = _estimate_battery_from_voltage(voltage)
         else:
             voltage = None
+            # No voltage at all: regular (non-special) nodes may still report
+            # a raw device battery_level percentage directly.
+            if not _is_special_node(node_id) and isinstance(payload, dict):
+                device_metrics = payload.get("device_metrics", {})
+                if isinstance(device_metrics, dict):
+                    battery_pct = device_metrics.get("battery_level")
 
         if isinstance(battery_pct, str) and battery_pct.isdigit():
             battery_pct = int(battery_pct)
@@ -1092,27 +1070,8 @@ def on_telemetry(json_data):
                 except Exception as db_err:
                     logger.error(f'Failed to record telemetry for {node_id}: {db_err}')
             
-            # Store best signal quality within a rolling 1-hour window.
-            # Multiple gateways each publish their own copy of a packet, so we keep
-            # the best (highest) RSSI/SNR seen within the window rather than last-received.
-            # After the window expires the next packet resets the baseline so stale
-            # best-ever values don't linger as the network topology changes over time.
-            _SIGNAL_WINDOW = 3600
-            now_sig = time.time()
-            new_rssi = json_data.get("rx_rssi")
-            new_snr  = json_data.get("rx_snr")
-            if new_rssi is not None:
-                prev      = nodes_data[node_id].get("rx_rssi")
-                prev_age  = now_sig - nodes_data[node_id].get("rx_rssi_ts", 0)
-                if prev is None or prev_age > _SIGNAL_WINDOW or new_rssi > prev:
-                    nodes_data[node_id]["rx_rssi"]    = new_rssi
-                    nodes_data[node_id]["rx_rssi_ts"] = now_sig
-            if new_snr is not None:
-                prev      = nodes_data[node_id].get("rx_snr")
-                prev_age  = now_sig - nodes_data[node_id].get("rx_snr_ts", 0)
-                if prev is None or prev_age > _SIGNAL_WINDOW or new_snr > prev:
-                    nodes_data[node_id]["rx_snr"]    = new_snr
-                    nodes_data[node_id]["rx_snr_ts"] = now_sig
+            # Best RSSI/SNR within a rolling window — same helper on_position uses.
+            _update_best_signal(node_id, json_data)
 
             # Add telemetry to special node history (if applicable)
             _add_telemetry_to_history(node_id, json_data)
