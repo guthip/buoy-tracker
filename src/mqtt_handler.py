@@ -238,8 +238,8 @@ def _add_telemetry_to_history(node_id, json_data):
         return
 
     # Guard clause: No valid position? Skip.
-    lat = nodes_data[node_id].get("lat")
-    lon = nodes_data[node_id].get("lon")
+    lat = nodes_data[node_id].get("latitude")
+    lon = nodes_data[node_id].get("longitude")
     if lat is None or lon is None or (lat == 0 and lon == 0):
         return
 
