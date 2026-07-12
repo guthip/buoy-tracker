@@ -282,20 +282,68 @@ host user so files in the mounted volumes are owned by you (default 1000:1000).
       TZ: America/Los_Angeles
 ```
 
-## Rootless podman (v2.1)
+## Rootless podman (no docker-compose)
 
 The entrypoint detects a non-root start, skips ownership changes, and runs as
-the invoking user (PUID/PGID are ignored — podman's user mapping replaces them):
+the invoking user (PUID/PGID are ignored — podman's `--userns=keep-id`
+mapping replaces them). This is a full walkthrough for when docker-compose
+isn't available at all, mirroring the Quick Start above in plain podman.
 
+**1. Create the deployment directory:**
+```bash
+mkdir -p ~/buoy-tracker/{config,data,logs} && cd ~/buoy-tracker
+```
+
+**2. Fetch the three example/template config files (no git clone needed):**
+```bash
+curl -o config/site.config.example \
+  https://raw.githubusercontent.com/guthip/buoy-tracker/main/site.config.example
+curl -o config/environment.config.example \
+  https://raw.githubusercontent.com/guthip/buoy-tracker/main/environment.config.example
+curl -o config/secret.config.template \
+  https://raw.githubusercontent.com/guthip/buoy-tracker/main/secret.config.template
+```
+
+**3. Hand-craft your real config files from those examples:**
+```bash
+cp config/site.config.example        config/site.config         # fleet: buoys, homes, alert policy
+cp config/environment.config.example config/environment.config  # infra: broker, smtp, ports
+cp config/secret.config.template     config/secret.config        # credentials (only if using auth/alerts)
+nano config/site.config config/environment.config config/secret.config
+```
+
+**4. Run it:**
 ```bash
 podman run -d --name buoy-tracker --userns=keep-id \
   -p 5103:5103 \
   -v ./config:/app/config -v ./data:/app/data -v ./logs:/app/logs \
-  dokwerker8891/buoy-tracker:2.1
-# systemd unit: podman generate systemd --new --name buoy-tracker
+  dokwerker8891/buoy-tracker:2.2
+```
+If a volume isn't writable, the container exits immediately with an
+actionable message rather than silently misbehaving.
+
+**5. Manage it:**
+```bash
+podman logs -f buoy-tracker              # view logs
+podman restart buoy-tracker              # apply config changes
+podman stop buoy-tracker                 # stop
+podman exec -it buoy-tracker /bin/bash   # shell inside
 ```
 
-If a volume isn't writable, the container exits with an actionable message.
+**6. (Optional) Run it as a systemd service, so it survives reboot:**
+```bash
+podman generate systemd --new --name buoy-tracker --files
+# move the generated .service file to ~/.config/systemd/user/ (rootless)
+systemctl --user daemon-reload
+systemctl --user enable --now container-buoy-tracker.service
+```
+
+**7. Upgrade to a new release:**
+```bash
+podman pull dokwerker8891/buoy-tracker:2.2   # or :latest
+podman stop buoy-tracker && podman rm buoy-tracker
+# re-run the podman run command from step 4 — ./data/ is untouched
+```
 
 ## Traefik (v2.1)
 
