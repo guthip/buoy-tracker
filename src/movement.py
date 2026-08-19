@@ -84,12 +84,18 @@ def _validate_position_precision(payload, node_id=None):
     Validate GPS position precision to reject corrupted packets.
 
     Two checks:
-    1. precision_bits field >= 32 (Meshtastic standard for full GPS fix)
-    2. Actual coordinate integers have 32 significant bits.
-       Relay nodes preserve the source's precision_bits=32 but quantize the
-       coordinates to fewer bits for privacy/efficiency. A 13-bit relay packet
-       has 19 trailing zero bits in latitude_i/longitude_i even though the
-       field still claims 32 — that is what this check catches.
+    1. precision_bits field >= MIN_PRECISION_BITS. Defaults to
+       MIN_POSITION_PRECISION_BITS (fleet-wide); a node broadcasting reduced
+       precision on purpose (e.g. for location privacy) can lower its own
+       floor via the min_precision_bits field on its [special_nodes] entry
+       without loosening the check for the rest of the fleet.
+    2. Actual coordinate integers have as many significant bits as the
+       packet claims. Relay nodes preserve the source's precision_bits but
+       quantize the coordinates further for privacy/efficiency. A 13-bit
+       relay packet has 19 trailing zero bits in latitude_i/longitude_i even
+       though the field still claims its original precision — that mismatch,
+       not any fixed bit count, is what this check catches, so it applies
+       equally whether the source is broadcasting full or reduced precision.
 
     When a quantized packet is from a special node, an ERROR is logged to
     help identify which relay nodes are modifying our buoy position packets.
@@ -97,11 +103,13 @@ def _validate_position_precision(payload, node_id=None):
     Returns:
         True if position precision is valid, False otherwise
     """
-    MIN_PRECISION_BITS = 32
-    # A 13-bit relay packet has 19 trailing zeros; a real GPS fix has 1-4.
-    # Threshold of 24 (= max 8 trailing zeros, ~2.8m grid) safely separates
-    # real GPS readings from relay-quantized coordinates.
-    MIN_ACTUAL_COORD_BITS = 24
+    node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {}) if node_id else {}
+    MIN_PRECISION_BITS = node_config.get('min_precision_bits') or getattr(config, 'MIN_POSITION_PRECISION_BITS', 32)
+    # A relay that quantizes a packet typically drops at least 8 bits below
+    # what it claims; a real GPS fix drifts by 1-4 bits of jitter. Tolerance
+    # is relative to the packet's own claimed precision_bits, not a fixed
+    # floor, so intentionally-reduced-precision broadcasts aren't penalized.
+    MAX_PRECISION_DRIFT_BITS = 8
 
     precision_bits = payload.get('precision_bits', 0)
 
@@ -113,16 +121,19 @@ def _validate_position_precision(payload, node_id=None):
         logger.warning(f'Rejected position packet with non-numeric precision_bits: {precision_bits!r}')
         return False
 
-    # Check actual coordinate precision regardless of the precision_bits claim.
+    # Check actual coordinate precision against what the packet itself claims.
+    # latitude_i/longitude_i are 32-bit fields, so a claim above 32 can't
+    # correspond to any more actual precision than a claim of exactly 32.
+    claimed_bits = min(precision_bits, 32)
     lat_i = payload.get('latitude_i', 0)
     lon_i = payload.get('longitude_i', 0)
     if lat_i and lon_i:
         lat_trailing = (lat_i & -lat_i).bit_length() - 1
         lon_trailing = (lon_i & -lon_i).bit_length() - 1
         actual_bits = 32 - max(lat_trailing, lon_trailing)
-        if actual_bits < MIN_ACTUAL_COORD_BITS:
+        if claimed_bits - actual_bits > MAX_PRECISION_DRIFT_BITS:
             if node_id and node_id in getattr(config, 'SPECIAL_NODES', {}):
-                precision_lost = MIN_PRECISION_BITS - actual_bits
+                precision_lost = claimed_bits - actual_bits
                 timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
                 logger.error(
                     f'[PRECISION] {timestamp} | node {node_id} | '

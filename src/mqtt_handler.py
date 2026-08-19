@@ -393,15 +393,17 @@ def _append_position_history(node_id, lat, lon, alt, json_data):
 
 
 def _check_battery_alert(node_id, simulated=False):
-    """Fire a low-battery alert if voltage drops below 3.5 V."""
+    """Fire a low-battery alert if battery percentage drops below the
+    configured threshold (same comparison the UI's battery-low badge uses)."""
     if not _is_special_node(node_id):
         return
 
-    voltage = _get_node_voltage(node_id)
-    if voltage is not None and voltage < 3.5:
+    battery_pct = nodes_data.get(node_id, {}).get('battery_pct')
+    threshold = getattr(config, 'LOW_BATTERY_THRESHOLD', 50)
+    if battery_pct is not None and battery_pct < threshold:
         from . import alerts
         storage.record_alert_event('battery_low', node_id,
-                                   details={'voltage': voltage},
+                                   details={'battery_pct': battery_pct},
                                    simulated=simulated)
         alerts.send_battery_alert(node_id, nodes_data[node_id])
 

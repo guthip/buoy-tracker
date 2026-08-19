@@ -59,7 +59,7 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
 - **Headline buoy states**: each card leads with one word — On station / Moved /
   Stale / Muted 🔕 / No GPS yet — with labeled Fix / Heard / Batt chips;
   buoys needing attention sort to the top
-- **Position Precision Validation**: Automatically rejects GPS packets with degraded precision (`precision_bits < 32`), preventing corrupted relay packets from polluting position trails
+- **Position Precision Validation**: Automatically rejects GPS packets with degraded precision (`precision_bits < 32` by default, configurable per-node for fleets that broadcast reduced precision on purpose), preventing corrupted relay packets from polluting position trails
 - **Battery History**: inline sparkline on every buoy card, plus a tap-to-open
   voltage chart with hover tooltips
 - **Gateway Tracking**: Automatically discovers and tracks mesh gateways
