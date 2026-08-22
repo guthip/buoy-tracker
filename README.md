@@ -320,19 +320,23 @@ Key settings by layer:
 broker = mqtt.bayme.sh
 port = 1883
 root_topic = msh/US/bayarea/2/e/
-channel_name = MediumFast
+channel_name = MediumFast, LongFast
 username = meshdev
 password = large4cats
 ```
 
-**MQTT Subscription Optimization:**
-- The `channel_name` parameter filters MQTT traffic to only the specified channel
-- Subscribes to: `root_topic/channel_name/#` (e.g., `msh/US/bayarea/2/e/MediumFast/#`)
-- **Additional optimization**: When both `show_all_nodes=false` AND `show_gateways=false`, the system subscribes only to specific special node topics
-  - Example: `msh/US/bayarea/2/e/MediumFast/!db8e8f6d/#` (one subscription per special node)
-  - Dramatically reduces bandwidth by filtering at the MQTT broker level
-  - For 4 special nodes: only receives those 4 nodes' packets, ignoring hundreds of other mesh nodes
-- Toggling `show_gateways` in the UI automatically reloads MQTT subscriptions (no restart needed)
+**MQTT Subscription:**
+- `channel_name` accepts a comma-separated list of channel/modem-preset names —
+  list every preset your fleet might use. A node commonly comes back up on a
+  different preset after a low-battery reset (e.g. `LongFast` instead of its
+  usual `MediumFast`); only channels listed here are ever heard.
+- Subscribes to `root_topic/<channel>/#` for each listed channel (e.g.
+  `msh/US/bayarea/2/e/MediumFast/#` and `msh/US/bayarea/2/e/LongFast/#`)
+- The subscription always covers every node on those channels, regardless of
+  `show_all_nodes`/`show_gateways` — those settings only control what's
+  displayed in the UI, not what's subscribed to
+- Toggling `show_gateways` or `show_all_nodes` in the UI reloads MQTT
+  subscriptions dynamically (no restart needed)
 
 ### Web Interface
 ```ini
