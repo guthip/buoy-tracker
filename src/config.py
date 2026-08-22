@@ -119,7 +119,10 @@ from . import __version__ as APP_VERSION  # noqa: E402
 MQTT_BROKER = config.get('mqtt', 'broker', fallback='mqtt.bayme.sh')
 MQTT_PORT = config.getint('mqtt', 'port', fallback=1883)
 MQTT_ROOT_TOPIC = config.get('mqtt', 'root_topic', fallback='msh/US/bayarea/2/e/')
-MQTT_CHANNEL_NAME = config.get('mqtt', 'channel_name', fallback='MediumFast')
+# channel_name accepts a comma-separated list (e.g. "MediumFast, LongFast") so
+# the tracker keeps hearing a node that changes modem preset — a low-battery
+# device commonly comes back up on a different preset than it left on.
+MQTT_CHANNEL_NAMES = [c.strip() for c in config.get('mqtt', 'channel_name', fallback='MediumFast').split(',') if c.strip()]
 # SECURITY: Try environment variables first, fallback to config file
 # This allows production deployments to keep secrets out of version control
 MQTT_USERNAME = os.getenv('MQTT_USERNAME') or config.get('mqtt', 'username', fallback='meshdev')

@@ -1269,15 +1269,16 @@ def _on_mqtt_connect(client_obj, userdata, flags, reason_code, properties):
             logger.info('✅ Connected to MQTT broker')
             mqtt_was_connected = True
 
-        # Subscribe to all nodes on the channel
+        # Subscribe to all nodes on every configured channel/modem-preset.
         # NOTE: We always subscribe to the wildcard regardless of show_gateways setting
         # because special nodes transmit via LoRa and are forwarded by gateways to MQTT.
         # The MQTT topic is the gateway's node ID, not the special node's ID.
         # Filtering happens in the app based on the packet payload's 'from' field.
-        base_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/' + config.MQTT_CHANNEL_NAME
-        subscribe_topic = base_topic + '/#'
-        result, mid = client_obj.subscribe(subscribe_topic, qos=0)
-        logger.info(f"✅ Subscribed to: {subscribe_topic} (result={result}, mid={mid})")
+        root = config.MQTT_ROOT_TOPIC.rstrip('/')
+        for channel in config.MQTT_CHANNEL_NAMES:
+            subscribe_topic = f'{root}/{channel}/#'
+            result, mid = client_obj.subscribe(subscribe_topic, qos=0)
+            logger.info(f"✅ Subscribed to: {subscribe_topic} (result={result}, mid={mid})")
 
         # Mark as connected
         message_received = True
@@ -1480,7 +1481,7 @@ def connect_mqtt():
 
     try:
         logger.info(f'Connecting to MQTT broker: {config.MQTT_BROKER}:{config.MQTT_PORT}')
-        logger.info(f'Channel: {config.MQTT_CHANNEL_NAME}')
+        logger.info(f"Channels: {', '.join(config.MQTT_CHANNEL_NAMES)}")
 
         # Create paho-mqtt client with automatic reconnection enabled
         client = mqtt_client.Client(
@@ -1626,23 +1627,22 @@ def reload_mqtt_subscriptions():
         # Use current in-memory config values (already updated by the endpoint)
         logger.info(f"Reloading MQTT subscriptions (show_all_nodes={config.SHOW_ALL_NODES}, show_gateways={config.SHOW_GATEWAYS})")
 
-        # Unsubscribe from all current topics
-        base_topic = config.MQTT_ROOT_TOPIC.rstrip('/') + '/' + config.MQTT_CHANNEL_NAME
+        root = config.MQTT_ROOT_TOPIC.rstrip('/')
 
-        # Unsubscribe from wildcard (in case we were subscribed to all)
-        try:
-            client.unsubscribe(base_topic + '/#')
-            logger.info(f"Unsubscribed from: {base_topic}/#")
-        except Exception as e:
-            logger.debug(f"Could not unsubscribe from wildcard: {e}")
-
-        # Always subscribe to the channel wildcard
+        # Always subscribe to every configured channel's wildcard.
         # NOTE: We don't filter at the MQTT subscription level because special nodes
         # transmit via LoRa and are forwarded by gateways. The MQTT topic is the
         # gateway's node ID, not the special node's ID. Filtering happens in the app.
-        subscribe_topic = base_topic + '/#'
-        result, mid = client.subscribe(subscribe_topic, qos=0)
-        logger.info(f"✅ Resubscribed to: {subscribe_topic} (result={result}, mid={mid})")
+        for channel in config.MQTT_CHANNEL_NAMES:
+            subscribe_topic = f'{root}/{channel}/#'
+            try:
+                client.unsubscribe(subscribe_topic)
+                logger.info(f"Unsubscribed from: {subscribe_topic}")
+            except Exception as e:
+                logger.debug(f"Could not unsubscribe from {subscribe_topic}: {e}")
+
+            result, mid = client.subscribe(subscribe_topic, qos=0)
+            logger.info(f"✅ Resubscribed to: {subscribe_topic} (result={result}, mid={mid})")
 
         return True
 
