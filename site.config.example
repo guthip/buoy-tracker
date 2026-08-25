@@ -13,19 +13,15 @@ title = SYC buoy tracker
 # Alert radius around each buoy's home position (meters)
 movement_threshold = 150
 
-# node_id = LABEL, home_lat, home_lon, <ignored>, voltage_channel, min_precision_bits
+# node_id = LABEL, home_lat, home_lon, <ignored>, voltage_channel
 # Coordinates: decimal (37.5637125,-122.2189855) or
 # degrees-minutes (N37° 33.81', W122° 13.13')
 # Omit coordinates to auto-learn home from the first GPS fix.
 #3681533965 = SYCS, N37° 33.81', W122° 13.13'
 #492590216  = SYCE, N37° 34.81', W122° 13.07'
-# min_precision_bits (optional, last field): lowers the GPS precision floor
-# for just this node, e.g. for a node deliberately configured to broadcast
-# reduced precision for location privacy. Leave the voltage_channel field
-# blank to keep its default (ch3_voltage). Fleet-wide default is 32; see
-# min_precision_bits under [special_nodes_settings] below to change it for
-# every node at once instead.
-#2699075274 = SYCT, N37° 32.41', W122° 10.92', , , 13
+# A node broadcasting reduced GPS precision (e.g. for location privacy) is
+# accepted as-is — there's no minimum precision to configure. Its resulting
+# position uncertainty is shown in the UI instead (e.g. "±5.8km").
 
 [special_nodes_settings]
 # Timing thresholds for the Fix / Heard indicators (hours),
@@ -36,11 +32,6 @@ sol_blue_threshold_hours = 2
 sol_orange_threshold_hours = 6
 # Deduplicate trail points to one per this many hours
 data_limit_time = 1.0
-# Minimum GPS precision_bits accepted fleet-wide (default 32). Lower this
-# only if most/all of your nodes broadcast reduced precision; to lower it
-# for just a few nodes, use min_precision_bits on their [special_nodes]
-# entry instead.
-#min_precision_bits = 32
 
 [webapp]
 # Map view for your waters

@@ -81,30 +81,26 @@ def _get_signal_quality_score(json_data):
 
 def _validate_position_precision(payload, node_id=None):
     """
-    Validate GPS position precision to reject corrupted packets.
+    Reject a position packet only when it's lying about its own precision —
+    not merely because it's coarse. There is no minimum precision_bits floor:
+    a node broadcasting reduced precision on purpose (e.g. for location
+    privacy) is trusted at face value, and the resulting uncertainty is
+    surfaced to the UI via _precision_radius_m() instead of being hidden by
+    an outright rejection.
 
-    Two checks:
-    1. precision_bits field >= MIN_PRECISION_BITS. Defaults to
-       MIN_POSITION_PRECISION_BITS (fleet-wide); a node broadcasting reduced
-       precision on purpose (e.g. for location privacy) can lower its own
-       floor via the min_precision_bits field on its [special_nodes] entry
-       without loosening the check for the rest of the fleet.
-    2. Actual coordinate integers have as many significant bits as the
-       packet claims. Relay nodes preserve the source's precision_bits but
-       quantize the coordinates further for privacy/efficiency. A 13-bit
-       relay packet has 19 trailing zero bits in latitude_i/longitude_i even
-       though the field still claims its original precision — that mismatch,
-       not any fixed bit count, is what this check catches, so it applies
-       equally whether the source is broadcasting full or reduced precision.
+    The one thing this still catches: a relay node that preserves the
+    source's precision_bits claim but quantizes the coordinates further for
+    privacy/efficiency. A 13-bit relay packet has 19 trailing zero bits in
+    latitude_i/longitude_i even though the field still claims its original
+    (higher) precision — that mismatch between claimed and actual bits, not
+    any fixed bit count, is what this check catches.
 
     When a quantized packet is from a special node, an ERROR is logged to
     help identify which relay nodes are modifying our buoy position packets.
 
     Returns:
-        True if position precision is valid, False otherwise
+        True if the packet isn't misrepresenting its precision, False otherwise
     """
-    node_config = getattr(config, 'SPECIAL_NODES', {}).get(node_id, {}) if node_id else {}
-    MIN_PRECISION_BITS = node_config.get('min_precision_bits') or getattr(config, 'MIN_POSITION_PRECISION_BITS', 32)
     # A relay that quantizes a packet typically drops at least 8 bits below
     # what it claims; a real GPS fix drifts by 1-4 bits of jitter. Tolerance
     # is relative to the packet's own claimed precision_bits, not a fixed
@@ -112,13 +108,14 @@ def _validate_position_precision(payload, node_id=None):
     MAX_PRECISION_DRIFT_BITS = 8
 
     precision_bits = payload.get('precision_bits', 0)
-
-    try:
-        if precision_bits < MIN_PRECISION_BITS:
-            logger.warning(f'Rejected position packet with low precision_bits: {precision_bits} (requires >= {MIN_PRECISION_BITS})')
-            return False
-    except TypeError:
+    if not isinstance(precision_bits, (int, float)) or isinstance(precision_bits, bool):
         logger.warning(f'Rejected position packet with non-numeric precision_bits: {precision_bits!r}')
+        return False
+    precision_bits = int(precision_bits)
+    if precision_bits <= 0:
+        # 0 (or missing, which defaults to 0) means "no fix" in Meshtastic's
+        # own convention — not merely coarse, but nothing to show at all.
+        logger.warning(f'Rejected position packet with precision_bits={precision_bits} (no fix)')
         return False
 
     # Check actual coordinate precision against what the packet itself claims.
@@ -143,6 +140,26 @@ def _validate_position_precision(payload, node_id=None):
             return False
 
     return True
+
+
+_METERS_PER_DEGREE = 111320  # at the equator; used as a simple, conservative estimate
+
+
+def _precision_radius_m(precision_bits):
+    """Approximate ground-uncertainty radius in meters for a claimed
+    precision_bits value, for display alongside a position (e.g. "±5.8 km").
+
+    latitude_i/longitude_i are degrees * 1e7; each bit below the full 32
+    doubles the edge length of the quantization grid the fix was snapped to.
+
+    Returns None when precision_bits is missing or not a plausible number —
+    "we don't know" is more honest than a fabricated figure.
+    """
+    if not isinstance(precision_bits, (int, float)) or isinstance(precision_bits, bool):
+        return None
+    bits = max(0, min(32, int(precision_bits)))
+    grid_degrees = (2 ** (32 - bits)) * 1e-7
+    return round(grid_degrees * _METERS_PER_DEGREE)
 
 
 def _add_copy_to_alert_buffer(node_id, json_data, payload, distance_m,

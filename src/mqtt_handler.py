@@ -30,6 +30,7 @@ from .movement import (
     _haversine_m,
     _get_signal_quality_score,
     _validate_position_precision,
+    _precision_radius_m,
     _add_copy_to_alert_buffer,
     _check_expired_alert_buffers,
     _evaluate_alert_buffer,
@@ -830,6 +831,9 @@ def _update_node_position(node_id, payload):
     nodes_data[node_id]["altitude"] = alt
     nodes_data[node_id]["last_seen"] = time.time()
     nodes_data[node_id]["last_position_update"] = time.time()
+    precision_bits = payload.get("precision_bits")
+    nodes_data[node_id]["position_precision_bits"] = precision_bits
+    nodes_data[node_id]["position_accuracy_m"] = _precision_radius_m(precision_bits)
     return lat, lon, alt
 
 

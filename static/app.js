@@ -273,6 +273,15 @@
         if (node.alt != null && node.alt !== 0) {
           popup += ' (' + node.alt + 'm)';
         }
+        // Only worth calling out when it's coarser than typical GPS jitter —
+        // a full-precision fix rounds to ~0m and would just be noise here.
+        if (node.position_accuracy_m != null && node.position_accuracy_m > 10) {
+          var accTxt = node.position_accuracy_m >= 1000
+            ? (node.position_accuracy_m / 1000).toFixed(1) + ' km'
+            : node.position_accuracy_m + ' m';
+          popup += '<br>Accuracy: ±' + accTxt +
+                   (node.position_precision_bits != null ? ' (' + node.position_precision_bits + '-bit)' : '');
+        }
       }
 
       // Special node: movement info
@@ -1569,6 +1578,14 @@
     var chips = '';
     if (node.is_special) {
       var lpu = getAgeStatus(node.last_position_update, lpuBlueThreshold, lpuOrangeThreshold);
+      var fixText = lpu.text;
+      // Only worth calling out when coarser than typical GPS jitter — a
+      // full-precision fix rounds to ~0m and would just be chip clutter.
+      if (node.position_accuracy_m != null && node.position_accuracy_m > 10) {
+        fixText += ' ±' + (node.position_accuracy_m >= 1000
+          ? (node.position_accuracy_m / 1000).toFixed(1) + 'km'
+          : node.position_accuracy_m + 'm');
+      }
       var sol = getAgeStatus(node.last_seen, solBlueThreshold, solOrangeThreshold);
       var batteryStr = formatBattery(voltage, bat) || '?';
       // Anchoring quality: spread of the last week's fixes around their
@@ -1577,7 +1594,7 @@
         ? chipHtml('Swing', 'σ ' + Math.round(node.anchor_spread_m) + ' m', null)
         : '';
       chips = '<div class="chips">' +
-              chipHtml('Fix', lpu.text, lpu.color) +
+              chipHtml('Fix', fixText, lpu.color) +
               chipHtml('Heard', sol.text, sol.color) +
               chipHtml('Batt', batteryStr, battColor, true) +
               spreadChip +

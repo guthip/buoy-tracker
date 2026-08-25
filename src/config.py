@@ -191,12 +191,6 @@ SOL_BLUE_THRESHOLD = _sol_blue_threshold_hours * 3600
 _sol_orange_threshold_hours = config.getint('special_nodes_settings', 'sol_orange_threshold_hours', fallback=6)
 SOL_ORANGE_THRESHOLD = _sol_orange_threshold_hours * 3600
 
-# Minimum GPS precision (bits) a position packet must claim to be accepted.
-# Meshtastic nodes can be configured to broadcast reduced precision on
-# purpose (privacy: don't publish an exact fix). Lower this to match your
-# fleet's configured precision_bits. Default 32 = full precision only.
-MIN_POSITION_PRECISION_BITS = config.getint('special_nodes_settings', 'min_precision_bits', fallback=32)
-
 
 # API Polling Interval - single unified interval for all endpoints
 # Read from config (defaults to 60 seconds if not specified)
@@ -256,18 +250,12 @@ if config.has_section('special_nodes'):
             # (3) node_id = label,home_lat,home_lon
             # (4) node_id = label,home_lat,home_lon,<ignored>
             # (5) node_id = label,home_lat,home_lon,<ignored>,voltage_channel
-            # (6) node_id = label,home_lat,home_lon,<ignored>,voltage_channel,min_precision_bits
-            #     min_precision_bits overrides MIN_POSITION_PRECISION_BITS for this node only —
-            #     use it for a node deliberately configured to broadcast reduced GPS
-            #     precision (e.g. for location privacy), without loosening the check
-            #     for the rest of the fleet.
 
             node_id = int(key)
             label = None
             home_lat = None
             home_lon = None
             voltage_channel = 'ch3_voltage'
-            min_precision_bits = None
 
             if value and value.strip():
                 value_clean = value.split('#')[0].strip()
@@ -289,12 +277,6 @@ if config.has_section('special_nodes'):
                     if len(parts) >= 5 and parts[4]:
                         voltage_channel = parts[4]
 
-                    if len(parts) >= 6 and parts[5]:
-                        try:
-                            min_precision_bits = int(parts[5])
-                        except ValueError:
-                            logger.warning(f"Invalid min_precision_bits for node {node_id} ({label}): {parts[5]!r}. Using the fleet default.")
-
             if node_id in seen_node_ids:
                 logger.error(f"DUPLICATE special node ID {node_id} found in '{key}' and '{seen_node_ids[node_id]}' - second entry will be ignored!")
                 continue
@@ -306,7 +288,6 @@ if config.has_section('special_nodes'):
                 'home_lat': home_lat,
                 'home_lon': home_lon,
                 'voltage_channel': voltage_channel,
-                'min_precision_bits': min_precision_bits,
             }
         except (ValueError, IndexError) as e:
             logger.warning(f"Skipping invalid special_nodes entry '{key} = {value}': {e}. Expected formats: (1) node_id, (2) node_id = label, (3) node_id = label,latitude,longitude, (5) node_id = label,latitude,longitude,_,voltage_channel")
