@@ -254,7 +254,7 @@ docker compose up -d
 
 - **Node Sidebar**: Click any node to zoom map to its location
 - **Map Markers**: Click markers for detailed popups with node information
-  - Includes link to view node on [Meshtastic Map](https://meshtastic.liamcottle.net)
+  - Includes a "View on Meshtastic Map" link (configurable via `node_map_url_template`; defaults to [meshview.bayme.sh](https://meshview.bayme.sh))
 - **Menu Controls** (password-protected):
   - Toggle "Show Gateways & Connections" to show/hide gateway nodes and signal connections
   - Toggle "Show Position Trails" to visualize movement history on the map
@@ -376,6 +376,10 @@ status_orange_threshold = 12
 #   120 seconds = 300/hour (low load)
 # ⚠️ Progress bar in UI updates every 100ms, filling from 0-100% over the polling interval
 api_polling_interval = 10
+
+# External node-detail link in each map popup ("View on Meshtastic Map").
+# {node_id} is replaced with the node's decimal number.
+node_map_url_template = https://meshview.bayme.sh/node/{node_id}
 ```
 
 ### User Interface Controls (Admin-Controlled)

@@ -6,6 +6,15 @@
 [webapp]
 host = 0.0.0.0
 port = 5103
+# External node-detail link in each map popup ("View on Meshtastic Map").
+# {node_id} is replaced with the node's decimal number. Uncomment to override
+# the app default (meshview.bayme.sh).
+#node_map_url_template = https://meshview.bayme.sh/node/{node_id}
+
+# [mqtt] is unset here — broker/root_topic/channel_name all fall back to
+# application defaults. channel_name accepts a comma-separated list (e.g.
+# "MediumFast, LongFast") if this fleet's nodes use more than one
+# modem-preset channel.
 
 [alerts]
 email_from = {{ buoy_role_project | default('buoy-tracker') }}@{{ host_domain }}

@@ -49,6 +49,12 @@ config merging. Upgrading from a pre-2.1 single-file config: run once
 - Live Leaflet map with per-buoy status: **On station / Moved / Stale / Muted**
 - **Drift alerts** by email, with multi-gateway consensus voting that rejects
   corrupted/mutated position packets (no more 2,000 km false alarms)
+- **Position precision aware**: a node broadcasting reduced GPS precision on
+  purpose (e.g. for location privacy) is trusted and shown with its
+  uncertainty radius (e.g. "±5.8km"), not silently dropped
+- **Multi-channel MQTT**: subscribe to more than one modem-preset channel
+  (`channel_name = MediumFast, LongFast`) so a node that resurfaces on a
+  different preset (e.g. after a low-battery reset) is still heard
 - **Battery monitoring**: voltage + charge on every card, history charts,
   low-battery emails; weak buoys sort to the top
 - **Per-buoy mute** for planned relocations — auto-unmutes when re-moored
@@ -61,7 +67,7 @@ config merging. Upgrading from a pre-2.1 single-file config: run once
 ## Tags
 
 - `latest` — current stable release
-- `2.5.0`, `2.4.0`, `2.3.3`, `2.2`, `2.1`, `2.0` — pinned releases (multi-arch: amd64 + arm64)
+- `2.5.1`, `2.5.0`, `2.4.0`, `2.3.3`, `2.2`, `2.1`, `2.0` — pinned releases (multi-arch: amd64 + arm64)
 
 ## Links
 

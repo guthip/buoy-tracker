@@ -317,7 +317,7 @@ nano config/site.config config/environment.config config/secret.config
 podman run -d --name buoy-tracker --userns=keep-id \
   -p 5103:5103 \
   -v ./config:/app/config -v ./data:/app/data -v ./logs:/app/logs \
-  dokwerker8891/buoy-tracker:2.5.0
+  dokwerker8891/buoy-tracker:2.5.1
 ```
 If a volume isn't writable, the container exits immediately with an
 actionable message rather than silently misbehaving.
@@ -340,7 +340,7 @@ systemctl --user enable --now container-buoy-tracker.service
 
 **7. Upgrade to a new release:**
 ```bash
-podman pull dokwerker8891/buoy-tracker:2.5.0   # or :latest
+podman pull dokwerker8891/buoy-tracker:2.5.1   # or :latest
 podman stop buoy-tracker && podman rm buoy-tracker
 # re-run the podman run command from step 4 — ./data/ is untouched
 ```
