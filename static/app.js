@@ -320,8 +320,9 @@
         }
       }
 
-      // Add link to liamcottle meshview server
-      popup += '<br><a href="https://meshtastic.liamcottle.net/?node_id=' + node.id + '" target="_blank" style="color:#2196F3;">View on Meshtastic Map</a>';
+      // Node-detail link (configurable via [webapp] node_map_url_template)
+      var nodeMapUrl = nodeMapUrlTemplate.replace('{node_id}', node.id);
+      popup += '<br><a href="' + escapeHtml(nodeMapUrl) + '" target="_blank" style="color:#2196F3;">View on Meshtastic Map</a>';
 
       return popup;
     }
@@ -532,6 +533,7 @@
   var isLocalhost = document.body.dataset.isLocalhost === 'true';
   var apiKey = document.body.dataset.apiKey || '';
   var urlPrefix = document.body.dataset.urlPrefix || '';  // URL prefix for subpath deployments (e.g., '/buoy-tracker')
+  var nodeMapUrlTemplate = document.body.dataset.nodeMapUrlTemplate || 'https://meshview.bayme.sh/node/{node_id}';
   var modalShownRecently = false; // Prevent rapid modal re-displays
   var authCheckDisabled = false; // Disable 401 checks briefly after login attempt
   var pendingAuthRequest = null; // Last admin request that failed with 401 — replayed after login

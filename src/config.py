@@ -153,6 +153,11 @@ WEBAPP_PORT = config.getint('webapp', 'port', fallback=5102)
 # per-request from the X-Forwarded-Prefix header (Traefik stripprefix sends
 # it automatically; Apache/nginx need one RequestHeader/proxy_set_header line).
 
+# External node-detail link shown in each map popup ("View on Meshtastic Map").
+# {node_id} is replaced with the node's decimal number.
+NODE_MAP_URL_TEMPLATE = config.get(
+    'webapp', 'node_map_url_template', fallback='https://meshview.bayme.sh/node/{node_id}')
+
 # Parse default center point (supports both decimal and degrees-minutes formats)
 _default_center = config.get('webapp', 'default_center', fallback='37.7749,-122.4194')
 _center_parts = [p.strip() for p in _default_center.split(',')]

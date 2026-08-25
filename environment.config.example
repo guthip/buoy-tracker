@@ -23,6 +23,9 @@ host = 0.0.0.0
 port = 5103
 # Client poll interval in seconds (rate limits auto-scale from this)
 api_polling_interval = 10
+# External node-detail link in each map popup ("View on Meshtastic Map").
+# {node_id} is replaced with the node's decimal number.
+node_map_url_template = https://meshview.bayme.sh/node/{node_id}
 
 [alerts]
 # SMTP TRANSPORT lives here; alert policy (on/off, cooldown) is site.config

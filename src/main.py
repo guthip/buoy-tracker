@@ -399,6 +399,7 @@ def index() -> Response:
 
                           special_history_hours=getattr(config, 'SPECIAL_HISTORY_HOURS', 24),
                           special_move_threshold=getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0),
+                          node_map_url_template=config.NODE_MAP_URL_TEMPLATE,
                           api_key_required=True,  # API key always required for Control Menu
                           api_key=client_api_key,  # Send actual key only for localhost
                           is_localhost=is_localhost,
