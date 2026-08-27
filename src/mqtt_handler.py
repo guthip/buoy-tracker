@@ -35,7 +35,6 @@ from .movement import (
     _check_expired_alert_buffers,
     _evaluate_alert_buffer,
     _update_homecoming,
-    _pending_movement_alerts,
     _homecoming_progress,
     _ALERT_WINDOW_S,
 )
@@ -484,11 +483,13 @@ def _build_packet_info(node_id, packet_type, json_data, current_time):
 def _track_special_node_packet(node_id, packet_type, json_data):
     """Track all packets from special nodes, for the packet-activity/debug
     log (special_node_packets) — a diagnostic view of mesh reception, not
-    the authoritative position. Deliberately different from
-    _is_new_broadcast's first-copy-wins rule used for DB history and the
-    live display: this view exists specifically to help diagnose RF/relay
-    issues, so it answers "what's the best signal quality we've seen for
-    this packet_id" rather than "which copy is authoritative."
+    the authoritative position. Deliberately different from the
+    coordinate-consensus vote in movement.py (_evaluate_alert_buffer /
+    _commit_broadcast_position) that decides the authoritative position for
+    DB history, the live display, and the alert together: this view exists
+    specifically to help diagnose RF/relay issues, so it answers "what's
+    the best signal quality we've seen for this packet_id," independent of
+    which coordinate that consensus ultimately trusts.
 
     When same packet ID seen multiple times:
     - Prefer direct-hop (hop_start == hop_limit) over relayed packets
@@ -792,22 +793,18 @@ def on_nodeinfo(json_data):
         logger.error(f'❌ Error processing nodeinfo: {e}', exc_info=True)
 
 
-def _process_special_movement(node_id, payload, json_data, is_new_broadcast=True):
+def _process_special_movement(node_id, payload, json_data):
     """Movement pipeline for one special-node position copy: resolve origin
     (config home, else first fix), compute distance-from-home, run the
     homecoming auto-unmute counter, and submit the copy to the buffered
-    consensus alert (movement.py decides at window close).
+    consensus (movement.py decides the winning coordinate — and whether to
+    alert — at window close, in _evaluate_alert_buffer).
 
-    Every gateway copy of a broadcast is still fed to the alert buffer, so
-    the email decision keeps voting across all of them. But
-    distance_from_origin_m and moved_far are only written into nodes_data
-    when is_new_broadcast is True — see _is_new_broadcast(): the first copy
-    of each broadcast is authoritative, later copies of the same packet_id
-    are ignored for display purposes, since a later, more-relayed copy can
-    carry a shifted coordinate even when it isn't lying about its
-    precision, and could otherwise overwrite an already-correct live
-    reading (e.g. "MOVED FAR" flickering on for a duplicate that a
-    majority of other copies disagree with)."""
+    Every copy is buffered now, not just ones that look far: the live
+    display and DB history are committed from that same consensus decision
+    (_commit_broadcast_position), not written here — so they can never
+    disagree with what the alert is based on. There's no immediate,
+    per-copy write to nodes_data in this function at all."""
     try:
         lat = payload["latitude_i"] / 1e7
         lon = payload["longitude_i"] / 1e7
@@ -829,41 +826,37 @@ def _process_special_movement(node_id, payload, json_data, is_new_broadcast=True
         dist = _haversine_m(o_lat, o_lon, lat, lon)
         threshold_m = getattr(config, 'SPECIAL_MOVEMENT_THRESHOLD_METERS', 50.0)
         moved_far = bool(dist is not None and dist >= threshold_m)
-        if is_new_broadcast:
-            nodes_data[node_id]["distance_from_origin_m"] = dist
-            nodes_data[node_id]["moved_far"] = moved_far
 
         try:
             _update_homecoming(node_id, json_data.get('id'), moved_far)
         except Exception as hc_err:
             logger.error(f'Homecoming check failed for {node_id}: {hc_err}')
 
-        # Buffered, not immediate: every copy (far or close) joins the open
-        # buffer so close copies vote against a mutated far outlier.
-        if moved_far or node_id in _pending_movement_alerts:
-            try:
-                _add_copy_to_alert_buffer(
-                    node_id, json_data, payload, dist,
-                    lat, lon, o_lat, o_lon, threshold_m, moved_far
-                )
-            except Exception as buf_err:
-                logger.error(f'Failed to buffer movement copy for {node_id}: {buf_err}')
+        try:
+            _add_copy_to_alert_buffer(
+                node_id, json_data, payload, dist,
+                lat, lon, o_lat, o_lon, threshold_m, moved_far
+            )
+        except Exception as buf_err:
+            logger.error(f'Failed to buffer position copy for {node_id}: {buf_err}')
     except Exception as e:
         logger.debug(f"Error processing movement alerts for {node_id}: {e}")
 
 
 def _update_node_position(node_id, payload, update_display=True):
     """Decode coordinates and update freshness. Returns (lat, lon, alt)
-    regardless of update_display, since callers (gateway sync, history)
-    need them either way.
+    regardless of update_display, since callers (gateway sync) need them
+    either way.
 
-    last_seen always advances — any copy proves the node is alive. The
-    displayed position itself (latitude/longitude/altitude/
-    last_position_update/precision fields) only updates when
-    update_display is True: for a special node, the caller passes
-    is_new_broadcast (see _is_new_broadcast) — the first-received copy of
-    each broadcast is authoritative, so a later duplicate of the same
-    packet_id can't clobber an already-correct live reading.
+    last_seen always advances — any copy proves the node is alive,
+    independent of whether its coordinates are trusted. The displayed
+    position itself (latitude/longitude/altitude/last_position_update/
+    precision fields) only updates when update_display is True. A special
+    node's caller always passes False here: its display is decided
+    entirely by the coordinate-consensus vote in movement.py at buffer
+    window close (_commit_broadcast_position), not by any individual copy
+    — see _process_special_movement. A regular (non-special) node has no
+    consensus concept and updates immediately, as before.
     """
     lat = payload["latitude_i"] / 1e7
     lon = payload["longitude_i"] / 1e7
@@ -956,32 +949,24 @@ def on_position(json_data):
                 nodes_data[node_id]["channel"] = channel
             nodes_data[node_id]["channel_name"] = channel_name
 
-            # Decided once per packet — _is_new_broadcast mutates state, so
-            # calling it twice would wrongly mark the second call's copy as
-            # already-seen. One shared decision gates both DB history (one
-            # row per broadcast) and the live position fields: the first
-            # copy of each broadcast is authoritative, later copies of the
-            # same packet_id are ignored for both. Every copy still feeds
-            # the alert-buffer consensus vote regardless (movement.py
-            # decides the email separately, voting across a time window).
-            pid = json_data.get('id')
-            is_new_broadcast = _is_new_broadcast(node_id, pid) if is_special else True
-
+            # A special node's every copy is buffered and consensus-decided
+            # at window close (_process_special_movement /
+            # _evaluate_alert_buffer / _commit_broadcast_position) — that
+            # one decision drives the live display, DB history, and the
+            # alert email together, so they can never disagree. There is no
+            # immediate per-copy write here; update_display=False leaves
+            # nodes_data's position fields untouched until the buffer
+            # resolves. A regular (non-special) node has no consensus
+            # concept and still updates immediately.
             if is_special:
-                _process_special_movement(node_id, payload, json_data, is_new_broadcast)
+                _process_special_movement(node_id, payload, json_data)
 
-            lat, lon, alt = _update_node_position(node_id, payload, update_display=is_new_broadcast)
+            lat, lon, alt = _update_node_position(node_id, payload, update_display=not is_special)
             _update_best_signal(node_id, json_data)
             _sync_gateway_position(node_id, lat, lon)
 
-            if is_special:
-                if is_new_broadcast:
-                    _append_position_history(node_id, lat, lon, alt, json_data)
-                    logger.debug(f'Added new position to history for {node_id} (packet {pid})')
-                else:
-                    logger.debug(f'Skipped gateway copy of position broadcast {pid} for {node_id}')
-
-            logger.info(f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
+            logger.info(f'Buffered position copy for {node_id}: {lat:.4f}, {lon:.4f}'
+                        if is_special else f'Updated position for {node_id}: {lat:.4f}, {lon:.4f}')
     except Exception as e:
         logger.error(f'❌ Error processing position: {e}', exc_info=True)
 

@@ -15,8 +15,9 @@ if __name__ == '__main__':
     import src.config as config
     import src.alerts as alerts
     import src.storage as storage
+    import src.movement as movement
 else:
-    from . import mqtt_handler, config, alerts, storage
+    from . import mqtt_handler, config, alerts, storage, movement
 import time
 from collections import defaultdict
 
@@ -342,8 +343,9 @@ def start_mqtt_on_startup() -> None:
 
 
 def init_background_services() -> None:
-    """Explicit initializer for background services (MQTT)."""
+    """Explicit initializer for background services (MQTT, alert-buffer monitor)."""
     start_mqtt_on_startup()
+    movement.start_alert_buffer_monitor()
 
 
 @app.before_request

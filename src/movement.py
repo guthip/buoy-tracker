@@ -1,11 +1,18 @@
-"""Movement detection and the buffered coord-consensus alert decision.
+"""Movement detection and the buffered coord-consensus position decision.
 
 A special-node position broadcast arrives as many near-simultaneous
-gateway-published copies of one packet_id. Copies are collected in a per-node
-buffer for _ALERT_WINDOW_S seconds; at window close the copies of each
-packet_id vote by coordinate group. The largest group is the consensus; a
-mutated single-path copy gets outvoted ([ALERT_SUPPRESSED]) while a genuine
-drift — all copies agreeing on a far position — fires ([ALERT_FIRE]).
+gateway-published copies of one packet_id. Every copy — not just ones that
+look far — is collected in a per-node buffer for _ALERT_WINDOW_S seconds;
+at window close the copies of each packet_id vote by coordinate group. The
+largest group is the consensus; ties on group size are treated as
+inconclusive (too little evidence to trust either coordinate) rather than
+broken by signal score. A resolved broadcast commits its winning copy to
+the live display, DB history, and the email-alert decision together, from
+one shared function (_commit_broadcast_position) — the three can never
+disagree about what a given broadcast said, and an ambiguous broadcast
+updates none of them rather than showing one thing and emailing another.
+There is no cost to waiting: this fleet's broadcasts are hours apart, not
+a live feed, so nothing here is time-critical.
 
 Also owns position-precision validation (rejects relay-quantized packets)
 and the homecoming auto-unmute counter.
@@ -13,6 +20,7 @@ and the homecoming auto-unmute counter.
 
 import logging
 import math
+import threading
 import time
 from collections import defaultdict
 
@@ -29,6 +37,14 @@ _ALERT_WINDOW_S = getattr(config, 'DEBUG_ALERT_WINDOW_S', 0.0) or 60.0
 
 # node_id -> {first_seen_ts, threshold_m, home_lat, home_lon, copies: [...]}
 _pending_movement_alerts = {}
+# Guards _pending_movement_alerts: with buffer expiry now also checked from
+# a periodic background thread (start_alert_buffer_monitor), not just
+# reactively from the MQTT callback thread, "check if a node's buffer
+# exists, then mutate it" (_add_copy_to_alert_buffer) and "collect expired
+# buffers, then pop them" (_check_expired_alert_buffers) are no longer
+# single-threaded — each is a multi-step operation on shared state that
+# needs to run as one unit.
+_pending_movement_alerts_lock = threading.Lock()
 
 # Auto-unmute on homecoming: a muted node that reports _HOMECOMING_UNMUTE_COUNT
 # consecutive distinct in-home broadcasts clears its own mute — being re-moored
@@ -172,50 +188,142 @@ def _add_copy_to_alert_buffer(node_id, json_data, payload, distance_m,
     context — everything needed for cross-gateway dedup and the vote at
     window close.
     """
-    if node_id not in _pending_movement_alerts:
-        _pending_movement_alerts[node_id] = {
-            'first_seen_ts': time.time(),
-            'threshold_m': threshold_m,
-            'home_lat': home_lat,
-            'home_lon': home_lon,
-            'copies': [],
-        }
     topic = json_data.get('mqtt_topic')
-    _pending_movement_alerts[node_id]['copies'].append({
-        'ts': time.time(),
-        'packet_id': json_data.get('id'),
-        'distance_m': distance_m,
-        'observed_lat': observed_lat,
-        'observed_lon': observed_lon,
-        'signal_score': _get_signal_quality_score(json_data),
-        'is_far': is_far,
-        'gateway_id': gateway_id_from_topic(topic) if topic else None,
-        'mqtt_topic': topic,
-        'hop_start': json_data.get('hop_start'),
-        'hop_limit': json_data.get('hop_limit'),
-        'rx_rssi': json_data.get('rx_rssi'),
-        'rx_snr': json_data.get('rx_snr'),
-        'payload_snapshot': payload,
-        'simulated': bool(json_data.get('simulated')),
-    })
+    with _pending_movement_alerts_lock:
+        if node_id not in _pending_movement_alerts:
+            _pending_movement_alerts[node_id] = {
+                'first_seen_ts': time.time(),
+                'threshold_m': threshold_m,
+                'home_lat': home_lat,
+                'home_lon': home_lon,
+                'copies': [],
+            }
+        _pending_movement_alerts[node_id]['copies'].append({
+            'ts': time.time(),
+            'packet_id': json_data.get('id'),
+            'distance_m': distance_m,
+            'observed_lat': observed_lat,
+            'observed_lon': observed_lon,
+            'signal_score': _get_signal_quality_score(json_data),
+            'is_far': is_far,
+            'gateway_id': gateway_id_from_topic(topic) if topic else None,
+            'mqtt_topic': topic,
+            'hop_start': json_data.get('hop_start'),
+            'hop_limit': json_data.get('hop_limit'),
+            'rx_rssi': json_data.get('rx_rssi'),
+            'rx_snr': json_data.get('rx_snr'),
+            'payload_snapshot': payload,
+            'simulated': bool(json_data.get('simulated')),
+        })
 
 
 def _check_expired_alert_buffers():
     """Close any buffers whose window has elapsed and decide alert/suppress."""
     now = time.time()
-    expired = [
-        nid for nid, info in _pending_movement_alerts.items()
-        if now - info['first_seen_ts'] >= _ALERT_WINDOW_S
-    ]
-    for nid in expired:
-        info = _pending_movement_alerts.pop(nid)
+    with _pending_movement_alerts_lock:
+        expired = [
+            nid for nid, info in _pending_movement_alerts.items()
+            if now - info['first_seen_ts'] >= _ALERT_WINDOW_S
+        ]
+        popped = {nid: _pending_movement_alerts.pop(nid) for nid in expired}
+    # Evaluated outside the lock — each info dict was already removed from
+    # the shared dict above, so it's now this thread's alone; no need to
+    # hold other threads (e.g. the MQTT callback thread buffering a copy
+    # for a different, still-open node) while this one's DB/email work runs.
+    for nid, info in popped.items():
         _evaluate_alert_buffer(nid, info)
+
+
+def _alert_buffer_monitor_loop(interval_s=5.0):
+    """Periodically close any buffers whose window has elapsed, independent
+    of whether new MQTT traffic is arriving. Every position copy is now
+    buffered (not just ones that look far — see _process_special_movement),
+    so a special node's display/history update depends on this running
+    reliably; on_position's reactive check alone (only runs when some
+    OTHER packet arrives) could otherwise leave a resolved broadcast
+    sitting uncommitted for an unpredictable stretch during a quiet spell.
+    """
+    while True:
+        time.sleep(interval_s)
+        try:
+            _check_expired_alert_buffers()
+        except Exception as e:
+            logger.error(f'Alert buffer monitor tick failed: {e}')
+
+
+def start_alert_buffer_monitor():
+    """Start the periodic alert-buffer-expiry background thread. Call once
+    at app startup (see main.py init_background_services); never imported
+    or started by the test suite, which closes buffers explicitly instead."""
+    thread = threading.Thread(
+        target=_alert_buffer_monitor_loop, daemon=True, name='alert-buffer-monitor')
+    thread.start()
+    return thread
+
+
+def _commit_broadcast_position(node_id, rep, packet_id):
+    """Write one broadcast's winning representative copy into the live
+    display and DB history — the single decision point for a special
+    node's position, shared by the display, history, and (via the caller)
+    the email alert, so the three can never disagree about what happened.
+
+    Called once per packet_id from _evaluate_alert_buffer, only for a
+    broadcast that resolved with a real consensus (never for an ambiguous
+    tie — see its docstring). Every broadcast goes through this now, not
+    just ones that looked far: there's no separate "just show me whatever
+    arrived" path for the display anymore.
+    """
+    from .mqtt_handler import nodes_data, _append_position_history  # local: avoid import cycle
+
+    lat = rep['observed_lat']
+    lon = rep['observed_lon']
+    payload_snapshot = rep.get('payload_snapshot') or {}
+    alt = payload_snapshot.get('altitude', 0)
+    precision_bits = payload_snapshot.get('precision_bits')
+
+    nodes_data.setdefault(node_id, {})
+    nodes_data[node_id]['latitude'] = lat
+    nodes_data[node_id]['longitude'] = lon
+    nodes_data[node_id]['altitude'] = alt
+    nodes_data[node_id]['last_position_update'] = rep['ts']
+    nodes_data[node_id]['position_precision_bits'] = precision_bits
+    nodes_data[node_id]['position_accuracy_m'] = _precision_radius_m(precision_bits)
+    nodes_data[node_id]['distance_from_origin_m'] = rep['distance_m']
+    nodes_data[node_id]['moved_far'] = rep['is_far']
+
+    _append_position_history(node_id, lat, lon, alt, {
+        'mqtt_topic': rep.get('mqtt_topic'),
+        'rx_rssi': rep.get('rx_rssi'),
+        'rx_snr': rep.get('rx_snr'),
+        'id': packet_id,
+        'simulated': rep.get('simulated'),
+    })
 
 
 def _evaluate_alert_buffer(node_id, info):
     """Close one burst's buffer: for each packet_id, take coordinate consensus
-    across gateway copies, then fire the alert if the consensus says "far."
-    Outlier copies (single-path mutations) get outvoted by the consensus group.
+    across gateway copies, commit the winner to the display and DB history,
+    then fire the alert if the consensus says "far." Outlier copies
+    (single-path mutations) get outvoted by the consensus group.
+
+    A verdict only commits (to display, history, AND email alike — see
+    _commit_broadcast_position) when its coordinate group has a real
+    plurality by copy count. When the largest group(s) are tied on count —
+    most commonly a bare 1-vs-1, e.g. exactly one gateway reported the true
+    position and exactly one reported a corrupted one — the old code broke
+    the tie purely by signal score, which a single corrupted-but-strong-
+    signal copy can win outright (SYCS, 2026-08-27: one bad copy with
+    better signal than the one good copy fired a false "moved 539m" email
+    — and would have shown the same false position on the map, since
+    signal quality says nothing about which *coordinate* is correct; the
+    same corrupted coordinate had correctly been suppressed hours earlier
+    when 25 copies were available to outvote 3 dissenters). A tied count
+    is genuinely ambiguous, so nothing commits at all — not the display,
+    not history, not an email — rather than showing one thing and emailing
+    another (or emailing nothing while still showing a false reading). The
+    next broadcast, whenever it arrives, gets a fresh, hopefully
+    unambiguous vote; there's no cost to waiting since nothing here is
+    time-critical.
     """
     copies = info.get('copies') or []
     if not copies:
@@ -224,12 +332,14 @@ def _evaluate_alert_buffer(node_id, info):
     # Process each packet_id separately (buffer usually contains 1, but handle multiple).
     fire_candidates = []   # [(packet_id, representative_copy, consensus_size, dissent_size)]
     suppressed_candidates = []
+    inconclusive_candidates = []  # [(packet_id, far_copy, consensus_size, dissent_size)]
     for pid in {c['packet_id'] for c in copies if c.get('packet_id') is not None}:
         pcopies = [c for c in copies if c.get('packet_id') == pid]
 
         # Group by (lat_i, lon_i). All copies of one broadcast should share the
         # same coords; divergence means at least one relay/gateway path mutated
-        # this copy. Largest group wins; ties broken by highest aggregate signal.
+        # this copy. Largest group wins; ties broken by highest aggregate signal
+        # — but only among groups that aren't ALSO tied on count (see below).
         coord_groups = defaultdict(list)
         for c in pcopies:
             payload = c.get('payload_snapshot') or {}
@@ -243,6 +353,19 @@ def _evaluate_alert_buffer(node_id, info):
         dissent = [c for k, g in coord_groups.items() if k != consensus_key for c in g]
         rep = max(consensus, key=lambda c: c['signal_score'])
 
+        group_sizes = [len(g) for g in coord_groups.values()]
+        tied_for_largest = group_sizes.count(max(group_sizes))
+        count_is_ambiguous = len(coord_groups) > 1 and tied_for_largest > 1
+
+        if count_is_ambiguous:
+            if rep['is_far']:
+                inconclusive_candidates.append((pid, rep, len(consensus), len(dissent)))
+            # else: tied between two different close-ish readings — nothing
+            # concerning either way, and still nothing to commit to; wait
+            # for a clearer broadcast rather than guess between them.
+            continue
+
+        _commit_broadcast_position(node_id, rep, pid)
         if rep['is_far']:
             fire_candidates.append((pid, rep, len(consensus), len(dissent)))
         elif any(c['is_far'] for c in pcopies):
@@ -305,6 +428,25 @@ def _evaluate_alert_buffer(node_id, info):
             'movement_suppressed', node_id, distance_m=most_far['distance_m'],
             details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
                      'consensus_distance_m': rep['distance_m']},
+            simulated=any(c.get('simulated') for c in copies))
+
+    elif inconclusive_candidates:
+        # A "far" coordinate tied on copy count with another group — too
+        # little evidence to trust either way (see docstring). No email;
+        # the next broadcast a few minutes later gets a fresh, hopefully
+        # less ambiguous, vote.
+        best_pid, rep, csize, dsize = max(
+            inconclusive_candidates, key=lambda x: x[2] + x[3]  # most total copies seen
+        )
+        logger.warning(
+            f'[ALERT_INCONCLUSIVE] {ts} | node {node_id} | reason=tied_consensus'
+            f' | packet_id={best_pid} | distance={int(rep["distance_m"])}m'
+            f' | consensus={csize} copies tied with dissent={dsize} copies on count'
+            f' | too few copies to trust either coordinate — no email sent'
+        )
+        storage.record_alert_event(
+            'movement_inconclusive', node_id, distance_m=rep['distance_m'],
+            details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize},
             simulated=any(c.get('simulated') for c in copies))
 
 
