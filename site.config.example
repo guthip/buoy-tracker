@@ -10,7 +10,12 @@
 title = SYC buoy tracker
 
 [special_nodes]
-# Alert radius around each buoy's home position (meters)
+# Alert radius around each buoy's home position (meters). A single reading
+# past this isn't trusted on its own (a bad GPS fix at the source can't be
+# caught by cross-gateway voting) — it commits/alerts only once the node's
+# next broadcast confirms it, or is discarded as a filtered anomaly if the
+# buoy is back in range on the next broadcast. See README's Special Node
+# Tracking section.
 movement_threshold = 150
 
 # node_id = LABEL, home_lat, home_lon, <ignored>, voltage_channel

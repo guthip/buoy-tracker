@@ -84,6 +84,21 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
   - Light red card background alerts when nodes move outside expected range
   - Gray markers at home position until first GPS fix
   - Packet activity display with timestamps
+  - **Reliable by construction, not just by validation**: a buoy's broadcast is
+    typically relayed by 20+ gateways. All of them are collected and voted on
+    by coordinate group before anything commits — the live position, the
+    trail history, and a movement email are all decided together from that
+    one vote, so they can never disagree about what a broadcast said. A tied
+    vote (most often one gateway relaying a corrupted copy against one
+    relaying the real one) commits nothing rather than guessing.
+  - **Filters isolated GPS anomalies**: a cheap GPS chip can produce one bad
+    fix that every gateway relays identically and honestly — no amount of
+    cross-gateway voting catches that, since there's nothing to disagree
+    about. A reading past the movement threshold is held rather than
+    trusted immediately; it's confirmed (and only then does it commit or
+    alert) if the *next* broadcast is also past threshold, or discarded as
+    a filtered anomaly if the buoy is back to normal on the next broadcast.
+    There's no cost to waiting — nothing here is a live feed.
 
 
 ## Quick Start
