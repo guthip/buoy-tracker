@@ -67,7 +67,7 @@ config merging. Upgrading from a pre-2.1 single-file config: run once
 ## Tags
 
 - `latest` — current stable release
-- `2.6.0`, `2.5.2`, `2.5.1`, `2.5.0`, `2.4.0`, `2.3.3`, `2.2`, `2.1`, `2.0` — pinned releases (multi-arch: amd64 + arm64)
+- `2.7.0`, `2.6.0`, `2.5.2`, `2.5.1`, `2.5.0`, `2.4.0`, `2.3.3`, `2.2`, `2.1`, `2.0` — pinned releases (multi-arch: amd64 + arm64)
 
 ## Links
 
