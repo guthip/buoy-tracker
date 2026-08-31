@@ -14,9 +14,11 @@ root_topic = msh/US/bayarea/2/e/
 # often comes back up on a different preset after a low-battery reset (e.g.
 # LongFast instead of MediumFast) — list every preset your fleet might use.
 channel_name = MediumFast, LongFast
-# Credentials may also go in secret.config or MQTT_USERNAME/MQTT_PASSWORD env vars
+# Credentials may also go in secret.config or MQTT_USERNAME/MQTT_PASSWORD/MQTT_KEY env vars
 username = meshdev
 password = large4cats
+# Channel encryption key (Meshtastic's default public channel key shown here)
+encryption_key = AQ==
 
 [webapp]
 host = 0.0.0.0

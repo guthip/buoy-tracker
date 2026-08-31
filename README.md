@@ -338,6 +338,7 @@ root_topic = msh/US/bayarea/2/e/
 channel_name = MediumFast, LongFast
 username = meshdev
 password = large4cats
+encryption_key = AQ==   # channel encryption key; also settable via MQTT_KEY env var
 ```
 
 **MQTT Subscription:**
@@ -840,6 +841,11 @@ curl -X POST https://your-domain.com/api/test-alert \
 - **`GET /api/alerts/mutes`** - Per-buoy movement-alert mute states (public read)
 - **`POST /api/alerts/mute`** - Mute/unmute one buoy's movement emails (Bearer)
   - Body: `{"node_id": 123, "muted": true}`
+- **`GET /api/alerts/status`** - Current alert settings (Bearer)
+  - Returns: `{"alerts_enabled": true, "alert_cooldown": 3600, "low_battery_threshold": 25}`
+- **`POST /api/alerts/toggle`** - Email kill switch — flips alerts on/off in
+  memory and persists the new state, no restart needed (Bearer)
+  - Returns: `{"status": "ok", "alerts_enabled": false, "message": "Alerts disabled"}`
 - **`POST /api/settings/reset`** - Delete runtime-setting overrides, restore
   config-file defaults (Bearer)
 
@@ -849,13 +855,26 @@ Set `[debug] enable_simulation = true` (never in production) to activate
 `POST /api/debug/inject`, `POST /api/debug/scenario`, `POST /api/debug/replay`,
 and `GET /api/debug/state` — synthetic packet streams through the real pipeline
 for fast alert debugging. Endpoints return 404 when disabled and always require
-the API key. Alert emails are dry-run (logged, not sent) in simulation mode.
+the API key. Alert emails are dry-run (logged, not sent) in simulation mode
+unless `[debug] send_real_emails = true` is also set — for actually verifying
+SMTP delivery works, not routine debugging.
 
 ### Admin Endpoints (Protected - Require Authentication)
 
 - **`POST /api/config/movement-threshold`** - Update movement threshold for special nodes
   - Body: `{"threshold": 100}` (distance in meters)
   - Returns: `{"success": true, "threshold": 100}`
+- **`POST /api/config/battery-threshold`** - Update the low-battery threshold
+  - Body: `{"threshold": 25}` (percent, 1-100)
+  - Returns: `{"success": true, "threshold": 25}`
+- **`POST /api/config/show-gateways`** - Toggle gateway display and reload MQTT
+  subscriptions to match (no restart needed)
+  - Body: `{"show_gateways": true}`
+  - Returns: `{"success": true, "show_gateways": true, "subscriptions_reloaded": true}`
+- **`POST /api/server/restart`** - Gracefully restart the server process,
+  clearing in-memory caches (position trails, dedup state) while preserving
+  config files
+  - Returns: `{"status": "ok", "message": "Server restarting..."}`
 
 - **`POST /api/test-alert`** - Send test alert email to verify email configuration
   - Body: `{"type": "movement"}`, `{"type": "battery"}`, or `{"type": "offline"}` (optional, defaults to "movement")
