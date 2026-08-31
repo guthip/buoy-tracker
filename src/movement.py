@@ -46,6 +46,21 @@ _pending_movement_alerts = {}
 # needs to run as one unit.
 _pending_movement_alerts_lock = threading.Lock()
 
+# A lone "far" broadcast, even one that resolved with a clean, unambiguous
+# consensus, doesn't commit or alert on its own — it waits here for the
+# NEXT resolved broadcast to confirm the buoy is actually away, rather than
+# a single bad GPS fix that every gateway innocently relayed identically
+# (cross-gateway consensus can't catch this: all copies of one broadcast
+# agree, because they're all relaying the same source transmission).
+# Observed repeatedly: SYCS (2026-08-29/30/31) and SYCX (2026-08-30) each
+# produced one isolated far reading — 90-160m for SYCS, 94m for SYCX,
+# against baselines of 55-100m and 5-45m respectively — immediately
+# followed by a return to baseline on the very next broadcast, hours
+# later. There's no cost to waiting for confirmation: nothing here is
+# time-critical.
+# node_id -> {'packet_id', 'rep'} — the unconfirmed far reading, if any.
+_pending_far_confirmation = {}
+
 # Auto-unmute on homecoming: a muted node that reports _HOMECOMING_UNMUTE_COUNT
 # consecutive distinct in-home broadcasts clears its own mute — being re-moored
 # is the natural end of a maintenance window. Gateway copies of one broadcast
@@ -324,16 +339,48 @@ def _evaluate_alert_buffer(node_id, info):
     next broadcast, whenever it arrives, gets a fresh, hopefully
     unambiguous vote; there's no cost to waiting since nothing here is
     time-critical.
+
+    A resolved (non-ambiguous) packet_id is also marked permanently seen
+    (_is_new_broadcast) before it commits, so a second, later buffer window
+    for the same packet_id — gateway copies of one broadcast can legitimately
+    trickle in well past _ALERT_WINDOW_S; mesh store-and-forward across
+    20+ gateways routinely spans minutes (SYCS, 2026-08-31: a straggler
+    wave arrived 213s after the first wave had already resolved and fired,
+    and independently fired a second, duplicate email for the same real
+    reading) — can't commit or alert again for it. An ambiguous verdict is
+    deliberately NOT marked, so it stays eligible for a later, hopefully
+    clearer wave of the same packet_id to resolve it properly.
+
+    A resolved "far" verdict, even an unambiguous one, still doesn't commit
+    on its own — see _pending_far_confirmation above: cross-gateway
+    consensus proves a broadcast wasn't mutated in transit, but says
+    nothing about whether the source GPS fix itself was good, and a cheap
+    GPS chip producing one bad fix gets relayed identically by every
+    gateway. A far reading is held until the node's NEXT resolved broadcast
+    either confirms it (also far — commits and alerts) or refutes it (back
+    to close — the far one is discarded as a filtered anomaly, and the
+    close one commits normally).
     """
     copies = info.get('copies') or []
     if not copies:
         return
 
-    # Process each packet_id separately (buffer usually contains 1, but handle multiple).
+    from .mqtt_handler import _is_new_broadcast  # local: avoid import cycle
+
+    ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+
+    # Process each packet_id separately (buffer usually contains 1, but handle
+    # multiple) — in chronological order, since the far/close-confirmation
+    # gate below cares which of two packet_ids in one window came first.
+    distinct_pids = {c['packet_id'] for c in copies if c.get('packet_id') is not None}
+    ordered_pids = sorted(
+        distinct_pids,
+        key=lambda pid: min(c['ts'] for c in copies if c['packet_id'] == pid)
+    )
     fire_candidates = []   # [(packet_id, representative_copy, consensus_size, dissent_size)]
     suppressed_candidates = []
     inconclusive_candidates = []  # [(packet_id, far_copy, consensus_size, dissent_size)]
-    for pid in {c['packet_id'] for c in copies if c.get('packet_id') is not None}:
+    for pid in ordered_pids:
         pcopies = [c for c in copies if c.get('packet_id') == pid]
 
         # Group by (lat_i, lon_i). All copies of one broadcast should share the
@@ -362,20 +409,75 @@ def _evaluate_alert_buffer(node_id, info):
                 inconclusive_candidates.append((pid, rep, len(consensus), len(dissent)))
             # else: tied between two different close-ish readings — nothing
             # concerning either way, and still nothing to commit to; wait
-            # for a clearer broadcast rather than guess between them.
+            # for a clearer broadcast rather than guess between them. Not
+            # marked as resolved (see below) — still eligible for a later,
+            # hopefully clearer wave of copies of this same packet_id.
             continue
 
-        _commit_broadcast_position(node_id, rep, pid)
+        # Gateway copies of one broadcast can legitimately trickle in over
+        # much longer than one buffer window — mesh store-and-forward across
+        # 20+ gateways routinely spans minutes, not seconds (SYCS,
+        # 2026-08-31: a straggler wave of copies for a packet_id already
+        # resolved 213s earlier opened a second buffer and fired a second,
+        # duplicate email for the same broadcast). Once a packet_id
+        # resolves with a real consensus, it's marked seen permanently, so
+        # a later wave of the same packet_id can't commit or alert again —
+        # only a packet_id that was ambiguous every time it was seen (never
+        # marked, via the `continue` above) stays eligible for a later,
+        # clearer wave to resolve it.
+        if not _is_new_broadcast(node_id, pid):
+            logger.debug(
+                f'Skipping already-resolved broadcast {pid} for {node_id}'
+                f' (straggler copies from a separate buffer window)'
+            )
+            continue
+
         if rep['is_far']:
+            pending = _pending_far_confirmation.get(node_id)
+            if pending is None:
+                # First far reading — hold it uncommitted rather than trust
+                # a single broadcast; see _pending_far_confirmation above.
+                _pending_far_confirmation[node_id] = {'packet_id': pid, 'rep': rep}
+                logger.warning(
+                    f'[MOVEMENT_PENDING] {ts} | node {node_id} | packet_id={pid}'
+                    f' | distance={int(rep["distance_m"])}m | awaiting confirmation'
+                    f' from the next broadcast before committing or alerting'
+                )
+                storage.record_alert_event(
+                    'movement_pending', node_id, distance_m=rep['distance_m'],
+                    details={'packet_id': pid, 'consensus': len(consensus), 'dissent': len(dissent)},
+                    simulated=any(c.get('simulated') for c in pcopies))
+                continue
+            # Second consecutive far reading — confirmed, not a one-off blip.
+            _pending_far_confirmation.pop(node_id, None)
+            _commit_broadcast_position(node_id, rep, pid)
             fire_candidates.append((pid, rep, len(consensus), len(dissent)))
-        elif any(c['is_far'] for c in pcopies):
+            continue
+
+        if node_id in _pending_far_confirmation:
+            # The buoy is confirmed still home — the earlier far reading was
+            # a one-off GPS anomaly, not real movement. Discard it: it was
+            # never committed to the display or history, so there's nothing
+            # to undo there, only the pending record itself.
+            discarded = _pending_far_confirmation.pop(node_id)
+            d_rep = discarded['rep']
+            logger.warning(
+                f'[MOVEMENT_ANOMALY_FILTERED] {ts} | node {node_id}'
+                f' | packet_id={discarded["packet_id"]} | distance={int(d_rep["distance_m"])}m'
+                f' | discarded: next broadcast (packet_id={pid}) confirmed the buoy is still home'
+            )
+            storage.record_alert_event(
+                'movement_anomaly_filtered', node_id, distance_m=d_rep['distance_m'],
+                details={'packet_id': discarded['packet_id'], 'confirmed_by_packet_id': pid},
+                simulated=any(c.get('simulated') for c in pcopies))
+
+        _commit_broadcast_position(node_id, rep, pid)
+        if any(c['is_far'] for c in pcopies):
             # Consensus says close but some dissenters said far — a single-path
             # mutation being neutralized. Record it.
             most_far = max((c for c in pcopies if c['is_far']),
                            key=lambda c: c['distance_m'])
             suppressed_candidates.append((pid, rep, most_far, len(consensus), len(dissent)))
-
-    ts = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
 
     if fire_candidates:
         # Pick the best (highest signal) far representative across all packet_ids
