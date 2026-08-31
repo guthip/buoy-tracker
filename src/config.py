@@ -233,7 +233,6 @@ LOW_BATTERY_THRESHOLD = config.getint('battery', 'low_battery_threshold', fallba
 SHOW_ALL_NODES = config.getboolean('app_features', 'show_all_nodes', fallback=False)
 SHOW_GATEWAYS = config.getboolean('app_features', 'show_gateways', fallback=True)
 SHOW_POSITION_TRAILS = config.getboolean('app_features', 'show_position_trails', fallback=True)
-SHOW_GATEWAY_CONNECTIONS = config.getboolean('app_features', 'show_gateway_connections', fallback=True)
 SHOW_NAUTICAL_MARKERS = config.getboolean('app_features', 'show_nautical_markers', fallback=True)
 TRAIL_HISTORY_HOURS = config.getint('app_features', 'trail_history_hours', fallback=24)
 
