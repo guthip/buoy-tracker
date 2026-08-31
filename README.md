@@ -630,19 +630,20 @@ Tune these to your buoy's update interval — the defaults assume ~2-hour positi
 **Data Handling** (v2.0): every accepted position, telemetry reading, and alert
 decision is recorded in a SQLite database at `data/buoy_tracker.db` (90-day
 retention for measurements, configurable via `[database] retention_days`).
-Position trails rebuild from it automatically at startup. Open the file
-read-only with any SQLite tool (DBeaver, pandas, DuckDB, Datasette, Grafana).
-  For a **live** Docker deployment, query inside the container — e.g.
-  `tools/dbq.sh "SELECT COUNT(*) FROM positions"` (works on any image) or
-  `docker exec buoy-tracker sqlite3 /app/data/buoy_tracker.db "..."`
-  (sqlite3 CLI included in the image from v2.0) — or copy the file first;
-  querying the mounted file from the host while the container writes is
-  best avoided
-for analysis — never write to it while the app is running.
-  - When `false` (default): Historical data is NOT loaded from disk on startup - start fresh (recommended for production)
-  - When `true`: Load any existing historical data from disk on startup (development/debugging)
-- Either way, new data collected is saved to disk for future reference
-- Packet data includes: timestamps, packet types, channel info, position/telemetry/nodeinfo details
+Persistence is automatic — there's no flag to disable it. Position trails and
+each special node's last-known state rebuild from the database automatically
+on every startup.
+
+Open the file read-only with any SQLite tool (DBeaver, pandas, DuckDB,
+Datasette, Grafana) for analysis — never write to it while the app is
+running. For a **live** Docker deployment, query inside the container — e.g.
+`tools/dbq.sh "SELECT COUNT(*) FROM positions"` (works on any image) or
+`docker exec buoy-tracker sqlite3 /app/data/buoy_tracker.db "..."`
+(sqlite3 CLI included in the image from v2.0) — or copy the file first;
+querying the mounted file from the host while the container writes is
+best avoided.
+
+Packet data includes: timestamps, packet types, channel info, position/telemetry/nodeinfo details.
 
 ## Email Alerts
 
