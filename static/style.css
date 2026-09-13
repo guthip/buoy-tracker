@@ -455,6 +455,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   padding: 3px 8px; font-size: 12px; font-family: var(--mono);
 }
 .leaflet-tooltip-custom::before { border-top-color: var(--ink); }
+.copy-latlon {
+  border: none; background: none; color: var(--ink-2);
+  font-size: 12px; cursor: pointer; padding: 0 2px; vertical-align: middle;
+}
+.copy-latlon:hover { color: var(--accent); }
+/* off-screen scratch element for the execCommand('copy') clipboard fallback */
+.copy-scratch { position: fixed; opacity: 0; pointer-events: none; }
 
 /* legacy stubs kept for JS references; never shown */
 #menu-fab, #settings-gear, #sidebar-overlay, #trafficLightLegend, #menu-btn { display: none !important; }

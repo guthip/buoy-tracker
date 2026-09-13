@@ -58,8 +58,23 @@ _pending_movement_alerts_lock = threading.Lock()
 # followed by a return to baseline on the very next broadcast, hours
 # later. There's no cost to waiting for confirmation: nothing here is
 # time-critical.
-# node_id -> {'packet_id', 'rep'} — the unconfirmed far reading, if any.
+# node_id -> {'packet_id', 'rep', 'consensus', 'dissent'} — the unconfirmed
+# far reading, if any.
 _pending_far_confirmation = {}
+
+# Once a far reading is confirmed (see above), the node stays here until a
+# resolved broadcast reports it close again. While a node is in this set,
+# every further far reading commits immediately with no new hold — a real
+# mark under way checks GPS every 15 minutes and broadcasts every 15
+# minutes whenever it's >100m from home (SYCO, 2026-09-13: sustained
+# travel produced a far reading on almost every broadcast; requiring each
+# one to be re-confirmed by the next before it could commit discarded
+# roughly every other position — exactly the single-blip filter above,
+# repeatedly mistaking real, continuing movement for a one-off GPS
+# anomaly). The confirmed pair itself (the held reading and the one that
+# confirmed it) are both committed at confirmation time, in order — the
+# held reading was a real position too, not just a trigger to arm on.
+_moving_confirmed = set()
 
 # Auto-unmute on homecoming: a muted node that reports _HOMECOMING_UNMUTE_COUNT
 # consecutive distinct in-home broadcasts clears its own mute — being re-moored
@@ -357,9 +372,14 @@ def _evaluate_alert_buffer(node_id, info):
     nothing about whether the source GPS fix itself was good, and a cheap
     GPS chip producing one bad fix gets relayed identically by every
     gateway. A far reading is held until the node's NEXT resolved broadcast
-    either confirms it (also far — commits and alerts) or refutes it (back
-    to close — the far one is discarded as a filtered anomaly, and the
-    close one commits normally).
+    either confirms it (also far — both readings commit and it fires) or
+    refutes it (back to close — the far one is discarded as a filtered
+    anomaly, and the close one commits normally). Once confirmed, the node
+    is considered genuinely away (see _moving_confirmed) and every further
+    far reading commits immediately with no further hold, until a resolved
+    broadcast reports it close again — sustained real movement (a mark
+    under way, broadcasting every 15 minutes) isn't a repeating sequence of
+    one-off anomalies each needing its own confirmation.
     """
     copies = info.get('copies') or []
     if not copies:
@@ -433,11 +453,20 @@ def _evaluate_alert_buffer(node_id, info):
             continue
 
         if rep['is_far']:
+            if node_id in _moving_confirmed:
+                # Already confirmed away — sustained movement, not a fresh
+                # anomaly to re-verify. Commit this reading immediately.
+                _commit_broadcast_position(node_id, rep, pid)
+                fire_candidates.append((pid, rep, len(consensus), len(dissent)))
+                continue
             pending = _pending_far_confirmation.get(node_id)
             if pending is None:
                 # First far reading — hold it uncommitted rather than trust
                 # a single broadcast; see _pending_far_confirmation above.
-                _pending_far_confirmation[node_id] = {'packet_id': pid, 'rep': rep}
+                _pending_far_confirmation[node_id] = {
+                    'packet_id': pid, 'rep': rep,
+                    'consensus': len(consensus), 'dissent': len(dissent),
+                }
                 logger.warning(
                     f'[MOVEMENT_PENDING] {ts} | node {node_id} | packet_id={pid}'
                     f' | distance={int(rep["distance_m"])}m | awaiting confirmation'
@@ -449,12 +478,28 @@ def _evaluate_alert_buffer(node_id, info):
                     simulated=any(c.get('simulated') for c in pcopies))
                 continue
             # Second consecutive far reading — confirmed, not a one-off blip.
+            # Both readings were real positions: commit the held one first
+            # (it's chronologically earlier), then this one, and stop
+            # re-holding for as long as the node keeps reporting far.
             _pending_far_confirmation.pop(node_id, None)
+            _moving_confirmed.add(node_id)
+            _commit_broadcast_position(node_id, pending['rep'], pending['packet_id'])
+            fire_candidates.append(
+                (pending['packet_id'], pending['rep'], pending['consensus'], pending['dissent'])
+            )
             _commit_broadcast_position(node_id, rep, pid)
             fire_candidates.append((pid, rep, len(consensus), len(dissent)))
             continue
 
-        if node_id in _pending_far_confirmation:
+        if node_id in _moving_confirmed:
+            # A genuine return, not a discarded blip — the node was already
+            # confirmed away, so there's no pending anomaly record to undo.
+            _moving_confirmed.discard(node_id)
+            logger.warning(
+                f'[MOVEMENT_HOME] {ts} | node {node_id} | packet_id={pid}'
+                f' | confirmed back within threshold after sustained movement'
+            )
+        elif node_id in _pending_far_confirmation:
             # The buoy is confirmed still home — the earlier far reading was
             # a one-off GPS anomaly, not real movement. Discard it: it was
             # never committed to the display or history, so there's nothing

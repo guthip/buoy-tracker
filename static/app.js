@@ -41,6 +41,41 @@
     }
 
     /**
+     * Copy "lat, lon" to the clipboard for pasting into a chartplotter or
+     * navigation app (Garmin, Navionics, OpenCPN). Called from inline
+     * onclick in popup HTML, so it has to live on window — that markup is
+     * set via Leaflet's bindPopup(html), which runs outside this file's
+     * closure. navigator.clipboard needs a secure context (https or
+     * localhost); the live deployment is plain http, so it silently falls
+     * through to the execCommand path below on that server.
+     */
+    window.copyPositionToClipboard = function(latStr, lonStr, btnEl) {
+      var text = latStr + ', ' + lonStr;
+      function flash() {
+        if (!btnEl) return;
+        var original = btnEl.textContent;
+        btnEl.textContent = '✅';
+        setTimeout(function() { btnEl.textContent = original; }, 1200);
+      }
+      function legacyCopy() {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.className = 'copy-scratch';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) { /* ignore */ }
+        document.body.removeChild(ta);
+        flash();
+      }
+      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(flash, legacyCopy);
+      } else {
+        legacyCopy();
+      }
+    };
+
+    /**
      * Format server-provided voltage and battery percentage as "4.00V (82%)".
      * Both values come from the server's single _estimate_battery_from_voltage curve;
      * the client never converts.
@@ -104,8 +139,12 @@
       }
 
       // Coordinates
-      lines.push('Lat: ' + point.lat.toFixed(6));
-      lines.push('Lon: ' + point.lon.toFixed(6));
+      var trailLatStr = point.lat.toFixed(6);
+      var trailLonStr = point.lon.toFixed(6);
+      lines.push('Lat: ' + trailLatStr);
+      lines.push('Lon: ' + trailLonStr +
+        ' <button type="button" class="copy-latlon" title="Copy lat, lon to clipboard"' +
+        ' onclick="copyPositionToClipboard(\'' + trailLatStr + '\',\'' + trailLonStr + '\',this)">📋</button>');
 
       // Distance to home
       if (node.origin_lat != null && node.origin_lon != null) {
@@ -269,7 +308,11 @@
 
       // Position coordinates
       if (node.lat != null && node.lon != null) {
-        popup += '<br>Position: ' + node.lat.toFixed(6) + ', ' + node.lon.toFixed(6);
+        var latStr = node.lat.toFixed(6);
+        var lonStr = node.lon.toFixed(6);
+        popup += '<br>Position: ' + latStr + ', ' + lonStr +
+          ' <button type="button" class="copy-latlon" title="Copy lat, lon to clipboard"' +
+          ' onclick="copyPositionToClipboard(\'' + latStr + '\',\'' + lonStr + '\',this)">📋</button>';
         if (node.alt != null && node.alt !== 0) {
           popup += ' (' + node.alt + 'm)';
         }
