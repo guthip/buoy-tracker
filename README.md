@@ -98,7 +98,17 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
     trusted immediately; it's confirmed (and only then does it commit or
     alert) if the *next* broadcast is also past threshold, or discarded as
     a filtered anomaly if the buoy is back to normal on the next broadcast.
-    There's no cost to waiting — nothing here is a live feed.
+    There's no cost to waiting — nothing here is a live feed. Once a node
+    is confirmed away, every further past-threshold reading commits
+    immediately with no more per-reading holding, for as long as it keeps
+    moving — a mark genuinely under way (checking GPS and broadcasting
+    every 15 minutes while far from home) isn't a repeating one-off
+    anomaly, and re-verifying every single reading would silently discard
+    real track data.
+  - **Copy lat/lon from any popup**: a small clipboard button next to the
+    coordinates in both the live marker popup and trail/history points
+    copies "lat, lon" in decimal degrees for pasting straight into Garmin,
+    Navionics, OpenCPN, or any other navigation tool.
 
 
 ## Quick Start
