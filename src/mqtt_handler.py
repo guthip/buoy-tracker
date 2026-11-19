@@ -245,10 +245,15 @@ def _add_telemetry_to_history(node_id, json_data):
 
     special_history entries double as both the map's position trail and the
     battery-history chart's data source, but a telemetry packet carries no
-    position of its own — it only ever reports whatever position was last
-    known (possibly none yet, for a brand-new node). Position-less entries
-    are valid: the battery chart never reads lat/lon; only the map-trail
-    renderer needs a real fix, and it filters for that itself.
+    position of its own, so its entry never gets one: lat/lon are always
+    None. Copying the last-known position in (as this used to do) made a
+    telemetry sample look like a fresh position fix stamped with the
+    telemetry's time — SYCX, 2026-11-19: a 10:46 telemetry packet re-showed
+    the 10:33 relay-rounded position as "Pos #57/57, 10:46", making one bad
+    fix look like a second, later one. Matches the shape
+    storage.get_telemetry_since() already uses for the startup rebuild.
+    The battery chart never reads lat/lon; the map-trail renderer filters
+    position-less entries out itself.
 
     Args:
         node_id: Node ID to add history for
@@ -257,11 +262,6 @@ def _add_telemetry_to_history(node_id, json_data):
     # Guard clause: Not a special node? Skip.
     if not _is_special_node(node_id):
         return
-
-    lat = nodes_data[node_id].get("latitude")
-    lon = nodes_data[node_id].get("longitude")
-    if lat == 0 and lon == 0:
-        lat = lon = None
 
     # Ensure history structure exists
     _ensure_history_struct(node_id)
@@ -279,9 +279,9 @@ def _add_telemetry_to_history(node_id, json_data):
     else:
         entry = {
             "ts": current_ts,
-            "lat": lat,
-            "lon": lon,
-            "alt": nodes_data[node_id].get("alt", 0),
+            "lat": None,
+            "lon": None,
+            "alt": None,
             "voltage": voltage,
             "rssi": rssi,
             "snr": snr,

@@ -24,13 +24,17 @@ logger = logging.getLogger(__name__)
 _conn: Optional[sqlite3.Connection] = None
 _lock = threading.Lock()
 _mute_cache: Dict[int, Dict[str, Any]] = {}  # node_id -> {'muted_at': int, 'note': str}
+_imprecise_ok_cache: Dict[int, Dict[str, Any]] = {}  # node_id -> {'set_at': int, 'note': str}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS node_settings (
-    node_id               INTEGER PRIMARY KEY,
-    movement_alerts_muted INTEGER NOT NULL DEFAULT 0,
-    muted_at              INTEGER,
-    note                  TEXT
+    node_id                  INTEGER PRIMARY KEY,
+    movement_alerts_muted    INTEGER NOT NULL DEFAULT 0,
+    muted_at                 INTEGER,
+    note                     TEXT,
+    accept_imprecise_position INTEGER NOT NULL DEFAULT 0,
+    imprecise_ok_set_at      INTEGER,
+    imprecise_ok_note        TEXT
 );
 
 CREATE TABLE IF NOT EXISTS positions (
@@ -86,6 +90,20 @@ CREATE TABLE IF NOT EXISTS nodes (
     home_lon   REAL,
     updated_at INTEGER
 );
+
+-- Per-gateway coordinate-consensus track record. Every time a broadcast's
+-- gateway copies split into a winning (consensus) and losing (dissent)
+-- coordinate group, each involved gateway's agree/disagree count is
+-- updated here — not pruned with the other time-series tables, since the
+-- whole point is a reputation that accumulates over weeks, not a window
+-- that ages out. See movement.py's _gateway_vote_weight / _evaluate_alert_buffer.
+CREATE TABLE IF NOT EXISTS gateway_reliability (
+    gateway_id       INTEGER PRIMARY KEY,
+    agree_count      INTEGER NOT NULL DEFAULT 0,
+    disagree_count   INTEGER NOT NULL DEFAULT 0,
+    last_disagree_ts INTEGER,
+    last_seen_ts     INTEGER
+);
 """
 
 # Measurement tables subject to time-based retention (settings/registry are kept)
@@ -139,13 +157,31 @@ def init(db_path: Union[str, Path, None] = None) -> None:
             _conn.execute('ALTER TABLE positions ADD COLUMN voltage REAL')
         except sqlite3.OperationalError:
             pass  # column already exists
+        # Migration for DBs created before the imprecise-position opt-in
+        try:
+            _conn.execute('ALTER TABLE node_settings ADD COLUMN accept_imprecise_position INTEGER NOT NULL DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            _conn.execute('ALTER TABLE node_settings ADD COLUMN imprecise_ok_set_at INTEGER')
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        try:
+            _conn.execute('ALTER TABLE node_settings ADD COLUMN imprecise_ok_note TEXT')
+        except sqlite3.OperationalError:
+            pass  # column already exists
         _conn.commit()
         _load_mute_cache_locked()
+        _load_imprecise_ok_cache_locked()
         _sync_nodes_registry_locked()
         _prune_locked()
     if _mute_cache:
         logger.warning(
             f'[MUTE] {len(_mute_cache)} node(s) have movement alerts muted: {sorted(_mute_cache)}'
+        )
+    if _imprecise_ok_cache:
+        logger.warning(
+            f'[IMPRECISE_OK] {len(_imprecise_ok_cache)} node(s) accept imprecise positions: {sorted(_imprecise_ok_cache)}'
         )
     logger.info(f'Storage initialized: {path}')
 
@@ -158,6 +194,7 @@ def close() -> None:
             _conn.close()
             _conn = None
         _mute_cache.clear()
+        _imprecise_ok_cache.clear()
 
 
 def _load_mute_cache_locked() -> None:
@@ -202,6 +239,54 @@ def set_movement_muted(node_id: int, muted: bool, note: Optional[str] = None) ->
             _mute_cache.pop(node_id, None)
     logger.warning(
         f'[MUTE] Movement alerts {"MUTED" if muted else "UNMUTED"} for node {node_id}'
+        + (f' ({note})' if note else '')
+    )
+
+
+def _load_imprecise_ok_cache_locked() -> None:
+    """Reload the imprecise-position opt-in cache from the DB. Caller must hold _lock."""
+    _imprecise_ok_cache.clear()
+    rows = _conn.execute(
+        'SELECT node_id, imprecise_ok_set_at, imprecise_ok_note FROM node_settings WHERE accept_imprecise_position = 1'
+    )
+    for node_id, set_at, note in rows:
+        _imprecise_ok_cache[node_id] = {'set_at': set_at, 'note': note}
+
+
+def accepts_imprecise_position(node_id: int) -> bool:
+    """True if this node has opted out of precision-based position rejection
+    (e.g. in maintenance away from its mooring, or deliberately broadcasting
+    reduced precision for location privacy). Memory-only read."""
+    return node_id in _imprecise_ok_cache
+
+
+def get_all_imprecise_ok() -> Dict[str, Dict[str, Any]]:
+    """All opted-in nodes as {node_id_str: {'set_at': int, 'note': str}}."""
+    return {str(nid): dict(v) for nid, v in _imprecise_ok_cache.items()}
+
+
+def set_accept_imprecise_position(node_id: int, accept: bool, note: Optional[str] = None) -> None:
+    """Persist a node's imprecise-position opt-in and update the cache."""
+    with _lock:
+        if _conn is None:
+            raise RuntimeError('storage.init() has not been called')
+        now = int(time.time())
+        _conn.execute(
+            'INSERT INTO node_settings (node_id, accept_imprecise_position, imprecise_ok_set_at, imprecise_ok_note) '
+            'VALUES (?, ?, ?, ?) '
+            'ON CONFLICT(node_id) DO UPDATE SET '
+            '  accept_imprecise_position = excluded.accept_imprecise_position, '
+            '  imprecise_ok_set_at = excluded.imprecise_ok_set_at, '
+            '  imprecise_ok_note = excluded.imprecise_ok_note',
+            (node_id, 1 if accept else 0, now if accept else None, note),
+        )
+        _conn.commit()
+        if accept:
+            _imprecise_ok_cache[node_id] = {'set_at': now, 'note': note}
+        else:
+            _imprecise_ok_cache.pop(node_id, None)
+    logger.warning(
+        f'[IMPRECISE_OK] Imprecise positions {"ACCEPTED" if accept else "REJECTED"} for node {node_id}'
         + (f' ({note})' if note else '')
     )
 
@@ -259,6 +344,79 @@ def record_alert_event(kind, node_id=None, distance_m=None, details=None,
              1 if simulated else 0),
         )
         _conn.commit()
+
+
+def record_gateway_vote(gateway_id, agreed, ts=None) -> None:
+    """Record one gateway's agreement/disagreement with a resolved
+    coordinate-consensus vote. Only meaningful to call when a vote actually
+    had disagreement to learn from — a unanimous broadcast teaches us
+    nothing about any individual gateway's trustworthiness."""
+    if gateway_id is None:
+        return
+    now = int(ts if ts is not None else time.time())
+    agree_inc, disagree_inc = (1, 0) if agreed else (0, 1)
+    last_disagree = None if agreed else now
+    with _lock:
+        if _conn is None:
+            return
+        _conn.execute(
+            'INSERT INTO gateway_reliability'
+            ' (gateway_id, agree_count, disagree_count, last_disagree_ts, last_seen_ts)'
+            ' VALUES (?, ?, ?, ?, ?)'
+            ' ON CONFLICT(gateway_id) DO UPDATE SET'
+            '   agree_count = agree_count + excluded.agree_count,'
+            '   disagree_count = disagree_count + excluded.disagree_count,'
+            '   last_disagree_ts = COALESCE(excluded.last_disagree_ts, last_disagree_ts),'
+            '   last_seen_ts = excluded.last_seen_ts',
+            (gateway_id, agree_inc, disagree_inc, last_disagree, now),
+        )
+        _conn.commit()
+
+
+def get_gateway_reliability(gateway_id) -> Optional[Dict[str, Any]]:
+    """{'agree', 'disagree', 'total', 'disagree_rate', 'last_disagree_ts'} for
+    one gateway, or None if it's never cast a vote that had disagreement."""
+    with _lock:
+        if _conn is None:
+            return None
+        row = _conn.execute(
+            'SELECT agree_count, disagree_count, last_disagree_ts'
+            ' FROM gateway_reliability WHERE gateway_id = ?',
+            (gateway_id,),
+        ).fetchone()
+    if row is None:
+        return None
+    agree, disagree, last_disagree_ts = row
+    total = agree + disagree
+    return {
+        'agree': agree, 'disagree': disagree, 'total': total,
+        'disagree_rate': (disagree / total) if total else 0.0,
+        'last_disagree_ts': last_disagree_ts,
+    }
+
+
+def get_all_gateway_reliability(min_samples=1):
+    """All gateways with >= min_samples total votes, worst (highest
+    disagree_rate) first — the "suspect gateway" report."""
+    with _lock:
+        if _conn is None:
+            return []
+        rows = _conn.execute(
+            'SELECT gateway_id, agree_count, disagree_count, last_disagree_ts, last_seen_ts'
+            ' FROM gateway_reliability WHERE (agree_count + disagree_count) >= ?',
+            (min_samples,),
+        ).fetchall()
+    result = [
+        {
+            'gateway_id': gw, 'agree': agree, 'disagree': disagree,
+            'total': agree + disagree,
+            'disagree_rate': disagree / (agree + disagree) if (agree + disagree) else 0.0,
+            'last_disagree_ts': last_disagree_ts, 'last_seen_ts': last_seen_ts,
+        }
+        for gw, agree, disagree, last_disagree_ts, last_seen_ts in rows
+    ]
+    result.sort(key=lambda r: r['disagree_rate'], reverse=True)
+    return result
 
 
 def get_positions_since(node_id, since_ts, include_simulated=False):

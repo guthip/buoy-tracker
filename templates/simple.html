@@ -30,6 +30,7 @@
         <div class="linkstate"><span class="pulse" id="mqtt-pulse"></span><span id="mqtt-status">connecting…</span></div>
         <div id="server-uptime-wrap" title="Time since the server last started — resets on any restart"><span id="server-uptime"></span></div>
         <div id="node-count-wrap"><span id="node-count">0</span> nodes</div>
+        <div id="tide-summary-wrap" onclick="openTideModal()" title="Tide &amp; current — click for chart"><span id="tide-summary" class="tide-summary-line">🌊 …</span></div>
         <div class="pollwrap" title="Time to next data poll">
             <div class="track"><span id="refresh-progress-bar"></span></div>
             <div id="rate-limit-message"></div>
@@ -99,6 +100,7 @@
                     <div class="menu-section-title">Per-buoy movement mutes</div>
                     <div id="muteList" class="menu-note">Loading…</div>
                     <div class="menu-note">Muted buoys send no movement emails — the map still shows them honestly. A mute clears itself once the buoy is back home.</div>
+                    <div class="menu-note">"Imprecise OK" skips position-precision rejection for that buoy — use it while a buoy is in maintenance away from its mooring, or if it's deliberately broadcasting reduced precision for location privacy. Leave "Precise only" on otherwise, so corrupted/relay-quantized packets keep getting rejected.</div>
                 </div>
                 <div class="menu-section">
                     <div class="menu-section-title">Server</div>
@@ -121,6 +123,20 @@
             <div id="histogramContainer">
                 <div class="menu-note">Loading history…</div>
             </div>
+        </div>
+    </div>
+
+    <!-- Tide & current -->
+    <div id="tideModal" class="detail-modal">
+        <div class="detail-panel detail-panel--wide">
+            <div class="head">
+                <h2>Tide &amp; current</h2>
+                <button class="closex" onclick="closeTideModal()" aria-label="Close">&times;</button>
+            </div>
+            <div id="tideChartContainer" class="detail-chart-container">
+                <div class="menu-note">Loading tide &amp; current history…</div>
+            </div>
+            <div id="tideHighlightReadout" class="tide-highlight-readout"></div>
         </div>
     </div>
 

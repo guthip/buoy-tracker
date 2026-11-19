@@ -403,3 +403,14 @@ TRUSTED_PROXIES = [ip.strip() for ip in os.getenv('TRUSTED_PROXIES',
 # Example: ['https://tracker.example.com', 'https://app.example.com']
 ALLOWED_ORIGINS = [origin.strip() for origin in os.getenv('ALLOWED_ORIGINS',
     config.get('security', 'allowed_origins', fallback='*')).split(',') if origin.strip()]
+
+# Tide & current context (NOAA CO-OPS, free, no API key).
+# Defaults are the stations nearest this fleet's South SF Bay moorings:
+# 9414523 "Redwood City" for tide height, PCT0521 "Redwood Pt., Blair I."
+# for current speed/direction — PCT0521 sits within ~1mi of the mark
+# cluster itself. Override in site.config if the fleet relocates.
+TIDE_ENABLED = config.getboolean('tides', 'enabled', fallback=True)
+TIDE_STATION_ID = config.get('tides', 'tide_station_id', fallback='9414523')
+CURRENT_STATION_ID = config.get('tides', 'current_station_id', fallback='PCT0521')
+TIDE_REFRESH_INTERVAL_S = config.getint('tides', 'refresh_interval_s', fallback=21600)  # 6h
+TIDE_FORECAST_HOURS = config.getint('tides', 'forecast_hours', fallback=36)

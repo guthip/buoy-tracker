@@ -157,6 +157,12 @@
         lines.push('Battery: ' + batteryStr);
       }
 
+      // Tide/current at the moment of this fix — the check an operator
+      // does by hand whenever a mark appears to have wandered.
+      if (point.ts) {
+        var tideLine = tideReadoutAt(point.ts);
+        if (tideLine) lines.push('🌊 ' + tideLine);
+      }
 
       return lines.join('<br>');
     }
@@ -741,11 +747,16 @@
     var html = '';
     lastSpecialNodes.forEach(function(n) {
       var muted = !!n.movement_alerts_muted;
+      var impreciseOk = !!n.accept_imprecise_position;
       var label = n.special_label || n.name || String(n.id);
-      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;">' +
+      html += '<div style="display:flex;justify-content:space-between;align-items:center;margin:3px 0;gap:6px;">' +
               '<span>' + escapeHtml(label) + '</span>' +
+              '<span style="display:flex;gap:4px;">' +
               '<button onclick="toggleMute(' + n.id + ')" style="border:none;border-radius:4px;cursor:pointer;padding:3px 10px;color:#fff;font-weight:bold;background:' + (muted ? '#f44336' : '#4CAF50') + ';">' +
-              (muted ? '🔕 Muted' : '🔔 Active') + '</button></div>';
+              (muted ? '🔕 Muted' : '🔔 Active') + '</button>' +
+              '<button onclick="toggleImpreciseOk(' + n.id + ')" title="Accept imprecise/coarse position packets for this node (maintenance, or privacy-reduced precision) instead of rejecting them" style="border:none;border-radius:4px;cursor:pointer;padding:3px 10px;color:#fff;font-weight:bold;background:' + (impreciseOk ? '#ff9800' : '#9e9e9e') + ';">' +
+              (impreciseOk ? '📍 Imprecise OK' : '🎯 Precise only') + '</button>' +
+              '</span></div>';
     });
     el.innerHTML = html;
   }
@@ -769,6 +780,28 @@
     } catch(e) {
       console.error('Mute toggle error:', e);
       alert('Failed to update mute');
+    }
+  };
+
+  window.toggleImpreciseOk = function toggleImpreciseOk(nodeId) {
+    var node = null;
+    for (var i = 0; i < lastSpecialNodes.length; i++) {
+      if (lastSpecialNodes[i].id === nodeId) { node = lastSpecialNodes[i]; break; }
+    }
+    var newAccept = node ? !node.accept_imprecise_position : true;
+    try {
+      makeApiRequest('POST', 'api/alerts/imprecise-ok', function(xhr) {
+        if (xhr.status === 200) {
+          if (node) node.accept_imprecise_position = newAccept;
+          renderMuteList();
+          console.log('[ImpreciseOk] node ' + nodeId + ' -> ' + (newAccept ? 'accepted' : 'precise only'));
+        } else if (xhr.status !== 401) {
+          alert('Failed to update imprecise-position setting: ' + xhr.statusText);
+        }
+      }, JSON.stringify({ node_id: nodeId, accept: newAccept }));
+    } catch(e) {
+      console.error('Imprecise-ok toggle error:', e);
+      alert('Failed to update imprecise-position setting');
     }
   };
 
@@ -845,6 +878,11 @@
   var movementLines = {}; // red lines from origin to current position when moved
   var gatewayLines = {}; // lines from special nodes to their best gateway receivers
   var currentNodesData = []; // All nodes from latest API fetch - used for gateway popup building
+  // This server process's own start time (from /health), so a "stale" badge
+  // can tell "the buoy went quiet" apart from "the tracker itself was down
+  // for part of that gap" — the two look identical in last_seen alone but
+  // mean very different things to someone glancing at the fleet.
+  var serverStartTs = null;
   
   // Ensure global scope access for debugging
   window.gatewayLines = gatewayLines;
@@ -1485,6 +1523,206 @@
     return svg;
   }
 
+  // ---- Tide & current ----
+  // Mirrors tides.py's _interpolate / _interpolate_current server-side, so
+  // a value read off the chart, the live summary, and a trail popup's
+  // readout for the same timestamp always agree.
+  function interpolateTideHeight(tidePoints, tsVal) {
+    if (!tidePoints || !tidePoints.length) return null;
+    if (tsVal <= tidePoints[0].ts || tsVal >= tidePoints[tidePoints.length - 1].ts) return null;
+    for (var i = 1; i < tidePoints.length; i++) {
+      if (tidePoints[i].ts >= tsVal) {
+        var t0 = tidePoints[i - 1].ts, t1 = tidePoints[i].ts;
+        var v0 = tidePoints[i - 1].height_ft, v1 = tidePoints[i].height_ft;
+        var frac = t1 > t0 ? (tsVal - t0) / (t1 - t0) : 0;
+        return v0 + (v1 - v0) * frac;
+      }
+    }
+    return null;
+  }
+
+  function interpolateCurrentSpeed(events, tsVal) {
+    if (!events || !events.length) return null;
+    if (tsVal <= events[0].ts || tsVal >= events[events.length - 1].ts) return null;
+    for (var i = 1; i < events.length; i++) {
+      if (events[i].ts >= tsVal) {
+        var t0 = events[i - 1].ts, t1 = events[i].ts;
+        var v0 = events[i - 1].speed_kt, v1 = events[i].speed_kt;
+        var frac = t1 > t0 ? (tsVal - t0) / (t1 - t0) : 0;
+        var eased = (1 - Math.cos(Math.PI * frac)) / 2;
+        return v0 + (v1 - v0) * eased;
+      }
+    }
+    return null;
+  }
+
+  function currentStateLabel(speedKt) {
+    return Math.abs(speedKt) < 0.1 ? 'slack' : (speedKt > 0 ? 'flood' : 'ebb');
+  }
+
+  var tideHistoryCache = null;  // last /api/tide/history response
+  var tideHighlightTs = null;   // timestamp highlighted on the open chart, if any
+
+  function tideReadoutAt(tsVal) {
+    // One-line human summary for a timestamp, from the cached history —
+    // used by the trail popup and the chart's click-to-highlight readout.
+    if (!tideHistoryCache || !tideHistoryCache.available) return null;
+    var height = interpolateTideHeight(tideHistoryCache.tide_points, tsVal);
+    var speed = interpolateCurrentSpeed(tideHistoryCache.current_events, tsVal);
+    if (height == null && speed == null) return null;
+    var parts = [];
+    if (height != null) parts.push('Tide ' + height.toFixed(1) + 'ft');
+    if (speed != null) parts.push('Current ' + Math.abs(speed).toFixed(1) + 'kt ' + currentStateLabel(speed));
+    return parts.join(' · ');
+  }
+
+  function fetchTideHistory(callback) {
+    makeApiRequest('GET', 'api/tide/history', function(xhr) {
+      if (xhr.status === 200) {
+        try { tideHistoryCache = JSON.parse(xhr.responseText); }
+        catch (e) { tideHistoryCache = null; }
+      } else {
+        tideHistoryCache = null;
+      }
+      if (callback) callback(tideHistoryCache);
+    });
+  }
+
+  function trendArrow(trend) {
+    return trend === 'rising' ? '↑' : trend === 'falling' ? '↓' : '→';
+  }
+
+  function updateTideSummary() {
+    makeApiRequest('GET', 'api/tide/current', function(xhr) {
+      var el = document.getElementById('tide-summary');
+      if (!el) return;
+      var data = null;
+      if (xhr.status === 200) {
+        try { data = JSON.parse(xhr.responseText); } catch (e) { data = null; }
+      }
+      if (!data || !data.available) { el.textContent = '🌊 tide data unavailable'; return; }
+      var parts = [];
+      if (data.tide_height_ft != null) {
+        parts.push(data.tide_height_ft.toFixed(1) + 'ft' + (data.tide_trend ? ' ' + trendArrow(data.tide_trend) : ''));
+      }
+      if (data.current_speed_kt != null) {
+        parts.push(data.current_speed_kt.toFixed(1) + 'kt ' + (data.current_state || ''));
+      }
+      el.textContent = '🌊 ' + (parts.length ? parts.join(' · ') : '—');
+    });
+  }
+
+  function _sampleSeries(fn, series, startTs, endTs, stepSec) {
+    var out = [];
+    for (var t = startTs; t <= endTs; t += stepSec) {
+      var v = fn(series, t);
+      if (v != null) out.push({ ts: t, v: v });
+    }
+    return out;
+  }
+
+  function buildTideChartSVG(history, highlightTs) {
+    if (!history || !history.available || !history.tide_points || history.tide_points.length < 2) {
+      return '<div style="padding:16px;color:var(--ink-2);text-align:center;">Tide/current data unavailable' +
+             (history && !history.available ? ' (NOAA fetch failed — will retry automatically)' : '') + '</div>';
+    }
+    var tidePts = history.tide_points, hilo = history.tide_hilo || [], curEvents = history.current_events || [];
+    var domainStart = tidePts[0].ts, domainEnd = tidePts[tidePts.length - 1].ts;
+
+    // A phone has no vertical room to spare (sidebar sheet below, header
+    // above) — render genuinely smaller panels there rather than the same
+    // chart scaled down, so the floating modal doesn't eat the whole screen.
+    var compact = window.innerWidth <= 480;
+    var width = compact ? Math.min(window.innerWidth * 0.92, 420) : Math.min(window.innerWidth * 0.9, 560);
+    var padL = compact ? 28 : 34, padR = compact ? 8 : 10;
+    var padTop = compact ? 10 : 14, padBottom = compact ? 14 : 18;
+    var tideH = compact ? 50 : 90, curH = compact ? 38 : 70, gap = compact ? 12 : 20;
+    var plotW = width - padL - padR;
+    var height = padTop + tideH + gap + curH + padBottom;
+    var scaleX = function (t) { return padL + ((t - domainStart) / (domainEnd - domainStart)) * plotW; };
+
+    var tideVals = tidePts.map(function (p) { return p.height_ft; });
+    var tideMin = Math.min.apply(null, tideVals), tideMax = Math.max.apply(null, tideVals);
+    var tidePad = Math.max(0.5, (tideMax - tideMin) * 0.15);
+    tideMin -= tidePad; tideMax += tidePad;
+    var tideTop = padTop;
+    var scaleTideY = function (v) { return tideTop + tideH - ((v - tideMin) / (tideMax - tideMin)) * tideH; };
+
+    var curSamples = _sampleSeries(interpolateCurrentSpeed, curEvents, domainStart, domainEnd, 900);
+    var curAbsVals = curSamples.map(function (s) { return Math.abs(s.v); })
+      .concat(curEvents.map(function (e) { return Math.abs(e.speed_kt); }));
+    var curAbsMax = Math.max(0.5, curAbsVals.length ? Math.max.apply(null, curAbsVals) : 0.5);
+    var curTop = tideTop + tideH + gap;
+    var curMid = curTop + curH / 2;
+    var scaleCurY = function (v) { return curMid - (v / curAbsMax) * (curH / 2); };
+
+    var svg = '<svg width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height +
+      '" style="max-width:100%;height:auto;display:block;font-family:ui-monospace,monospace;font-size:10px;">';
+    svg += '<rect width="' + width + '" height="' + height + '" fill="var(--panel-2)" rx="6"/>';
+
+    var tideMarks = [tideMin + (tideMax - tideMin) * 0.15, (tideMin + tideMax) / 2, tideMax - (tideMax - tideMin) * 0.15];
+    for (var g = 0; g < tideMarks.length; g++) {
+      var gy = scaleTideY(tideMarks[g]);
+      svg += '<line x1="' + padL + '" y1="' + gy + '" x2="' + (width - padR) + '" y2="' + gy + '" stroke="var(--line)" stroke-width="1"/>';
+      svg += '<text x="2" y="' + (gy + 3) + '" fill="var(--ink-2)">' + tideMarks[g].toFixed(1) + '</text>';
+    }
+    var tidePath = '';
+    for (var i = 0; i < tidePts.length; i++) {
+      tidePath += (i === 0 ? 'M' : 'L') + scaleX(tidePts[i].ts) + ',' + scaleTideY(tidePts[i].height_ft) + ' ';
+    }
+    svg += '<path d="' + tidePath + '" stroke="var(--tide-line)" stroke-width="2" fill="none"/>';
+    for (var h = 0; h < hilo.length; h++) {
+      var hp = hilo[h];
+      if (hp.ts < domainStart || hp.ts > domainEnd) continue;
+      var hx = scaleX(hp.ts), hy = scaleTideY(hp.height_ft);
+      var htip = (hp.type === 'H' ? 'High' : 'Low') + ' tide: ' + hp.height_ft.toFixed(1) + 'ft\n' + new Date(hp.ts * 1000).toLocaleString();
+      svg += '<circle cx="' + hx + '" cy="' + hy + '" r="3" fill="var(--tide-line)" style="cursor:pointer;" class="histogram-point" data-tooltip="' + htip.replace(/"/g, '&quot;') + '"/>';
+    }
+    svg += '<text x="' + padL + '" y="' + (tideTop - 3) + '" fill="var(--tide-line)" font-weight="bold">Tide height (ft)</text>';
+
+    svg += '<line x1="' + padL + '" y1="' + curMid + '" x2="' + (width - padR) + '" y2="' + curMid + '" stroke="var(--ink-2)" stroke-width="1" stroke-dasharray="2,2"/>';
+    svg += '<text x="2" y="' + (curMid + 3) + '" fill="var(--ink-2)">0</text>';
+    svg += '<text x="2" y="' + (curTop + 9) + '" fill="var(--ink-2)">fld</text>';
+    svg += '<text x="2" y="' + (curTop + curH - 2) + '" fill="var(--ink-2)">ebb</text>';
+    if (curSamples.length > 1) {
+      var curPath = '';
+      for (var s = 0; s < curSamples.length; s++) {
+        curPath += (s === 0 ? 'M' : 'L') + scaleX(curSamples[s].ts) + ',' + scaleCurY(curSamples[s].v) + ' ';
+      }
+      svg += '<path d="' + curPath + '" stroke="var(--current-line)" stroke-width="2" fill="none"/>';
+    }
+    for (var c = 0; c < curEvents.length; c++) {
+      var ce = curEvents[c];
+      if (ce.ts < domainStart || ce.ts > domainEnd) continue;
+      var cx = scaleX(ce.ts), cy = scaleCurY(ce.speed_kt);
+      var ctip = ce.type.charAt(0).toUpperCase() + ce.type.slice(1) +
+        (ce.type !== 'slack' ? ' ' + Math.abs(ce.speed_kt).toFixed(1) + 'kt' : '') +
+        '\n' + new Date(ce.ts * 1000).toLocaleString();
+      svg += '<circle cx="' + cx + '" cy="' + cy + '" r="3" fill="var(--current-line)" style="cursor:pointer;" class="histogram-point" data-tooltip="' + ctip.replace(/"/g, '&quot;') + '"/>';
+    }
+    svg += '<text x="' + padL + '" y="' + (curTop - 3) + '" fill="var(--current-line)" font-weight="bold">Current speed (kt)</text>';
+
+    var nowTs = Date.now() / 1000;
+    if (nowTs >= domainStart && nowTs <= domainEnd) {
+      var nx = scaleX(nowTs);
+      svg += '<line x1="' + nx + '" y1="' + padTop + '" x2="' + nx + '" y2="' + (curTop + curH) + '" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3,2"/>';
+    }
+    if (highlightTs != null && highlightTs >= domainStart && highlightTs <= domainEnd) {
+      var hlx = scaleX(highlightTs);
+      svg += '<line x1="' + hlx + '" y1="' + padTop + '" x2="' + hlx + '" y2="' + (curTop + curH) + '" stroke="var(--crit)" stroke-width="1.5"/>';
+    }
+
+    var labelTimes = [domainStart, (domainStart + domainEnd) / 2, domainEnd];
+    for (var l = 0; l < labelTimes.length; l++) {
+      var lx = scaleX(labelTimes[l]);
+      var anchor = l === 0 ? 'start' : (l === labelTimes.length - 1 ? 'end' : 'middle');
+      svg += '<text x="' + lx + '" y="' + (height - 4) + '" fill="var(--ink-2)" text-anchor="' + anchor + '">' +
+        new Date(labelTimes[l] * 1000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric' }) + '</text>';
+    }
+    svg += '</svg>';
+    return svg;
+  }
+
   // Security: Escape HTML special characters to prevent XSS
   function escapeHtml(text) {
     if (typeof text !== 'string') return '';
@@ -1528,6 +1766,18 @@
     return 5;                                                     // all well
   }
 
+  function staleDetail(lastSeen) {
+    // A "quiet since X" badge reads as "this buoy stopped transmitting" —
+    // true if the tracker was up the whole time, but misleading right after
+    // a tracker restart: the gap is mostly (or entirely) the tracker being
+    // offline to listen, not the buoy going silent. serverStartTs (from
+    // /health) tells them apart.
+    if (serverStartTs && lastSeen && lastSeen < serverStartTs) {
+      return 'tracker was down — last heard ' + formatTimeAgo(lastSeen);
+    }
+    return 'quiet ' + formatTimeAgo(lastSeen);
+  }
+
   function nodeHeadlineState(node) {
     var d = node.distance_from_origin_m;
     var dist = (d == null || isNaN(d)) ? '' : Math.round(d) + ' m from home';
@@ -1541,11 +1791,11 @@
       if (!hasRealFix) return { cls: 'nofix', word: 'No GPS yet', detail: 'heard ' + formatTimeAgo(node.last_seen) };
       var quietFor = (Date.now() / 1000 - node.last_seen);
       if (node.stale || (quietFor != null && quietFor > solOrangeThreshold)) {
-        return { cls: 'stale', word: 'Stale', detail: 'quiet ' + formatTimeAgo(node.last_seen) };
+        return { cls: 'stale', word: 'Stale', detail: staleDetail(node.last_seen) };
       }
       return { cls: 'ok', word: 'On station', detail: dist };
     }
-    if (node.stale || node.status === 'red') return { cls: 'stale', word: 'Stale', detail: 'heard ' + formatTimeAgo(node.last_seen) };
+    if (node.stale || node.status === 'red') return { cls: 'stale', word: 'Stale', detail: staleDetail(node.last_seen) };
     return { cls: 'ok', word: 'Relaying', detail: 'heard ' + formatTimeAgo(node.last_seen) };
   }
 
@@ -2161,6 +2411,11 @@
                             // Build and bind popup
                             var popupText = buildTrailPopup(pnt, u, pts.length, node);
                             historyMarker.bindPopup(popupText);
+                            if (pnt.ts) {
+                              historyMarker.on('click', (function(pointTs) {
+                                return function() { window.highlightTideAtTime(pointTs); };
+                              })(pnt.ts));
+                            }
 
                             trail_markers[node.id].push(historyMarker);
                           }
@@ -2234,6 +2489,9 @@
             if (uptimeEl && data2 && data2.server_start_ts) {
               uptimeEl.textContent = 'up ' + formatTimeAgo(data2.server_start_ts);
             }
+            if (data2 && data2.server_start_ts) {
+              serverStartTs = data2.server_start_ts;
+            }
           } else if (xhr.status === 429) {
             pausePollingForRateLimit();
             statusEl.textContent = '⏸️ Rate limited (paused 60s)';
@@ -2293,6 +2551,12 @@
       updateNodes();
     } catch(e) {
       console.error('[INIT] Error in updateNodes:', e);
+    }
+    try {
+      updateTideSummary();
+      fetchTideHistory();
+    } catch(e) {
+      console.error('[INIT] Error fetching tide/current data:', e);
     }
   }).catch(function(e) {
     console.error('[INIT] Failed to initialize features:', e);
@@ -2442,7 +2706,28 @@
   } catch(e) {
     console.error('Error setting up node polling:', e);
   }
-  
+
+  // Tide/current: predictions barely change, so a slow interval is plenty —
+  // the live summary chip refreshes every 5 minutes, the full history
+  // series (for the chart) every 15.
+  try {
+    setInterval(function(){
+      if (!isPageVisible) return;
+      try { updateTideSummary(); } catch(e) { console.error('Error updating tide summary:', e); }
+    }, 5 * 60 * 1000);
+    setInterval(function(){
+      if (!isPageVisible) return;
+      try {
+        fetchTideHistory(function(){
+          var tm = document.getElementById('tideModal');
+          if (tm && tm.style.display !== 'none' && tm.style.display !== '') renderTideChart();
+        });
+      } catch(e) { console.error('Error fetching tide history:', e); }
+    }, 15 * 60 * 1000);
+  } catch(e) {
+    console.error('Error setting up tide polling:', e);
+  }
+
   // Update voltage graphs every polling interval
   try {
     setInterval(function(){
@@ -2749,20 +3034,71 @@
       modal.style.display = 'none';
     }
   };
-  
+
+  function renderTideChart() {
+    var container = document.getElementById('tideChartContainer');
+    if (!container) return;
+    container.innerHTML = buildTideChartSVG(tideHistoryCache, tideHighlightTs);
+    attachHistogramTooltips(container);
+    var readout = document.getElementById('tideHighlightReadout');
+    if (readout) {
+      readout.textContent = tideHighlightTs != null ? (tideReadoutAt(tideHighlightTs) || '') : '';
+    }
+  }
+
+  window.openTideModal = function() {
+    var modal = document.getElementById('tideModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    var container = document.getElementById('tideChartContainer');
+    if (container && !tideHistoryCache) {
+      container.innerHTML = '<div class="menu-note">Loading tide &amp; current history…</div>';
+    } else {
+      renderTideChart();
+    }
+    fetchTideHistory(function() { renderTideChart(); });
+  };
+
+  window.closeTideModal = function() {
+    var modal = document.getElementById('tideModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  // Called when a historic trail position marker is clicked — highlights
+  // the tide/current reading for that exact moment, both inline (the
+  // marker's own popup, built fresh each click) and on the chart modal if
+  // it's currently open, so "what were the tide/current doing when this
+  // fix was taken" is a click away instead of a separate manual lookup.
+  window.highlightTideAtTime = function(tsVal) {
+    tideHighlightTs = tsVal;
+    var modal = document.getElementById('tideModal');
+    if (modal && modal.style.display !== 'none' && modal.style.display !== '') {
+      renderTideChart();
+    }
+  };
+
   // Close modal on ESC key
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
       window.closeNodeDetails();
+      window.closeTideModal();
     }
   });
-  
+
   // Close modal on backdrop click
   document.getElementById('nodeDetailsModal').addEventListener('click', function(e) {
     if (e.target === this) {
       window.closeNodeDetails();
     }
   });
+  var tideModalEl = document.getElementById('tideModal');
+  if (tideModalEl) {
+    tideModalEl.addEventListener('click', function(e) {
+      if (e.target === this) {
+        window.closeTideModal();
+      }
+    });
+  }
 })();
 
 

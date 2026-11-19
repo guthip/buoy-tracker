@@ -59,7 +59,7 @@ This project is **100% vibe coded** — an exercise in exploring what Anthropic 
 - **Headline buoy states**: each card leads with one word — On station / Moved /
   Stale / Muted 🔕 / No GPS yet — with labeled Fix / Heard / Batt chips;
   buoys needing attention sort to the top
-- **Position Precision Awareness**: A node broadcasting reduced GPS precision on purpose (e.g. for location privacy) is trusted, not rejected — its uncertainty radius is estimated from `precision_bits` and shown on the card and map popup (e.g. "±5.8km"). Only a relay caught lying about precision (claims full precision, delivers a quantized coordinate) is rejected, keeping corrupted relay packets out of position trails
+- **Position Precision Awareness**: A node broadcasting reduced GPS precision on purpose (e.g. for location privacy) is trusted, not rejected — its uncertainty radius is estimated from `precision_bits` and shown on the card and map popup (e.g. "±5.8km"). A relay caught lying about precision (claims full precision, delivers a quantized coordinate) is rejected, and so is a coordinate too coarse to trust regardless of what it claims (8+ trailing zero bits — well past what real GPS noise explains) — keeping corrupted relay packets out of position trails. A buoy that's legitimately coarse right now (in maintenance away from its mooring, or deliberately broadcasting reduced precision) can be opted out of both checks per-node from the admin panel ("Imprecise OK", next to the mute toggle), so it still shows up instead of being silently rejected
 - **Battery History**: inline sparkline on every buoy card, plus a tap-to-open
   voltage chart with hover tooltips
 - **Gateway Tracking**: Automatically discovers and tracks mesh gateways
@@ -846,11 +846,20 @@ curl -X POST https://your-domain.com/api/test-alert \
 - **`GET /api/special/history/batch?hours=<hours>`** - Position history for all special nodes (single batch request)
 - **`GET /api/signal/history?node_id=<id>`** - Battery history for a node
 
+### Tide & Current Endpoints (v2.9, public read)
+
+- **`GET /api/tide/current`** - Live tide/current snapshot (height, trend, next hi/lo, current speed/state, next slack)
+- **`GET /api/tide/history`** - Tide-height + current-event series for charting, same window as the position trails
+- **`GET /api/gateway-reliability?min_samples=<n>`** - Per-gateway coordinate-consensus track record (agree/disagree vs. resolved votes), worst first
+
 ### Mute & Settings Endpoints (v2.0)
 
 - **`GET /api/alerts/mutes`** - Per-buoy movement-alert mute states (public read)
 - **`POST /api/alerts/mute`** - Mute/unmute one buoy's movement emails (Bearer)
   - Body: `{"node_id": 123, "muted": true}`
+- **`GET /api/alerts/imprecise-ok`** - Per-buoy imprecise-position opt-ins (public read)
+- **`POST /api/alerts/imprecise-ok`** - Opt a buoy in/out of precision-based position rejection (Bearer)
+  - Body: `{"node_id": 123, "accept": true}`
 - **`GET /api/alerts/status`** - Current alert settings (Bearer)
   - Returns: `{"alerts_enabled": true, "alert_cooldown": 3600, "low_battery_threshold": 25}`
 - **`POST /api/alerts/toggle`** - Email kill switch — flips alerts on/off in

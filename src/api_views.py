@@ -145,6 +145,7 @@ def _build_node_info_from_data(node_id, data, is_special, current_time):
         "moved_far": data.get("moved_far", False),
         "distance_from_origin_m": data.get("distance_from_origin_m"),
         "movement_alerts_muted": storage.is_movement_muted(node_id) if is_special else False,
+        "accept_imprecise_position": storage.accepts_imprecise_position(node_id) if is_special else False,
         "voltage": mh._get_node_voltage(node_id),
     }
 
@@ -240,6 +241,7 @@ def _build_gateway_only_node(gateway_id, current_time):
         "moved_far": False,
         "distance_from_origin_m": None,
         "movement_alerts_muted": False,
+        "accept_imprecise_position": False,
         "voltage": None,
         "power_current": None,
         "is_gateway": True,
@@ -319,9 +321,14 @@ def _deduplicate_by_hour(points):
     time_window_hours = config.special_nodes_settings.get('data_limit_time', 1.0)
     time_window_seconds = time_window_hours * 3600
     
+    # Position fixes and position-less telemetry samples are bucketed
+    # separately: otherwise a telemetry sample arriving later in the same
+    # window would evict that window's only position fix, silently dropping
+    # it from the map trail.
     time_buckets = {}
     for point in points:
-        time_key = int(point['ts'] / time_window_seconds)  # Group by time window
+        has_position = point.get('lat') is not None and point.get('lon') is not None
+        time_key = (int(point['ts'] / time_window_seconds), has_position)
         # Keep the most recent point in each time window
         if time_key not in time_buckets:
             time_buckets[time_key] = point

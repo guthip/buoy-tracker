@@ -67,7 +67,7 @@ config merging. Upgrading from a pre-2.1 single-file config: run once
 ## Tags
 
 - `latest` — current stable release
-- `2.8.0` — pinned current release (multi-arch: amd64 + arm64)
+- `2.9.0` — pinned current release (multi-arch: amd64 + arm64)
 
 ## Links
 

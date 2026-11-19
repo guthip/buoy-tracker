@@ -17,7 +17,7 @@ if __name__ == '__main__':
     import src.storage as storage
     import src.movement as movement
 else:
-    from . import mqtt_handler, config, alerts, storage, movement
+    from . import mqtt_handler, config, alerts, storage, movement, tides
 import time
 from collections import defaultdict
 
@@ -343,9 +343,10 @@ def start_mqtt_on_startup() -> None:
 
 
 def init_background_services() -> None:
-    """Explicit initializer for background services (MQTT, alert-buffer monitor)."""
+    """Explicit initializer for background services (MQTT, alert-buffer monitor, tide refresh)."""
     start_mqtt_on_startup()
     movement.start_alert_buffer_monitor()
+    tides.start_tide_refresh_thread()
 
 
 @app.before_request
@@ -547,6 +548,34 @@ def get_alert_mutes() -> Response:
         return jsonify({'error': str(e)}), 500
 
 
+@api_bp.route('/api/gateway-reliability', methods=['GET'])
+@check_rate_limit
+def get_gateway_reliability() -> Response:
+    """
+    Per-gateway coordinate-consensus track record (public read) — how often
+    a gateway's relayed copy of a broadcast agreed vs. disagreed with the
+    resolved consensus, accumulated across all special nodes. Worst
+    (highest disagree_rate) first. A gateway with a persistently high
+    disagree_rate and enough samples is a relay/path worth investigating —
+    see movement.py's _gateway_vote_weight, which also down-weights such a
+    gateway's future votes automatically.
+
+    Query params:
+        min_samples (int, optional): only include gateways with at least
+            this many recorded votes (default 1).
+
+    Returns:
+        {'gateways': [{'gateway_id', 'agree', 'disagree', 'total',
+                        'disagree_rate', 'last_disagree_ts', 'last_seen_ts'}, ...]}
+    """
+    try:
+        min_samples = request.args.get('min_samples', type=int) or 1
+        return jsonify({'gateways': storage.get_all_gateway_reliability(min_samples)})
+    except Exception as e:
+        logger.exception('Failed to get gateway reliability')
+        return jsonify({'error': str(e)}), 500
+
+
 @api_bp.route('/api/alerts/mute', methods=['POST'])
 @check_rate_limit
 @require_api_key
@@ -575,6 +604,55 @@ def set_alert_mute() -> Response:
         return jsonify({'success': True, 'node_id': node_id, 'muted': muted})
     except Exception as e:
         logger.exception('Failed to set alert mute')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/alerts/imprecise-ok', methods=['GET'])
+@check_rate_limit
+def get_imprecise_ok() -> Response:
+    """
+    Get per-node imprecise-position opt-ins (public read).
+
+    Returns:
+        {'imprecise_ok': {node_id_str: {'set_at': int, 'note': str}}}
+    """
+    try:
+        return jsonify({'imprecise_ok': storage.get_all_imprecise_ok()})
+    except Exception as e:
+        logger.exception('Failed to get imprecise-position opt-ins')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/alerts/imprecise-ok', methods=['POST'])
+@check_rate_limit
+@require_api_key
+def set_imprecise_ok() -> Response:
+    """
+    Opt a special node in or out of precision-based position rejection.
+
+    Body: {'node_id': int, 'accept': bool}
+    When accepted, this node's position packets skip both the claim-vs-actual
+    drift check and the absolute trailing-zero-bit floor — for a node in
+    maintenance away from its mooring, or deliberately broadcasting reduced
+    precision for location privacy, where precision doesn't matter but still
+    showing up on the tracker does.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        try:
+            node_id = int(data.get('node_id'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'node_id (int) is required'}), 400
+        if node_id not in config.SPECIAL_NODE_IDS:
+            return jsonify({'error': f'node {node_id} is not a special node'}), 400
+        accept = data.get('accept')
+        if not isinstance(accept, bool):
+            return jsonify({'error': 'accept (true/false) is required'}), 400
+
+        storage.set_accept_imprecise_position(node_id, accept, note=f'via API from {get_client_ip()}')
+        return jsonify({'success': True, 'node_id': node_id, 'accept': accept})
+    except Exception as e:
+        logger.exception('Failed to set imprecise-position opt-in')
         return jsonify({'error': str(e)}), 500
 
 
@@ -683,6 +761,36 @@ def get_signal_history() -> Response:
     except Exception as e:
         logger.exception('Failed to get signal history')
         return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/tide/current', methods=['GET'])
+@check_rate_limit
+def get_tide_current() -> Response:
+    """
+    'Right now' tide/current snapshot for the live panel — see
+    tides.get_current_snapshot() for field details.
+    """
+    try:
+        return jsonify(tides.get_current_snapshot())
+    except Exception as e:
+        logger.exception('Failed to get tide/current snapshot')
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/api/tide/history', methods=['GET'])
+@check_rate_limit
+def get_tide_history() -> Response:
+    """
+    Tide-height + current-event series for charting, spanning the same
+    history+forecast window the position trails use — see
+    tides.get_history_series() for field details.
+    """
+    try:
+        return jsonify(tides.get_history_series())
+    except Exception as e:
+        logger.exception('Failed to get tide/current history')
+        return jsonify({'error': str(e)}), 500
+
 
 @api_bp.route('/api/config/movement-threshold', methods=['POST'])
 @check_rate_limit

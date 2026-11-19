@@ -94,7 +94,29 @@ def _send_alert(kind: str, node_id: int, subject: str, body: str, log_detail: st
         logger.error(f"Failed to send {kind} alert: {e}", exc_info=True)
 
 
-def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: float) -> None:
+def _format_tide_context(tide_context: Union[Dict[str, Any], None]) -> str:
+    """Render a tide/current snapshot for the alert body — the first thing
+    an operator checks by hand when a mark appears to have wandered.
+    Empty string (no section at all) when tides are disabled/unreachable,
+    rather than a section full of 'unknown'."""
+    if not tide_context:
+        return ""
+    lines = []
+    height = tide_context.get("tide_height_ft")
+    if height is not None:
+        trend = tide_context.get("tide_trend")
+        lines.append(f"  Tide: {height:.1f} ft" + (f" ({trend})" if trend else ""))
+    speed = tide_context.get("current_speed_kt")
+    if speed is not None:
+        state = tide_context.get("current_state", "")
+        lines.append(f"  Current: {speed:.1f} kt {state}".rstrip())
+    if not lines:
+        return ""
+    return "TIDE & CURRENT (at time of fix):\n" + "\n".join(lines) + "\n\n"
+
+
+def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: float,
+                        tide_context: Union[Dict[str, Any], None] = None) -> None:
     """
     Send email alert when a special node moves beyond threshold.
 
@@ -102,6 +124,8 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
         node_id: Node ID that moved
         node_data: Dictionary with node information
         distance_m: Distance from origin in meters
+        tide_context: Optional {'tide_height_ft', 'tide_trend', 'current_speed_kt',
+            'current_state'} snapshot at the time of the fix (see tides.get_state_at).
     """
     node_name = node_data.get("long_name", "Unknown")
     battery_display = _format_battery(node_data)
@@ -114,6 +138,7 @@ def send_movement_alert(node_id: int, node_data: Dict[str, Any], distance_m: flo
         f"Buoy: {special_label}\n\n"
         f"DETECTION TIME: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
         f"ALERT DETAILS:\n  Distance from home: {int(distance_m)} meters\n  Safe zone threshold: {config.SPECIAL_MOVEMENT_THRESHOLD_METERS} meters\n\n"
+        f"{_format_tide_context(tide_context)}"
         f"TELEMETRY:\n  Battery: {battery_display}\n\n"
         f"VIEW ON TRACKER: {getattr(config, 'ALERT_TRACKER_URL', 'http://localhost:5103')}\n\n"
         f"---\nThis is an automated alert from {config.APP_TITLE}.\nAlert cooldown: {config.ALERT_COOLDOWN}s (next alert after this time)"

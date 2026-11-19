@@ -21,6 +21,8 @@
   --crit-soft: #F9E5E5;
   --muted-state: #5A6E75;
   --muted-soft: #E8EEED;
+  --tide-line: #2F6FB0;
+  --current-line: #7B5EA7;
   --sheet-shadow: 0 -8px 28px rgba(22, 39, 47, 0.18);
   --card-shadow: 0 1px 3px rgba(22, 39, 47, 0.08);
   --display: "Avenir Next", "Avenir", Futura, "Trebuchet MS", system-ui, sans-serif;
@@ -45,6 +47,8 @@
     --crit-soft: #421C1F;
     --muted-state: #8CA3AB;
     --muted-soft: #1B2C35;
+    --tide-line: #6FA8DC;
+    --current-line: #B79FD9;
     --sheet-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
     --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
@@ -409,8 +413,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 #api-key-panel .fineprint { font-size: 12px; color: var(--ink-2); margin: 14px 0 0; text-align: center; }
 
-/* ---------- battery history modal ---------- */
-#nodeDetailsModal {
+/* ---------- battery history modal (and anything sharing .detail-modal) ---------- */
+#nodeDetailsModal, .detail-modal {
   display: none;
   position: fixed;
   top: calc(60px + env(safe-area-inset-top, 0px));
@@ -418,7 +422,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   z-index: 2100;
   pointer-events: none;
 }
-#nodeDetailsPanel {
+#nodeDetailsPanel, .detail-panel {
   background: var(--panel);
   color: var(--ink);
   border: 1px solid var(--line);
@@ -428,20 +432,37 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   box-shadow: var(--card-shadow);
   pointer-events: auto;
 }
-#nodeDetailsPanel .head {
+.detail-panel--wide {
+  max-width: 640px;
+  /* Hard ceiling so a tall panel (the tide/current chart) can never eat
+     the whole screen on a phone — sidebar sheet below, header above
+     already claim real space there. Scrolls internally past this. */
+  max-height: min(55vh, calc(100vh - 140px));
+  overflow-y: auto;
+}
+#nodeDetailsPanel .head, .detail-panel .head {
   display: flex; justify-content: space-between; align-items: center;
   gap: 6px; padding-bottom: 4px; margin-bottom: 4px;
   border-bottom: 1px solid var(--line);
 }
-#modalTitle {
+#modalTitle, .detail-panel .head h2 {
   margin: 0; font-size: 13px; font-weight: 600; flex: 1;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#nodeDetailsPanel .closex {
+#nodeDetailsPanel .closex, .detail-panel .closex {
   background: none; border: none; cursor: pointer;
   color: var(--ink-2); font-size: 15px; line-height: 1; padding: 0 3px;
 }
-#histogramContainer { overflow-x: auto; text-align: center; }
+#histogramContainer, .detail-chart-container { overflow-x: auto; text-align: center; }
+
+/* ---------- tide & current chart/panel ---------- */
+.tide-summary-line {
+  font-size: 11px; color: var(--ink-2); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tide-highlight-readout {
+  font-size: 11px; color: var(--ink); text-align: center; min-height: 14px;
+}
 
 /* ---------- leaflet touches ---------- */
 .leaflet-popup-content-wrapper {

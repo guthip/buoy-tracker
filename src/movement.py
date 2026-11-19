@@ -27,6 +27,7 @@ from collections import defaultdict
 from . import alerts
 from . import config
 from . import storage
+from . import tides
 from .topics import gateway_id_from_topic
 
 logger = logging.getLogger(__name__)
@@ -125,21 +126,104 @@ def _get_signal_quality_score(json_data):
     return score
 
 
+# Per-copy vote weight for coordinate consensus, keyed by hops taken
+# (hop_start - hop_limit). Gateway copies of one broadcast are NOT
+# independent witnesses once a relay is involved: every listener downstream
+# of the same relay hop just re-hears whatever that one relay retransmitted,
+# correct or corrupted. A buoy's own signal is typically weak relative to
+# gateway placement (rooftops/summits), so most — sometimes all — copies of
+# a given broadcast arrive relayed; a single corrupting relay with wide
+# reach can out-fan-out the handful of listeners who caught the original,
+# letting corrupted copies win a plain headcount (SYCO, 2026-10-27: 8
+# 3-hop copies of a mutated position outvoted 5 copies of the real one).
+# Weighting down each extra hop means that amplification no longer
+# automatically wins: fewer, lower-hop copies can outweigh a larger but
+# more-relayed, more-correlated group. hop_start/hop_limit missing (older
+# firmware, malformed packet) gets neutral weight — neither boosted nor
+# penalized, since we can't tell how many hops it took.
+_HOP_VOTE_WEIGHT = {0: 4.0, 1: 2.0}
+_HOP_VOTE_WEIGHT_DEFAULT = 1.0  # 2+ hops, or unknown hop info
+
+
+def _hop_vote_weight(copy):
+    hop_start = copy.get('hop_start')
+    hop_limit = copy.get('hop_limit')
+    if hop_start is None or hop_limit is None:
+        return _HOP_VOTE_WEIGHT_DEFAULT
+    hops_taken = hop_start - hop_limit
+    return _HOP_VOTE_WEIGHT.get(max(hops_taken, 0), _HOP_VOTE_WEIGHT_DEFAULT)
+
+
+# Per-gateway reputation multiplier, layered on top of _hop_vote_weight.
+# Hop weighting alone only protects a single vote; it doesn't remember that
+# a specific gateway/relay has a track record of carrying the losing
+# coordinate (SYCO, 2026-10-27: the eventual winning ghost reading had
+# already lost 16 consensus votes over the preceding days before winning
+# the 17th — hop weighting helps per-broadcast, but only a cross-broadcast
+# memory of "this gateway disagrees unusually often" catches a persistent
+# culprit before its lucky win, not just after). A gateway needs
+# _GATEWAY_TRUST_MIN_SAMPLES recorded votes before its record affects
+# anything — below that, a gateway we simply haven't seen much of gets the
+# benefit of the doubt (weight 1.0) rather than being penalized on noise.
+_GATEWAY_TRUST_MIN_SAMPLES = 5
+_GATEWAY_TRUST_WEIGHT_FLOOR = 0.1
+
+
+def _gateway_vote_weight(gateway_id):
+    if gateway_id is None:
+        return 1.0
+    rel = storage.get_gateway_reliability(gateway_id)
+    if rel is None or rel['total'] < _GATEWAY_TRUST_MIN_SAMPLES:
+        return 1.0
+    return max(_GATEWAY_TRUST_WEIGHT_FLOOR, 1.0 - rel['disagree_rate'])
+
+
+def _copy_vote_weight(copy):
+    return _hop_vote_weight(copy) * _gateway_vote_weight(copy.get('gateway_id'))
+
+
+def _hop_breakdown(group):
+    """{'0': n, '1': n, '2+': n, 'unknown': n} hop-count histogram for a
+    group of copies — the audit trail a hop-amplified-relay incident needs
+    (e.g. "8 copies, all 3-hop, no direct corroboration") that a plain
+    copy count or signal score doesn't convey on its own."""
+    counts = {'0': 0, '1': 0, '2+': 0, 'unknown': 0}
+    for c in group:
+        hop_start, hop_limit = c.get('hop_start'), c.get('hop_limit')
+        if hop_start is None or hop_limit is None:
+            counts['unknown'] += 1
+            continue
+        hops_taken = max(hop_start - hop_limit, 0)
+        counts['2+' if hops_taken >= 2 else str(hops_taken)] += 1
+    return counts
+
+
 def _validate_position_precision(payload, node_id=None):
     """
-    Reject a position packet only when it's lying about its own precision —
-    not merely because it's coarse. There is no minimum precision_bits floor:
-    a node broadcasting reduced precision on purpose (e.g. for location
-    privacy) is trusted at face value, and the resulting uncertainty is
-    surfaced to the UI via _precision_radius_m() instead of being hidden by
-    an outright rejection.
+    Reject a position packet when it's lying about its own precision, or
+    when its coordinates are coarse enough that chance alone can't explain
+    it — unless the node has opted out of this check entirely (maintenance
+    away from its mooring, or deliberately broadcasting reduced precision
+    for location privacy; see storage.accepts_imprecise_position).
 
-    The one thing this still catches: a relay node that preserves the
-    source's precision_bits claim but quantizes the coordinates further for
-    privacy/efficiency. A 13-bit relay packet has 19 trailing zero bits in
-    latitude_i/longitude_i even though the field still claims its original
-    (higher) precision — that mismatch between claimed and actual bits, not
-    any fixed bit count, is what this check catches.
+    Two independent checks, both operating on the same trailing-zero-bit
+    count in latitude_i/longitude_i:
+
+    1. Claim-vs-actual drift: a relay node that preserves the source's
+       precision_bits claim but quantizes the coordinates further for
+       privacy/efficiency. A 13-bit relay packet has 19 trailing zero bits
+       even though the field still claims its original (higher) precision —
+       that mismatch, not any fixed bit count, is what this half catches.
+    2. Absolute floor, independent of what the packet claims: a real GPS
+       fix's low bits are effectively random noise, so by chance alone a
+       coordinate has only a ~0.8% chance of 8+ trailing zero bits (measured
+       against this fleet's own history, actual observed baseline tracks
+       closely with that figure before corruption). Every confirmed
+       mesh-corruption case found in this fleet clusters at 9-16+ bits lost,
+       far past that. A packet with less actual precision than that is
+       rejected regardless of its own claim — this is what catches a relay
+       that corrupts coordinates *and* honestly updates its precision claim
+       to match, which the drift check alone can't see.
 
     When a quantized packet is from a special node, an ERROR is logged to
     help identify which relay nodes are modifying our buoy position packets.
@@ -147,11 +231,19 @@ def _validate_position_precision(payload, node_id=None):
     Returns:
         True if the packet isn't misrepresenting its precision, False otherwise
     """
+    if node_id is not None and storage.accepts_imprecise_position(node_id):
+        return True
+
     # A relay that quantizes a packet typically drops at least 8 bits below
     # what it claims; a real GPS fix drifts by 1-4 bits of jitter. Tolerance
     # is relative to the packet's own claimed precision_bits, not a fixed
     # floor, so intentionally-reduced-precision broadcasts aren't penalized.
     MAX_PRECISION_DRIFT_BITS = 8
+
+    # Absolute floor: reject a coordinate with 8 or more trailing zero bits
+    # (actual_bits <= 24) no matter what precision_bits claims, unless the
+    # node opted out above.
+    MIN_ACTUAL_PRECISION_BITS = 24
 
     precision_bits = payload.get('precision_bits', 0)
     if not isinstance(precision_bits, (int, float)) or isinstance(precision_bits, bool):
@@ -174,6 +266,17 @@ def _validate_position_precision(payload, node_id=None):
         lat_trailing = (lat_i & -lat_i).bit_length() - 1
         lon_trailing = (lon_i & -lon_i).bit_length() - 1
         actual_bits = 32 - max(lat_trailing, lon_trailing)
+
+        if actual_bits <= MIN_ACTUAL_PRECISION_BITS:
+            if node_id and node_id in getattr(config, 'SPECIAL_NODES', {}):
+                timestamp = time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())
+                logger.error(
+                    f'[PRECISION_FLOOR] {timestamp} | node {node_id} | '
+                    f'actual={actual_bits} bits, at or below the {MIN_ACTUAL_PRECISION_BITS}-bit floor '
+                    f'(claims precision_bits={precision_bits}) | lat_i={lat_i}, lon_i={lon_i}'
+                )
+            return False
+
         if claimed_bits - actual_bits > MAX_PRECISION_DRIFT_BITS:
             if node_id and node_id in getattr(config, 'SPECIAL_NODES', {}):
                 precision_lost = claimed_bits - actual_bits
@@ -397,7 +500,7 @@ def _evaluate_alert_buffer(node_id, info):
         distinct_pids,
         key=lambda pid: min(c['ts'] for c in copies if c['packet_id'] == pid)
     )
-    fire_candidates = []   # [(packet_id, representative_copy, consensus_size, dissent_size)]
+    fire_candidates = []   # [(packet_id, representative_copy, consensus_size, dissent_size, consensus_weight, consensus_hops)]
     suppressed_candidates = []
     inconclusive_candidates = []  # [(packet_id, far_copy, consensus_size, dissent_size)]
     for pid in ordered_pids:
@@ -405,8 +508,15 @@ def _evaluate_alert_buffer(node_id, info):
 
         # Group by (lat_i, lon_i). All copies of one broadcast should share the
         # same coords; divergence means at least one relay/gateway path mutated
-        # this copy. Largest group wins; ties broken by highest aggregate signal
-        # — but only among groups that aren't ALSO tied on count (see below).
+        # this copy. Highest weighted vote total wins (see _copy_vote_weight:
+        # hop distance x per-gateway track record), not raw copy count:
+        # copies relayed through the same hop are correlated echoes of one
+        # retransmission, not independent confirmations, so a group of many
+        # multi-hop copies — especially from a gateway with a history of
+        # disagreeing with consensus — no longer automatically beats a
+        # smaller group of fewer-hop, more-trusted copies. Ties broken by
+        # aggregate signal — but only among groups that aren't ALSO tied on
+        # vote weight (see below).
         coord_groups = defaultdict(list)
         for c in pcopies:
             payload = c.get('payload_snapshot') or {}
@@ -414,14 +524,19 @@ def _evaluate_alert_buffer(node_id, info):
             coord_groups[key].append(c)
 
         def _group_strength(group):
-            return (len(group), sum(c['signal_score'] for c in group))
+            return (sum(_copy_vote_weight(c) for c in group),
+                    sum(c['signal_score'] for c in group))
         consensus_key = max(coord_groups, key=lambda k: _group_strength(coord_groups[k]))
         consensus = coord_groups[consensus_key]
         dissent = [c for k, g in coord_groups.items() if k != consensus_key for c in g]
         rep = max(consensus, key=lambda c: c['signal_score'])
+        consensus_weight = round(sum(_copy_vote_weight(c) for c in consensus), 1)
+        consensus_hops = _hop_breakdown(consensus)
 
-        group_sizes = [len(g) for g in coord_groups.values()]
-        tied_for_largest = group_sizes.count(max(group_sizes))
+        _VOTE_TIE_EPSILON = 1e-9
+        group_weights = [_group_strength(g)[0] for g in coord_groups.values()]
+        max_weight = max(group_weights)
+        tied_for_largest = sum(1 for w in group_weights if abs(w - max_weight) < _VOTE_TIE_EPSILON)
         count_is_ambiguous = len(coord_groups) > 1 and tied_for_largest > 1
 
         if count_is_ambiguous:
@@ -431,8 +546,27 @@ def _evaluate_alert_buffer(node_id, info):
             # concerning either way, and still nothing to commit to; wait
             # for a clearer broadcast rather than guess between them. Not
             # marked as resolved (see below) — still eligible for a later,
-            # hopefully clearer wave of copies of this same packet_id.
+            # hopefully clearer wave of copies of this same packet_id. No
+            # gateway-reliability votes recorded either — a coin-flip tie
+            # has no resolved "right answer" yet to agree or disagree with.
             continue
+
+        # Teach the per-gateway reliability ledger from this resolved vote —
+        # but only when there was real disagreement to learn from; a
+        # unanimous broadcast says nothing about any individual gateway's
+        # track record.
+        if len(coord_groups) > 1:
+            for c in consensus:
+                storage.record_gateway_vote(c.get('gateway_id'), agreed=True)
+            for c in dissent:
+                storage.record_gateway_vote(c.get('gateway_id'), agreed=False)
+                rel = storage.get_gateway_reliability(c.get('gateway_id'))
+                if rel and rel['total'] >= _GATEWAY_TRUST_MIN_SAMPLES and rel['disagree_rate'] >= 0.3:
+                    logger.warning(
+                        f'[GATEWAY_SUSPECT] gateway {c.get("gateway_id")} disagreed with'
+                        f' consensus {rel["disagree"]}/{rel["total"]} times'
+                        f' ({rel["disagree_rate"]:.0%}) — latest: node {node_id} packet_id={pid}'
+                    )
 
         # Gateway copies of one broadcast can legitimately trickle in over
         # much longer than one buffer window — mesh store-and-forward across
@@ -457,7 +591,8 @@ def _evaluate_alert_buffer(node_id, info):
                 # Already confirmed away — sustained movement, not a fresh
                 # anomaly to re-verify. Commit this reading immediately.
                 _commit_broadcast_position(node_id, rep, pid)
-                fire_candidates.append((pid, rep, len(consensus), len(dissent)))
+                fire_candidates.append(
+                    (pid, rep, len(consensus), len(dissent), consensus_weight, consensus_hops))
                 continue
             pending = _pending_far_confirmation.get(node_id)
             if pending is None:
@@ -466,15 +601,18 @@ def _evaluate_alert_buffer(node_id, info):
                 _pending_far_confirmation[node_id] = {
                     'packet_id': pid, 'rep': rep,
                     'consensus': len(consensus), 'dissent': len(dissent),
+                    'consensus_weight': consensus_weight, 'consensus_hops': consensus_hops,
                 }
                 logger.warning(
                     f'[MOVEMENT_PENDING] {ts} | node {node_id} | packet_id={pid}'
-                    f' | distance={int(rep["distance_m"])}m | awaiting confirmation'
+                    f' | distance={int(rep["distance_m"])}m | vote_weight={consensus_weight}'
+                    f' (hops: {consensus_hops}) | awaiting confirmation'
                     f' from the next broadcast before committing or alerting'
                 )
                 storage.record_alert_event(
                     'movement_pending', node_id, distance_m=rep['distance_m'],
-                    details={'packet_id': pid, 'consensus': len(consensus), 'dissent': len(dissent)},
+                    details={'packet_id': pid, 'consensus': len(consensus), 'dissent': len(dissent),
+                             'consensus_weight': consensus_weight, 'consensus_hops': consensus_hops},
                     simulated=any(c.get('simulated') for c in pcopies))
                 continue
             # Second consecutive far reading — confirmed, not a one-off blip.
@@ -484,11 +622,13 @@ def _evaluate_alert_buffer(node_id, info):
             _pending_far_confirmation.pop(node_id, None)
             _moving_confirmed.add(node_id)
             _commit_broadcast_position(node_id, pending['rep'], pending['packet_id'])
-            fire_candidates.append(
-                (pending['packet_id'], pending['rep'], pending['consensus'], pending['dissent'])
-            )
+            fire_candidates.append((
+                pending['packet_id'], pending['rep'], pending['consensus'], pending['dissent'],
+                pending.get('consensus_weight', 0.0), pending.get('consensus_hops', {}),
+            ))
             _commit_broadcast_position(node_id, rep, pid)
-            fire_candidates.append((pid, rep, len(consensus), len(dissent)))
+            fire_candidates.append(
+                (pid, rep, len(consensus), len(dissent), consensus_weight, consensus_hops))
             continue
 
         if node_id in _moving_confirmed:
@@ -526,16 +666,22 @@ def _evaluate_alert_buffer(node_id, info):
 
     if fire_candidates:
         # Pick the best (highest signal) far representative across all packet_ids
-        best_pid, best_rep, csize, dsize = max(
+        best_pid, best_rep, csize, dsize, cweight, chops = max(
             fire_candidates, key=lambda x: x[1]['signal_score']
         )
         logger.error(
             f'[ALERT_FIRE] {ts} | node {node_id} | window={_ALERT_WINDOW_S:.0f}s'
             f' | packet_id={best_pid} | distance={int(best_rep["distance_m"])}m'
-            f' | consensus={csize} gateway copies, dissent={dsize}'
+            f' | consensus={csize} gateway copies (vote_weight={cweight}, hops={chops}), dissent={dsize}'
             f' | best.gateway={best_rep["gateway_id"]}'
         )
         _sim = any(c.get('simulated') for c in copies)
+        # Tide/current context at the moment this broadcast's fix was taken
+        # — automates the tide/current check an operator does by hand
+        # whenever a mark appears to have wandered. None of its keys are
+        # present if tides are disabled or NOAA was unreachable; the alert
+        # still fires either way.
+        tide_context = tides.get_state_at(best_rep['ts'])
         if storage.is_movement_muted(node_id):
             # Detection stands (the [ALERT_FIRE] record above is the audit trail);
             # only the email is suppressed while an admin mute is active.
@@ -545,17 +691,22 @@ def _evaluate_alert_buffer(node_id, info):
             )
             storage.record_alert_event(
                 'movement_muted', node_id, distance_m=best_rep['distance_m'],
-                details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize},
+                details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
+                         'consensus_weight': cweight, 'consensus_hops': chops,
+                         'tide': tide_context},
                 simulated=_sim)
         elif getattr(config, 'ALERT_ENABLED', False):
             storage.record_alert_event(
                 'movement_fired', node_id, distance_m=best_rep['distance_m'],
                 details={'packet_id': best_pid, 'consensus': csize, 'dissent': dsize,
-                         'gateway': best_rep['gateway_id']},
+                         'consensus_weight': cweight, 'consensus_hops': chops,
+                         'gateway': best_rep['gateway_id'], 'tide': tide_context},
                 simulated=_sim)
             try:
                 from .mqtt_handler import nodes_data
-                alerts.send_movement_alert(node_id, nodes_data.get(node_id, {}), best_rep['distance_m'])
+                alerts.send_movement_alert(
+                    node_id, nodes_data.get(node_id, {}), best_rep['distance_m'],
+                    tide_context=tide_context)
             except Exception as alert_err:
                 logger.error(f"Failed to send movement alert for {node_id}: {alert_err}")
 
