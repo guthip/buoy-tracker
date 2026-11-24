@@ -4,6 +4,7 @@
 venv/
 env/
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.pyc
@@ -28,6 +29,7 @@ logs/
 .vscode/
 .idea/
 .DS_Store
+**/.DS_Store
 Thumbs.db
 # macOS resource fork / AppleDouble files
 ._*
@@ -59,6 +61,9 @@ DOCKER_HUB_SETUP.md
 MESHTASTIC_SIGNAL_METRICS.md
 SIGNAL_ANALYSIS_PLAN.md
 effort_assessment.md
+
+# Local-only compose override (builds from the working tree)
+docker-compose.override.yml
 
 # Runtime directories (mounted as volumes, not part of image)
 config/

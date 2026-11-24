@@ -377,11 +377,17 @@ def rebuild_history_from_db():
         logger.info(f'Warm-started last-known state for {warmed} special node(s)')
 
 
-def _append_position_history(node_id, lat, lon, alt, json_data):
-    """Append one accepted position to the in-memory trail and the durable store."""
+def _append_position_history(node_id, lat, lon, alt, json_data, ts=None):
+    """Append one accepted position to the in-memory trail and the durable store.
+
+    `ts` is when the broadcast was received. Callers committing a reading
+    later than it arrived (a far reading held for confirmation, committed
+    one broadcast later) must pass it, or the trail shows the held reading
+    at the confirming broadcast's time (SYCS, 2026-11-24: a 12:32 PT reading
+    was stored at 13:47, stacked on the reading that confirmed it)."""
     _ensure_history_struct(node_id)
     entry = {
-        "ts": time.time(),
+        "ts": ts if ts is not None else time.time(),
         "lat": lat,
         "lon": lon,
         "alt": alt,
@@ -390,7 +396,7 @@ def _append_position_history(node_id, lat, lon, alt, json_data):
         "snr": json_data.get("rx_snr"),
     }
     special_history[node_id].append(entry)
-    _prune_history(node_id, now_ts=entry['ts'])
+    _prune_history(node_id)
 
     try:
         topic = json_data.get('mqtt_topic')

@@ -430,7 +430,7 @@ def _commit_broadcast_position(node_id, rep, packet_id):
         'rx_snr': rep.get('rx_snr'),
         'id': packet_id,
         'simulated': rep.get('simulated'),
-    })
+    }, ts=rep['ts'])
 
 
 def _evaluate_alert_buffer(node_id, info):
